@@ -40,6 +40,15 @@ Pokrenuti odgovarajuću skriptu iz `sql/` direktorija na odabranoj bazi:
 
 ## Konfiguracija
 
+Prije prvog pokretanja, u oba projekta potrebno je napraviti kopiju predloška:
+
+```bash
+cp ScaleVoteBenchmark.Api/appsettings.json.example ScaleVoteBenchmark.Api/appsettings.json
+cp ScaleVoteBenchmark.Web/appsettings.json.example ScaleVoteBenchmark.Web/appsettings.json
+```
+
+Stvarna `appsettings.json` datoteka namjerno je u `.gitignore` (sadrži connection stringove i tajne), dok `appsettings.json.example` ostaje pod verzijskom kontrolom kao predložak.
+
 U `ScaleVoteBenchmark.Api/appsettings.json` potrebno je postaviti:
 
 - `DatabaseProvider` — `"MsSql"` ili `"MySql"`, bira koja se implementacija repozitorija koristi
