@@ -42,7 +42,7 @@
   },
 
   "Jwt": {
-    "Key": "REPLACE-WITH-A-LONG-RANDOM-SECRET-KEY-MIN-32-CHARS",
+    "Key": "abcdefghijklmnopqrstuvwxyz012345",
     "Issuer": "ScaleVoteBenchmark.Api",
     "Audience": "ScaleVoteBenchmark.Clients",
     "ExpirationMinutes": 60

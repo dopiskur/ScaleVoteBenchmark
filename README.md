@@ -118,7 +118,7 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 - `Load:CpuIterationsPerVote` and `Load:MemoryMegabytesPerVote` — intensity of the artificial CPU and memory load per vote
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for voting results; `false` disables caching so every `GET /api/vote/counts` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `true` (default) requires a JWT on `GET /api/vote/counts`; `false` makes it reachable without one
-- `Jwt:Key` — a random secret key, at least 32 characters
+- `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true
 - `AdminUser:Username` / `AdminUser:Password` — credentials for administrator login (default `admin` / `admin`)
 
 ## Running
