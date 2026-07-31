@@ -22,10 +22,41 @@ namespace ScaleVoteBenchmark.Api.Repositories
             this.connectionString = connectionString;
         }
 
+        /// <summary>
+        /// Opens a connection and applies the settings SQLite needs to
+        /// cope with concurrent votes: a busy timeout so a connection
+        /// that finds the database momentarily locked by another writer
+        /// retries instead of immediately throwing "database is locked"
+        /// (SQLite Error 5), and WAL journal mode so readers (the
+        /// dashboard polling /api/vote/report) don't block writers and
+        /// vice versa. WAL mode is persisted in the database file itself,
+        /// but is set on every connection anyway since it's a cheap no-op
+        /// once already enabled, and covers databases created before
+        /// this was added.
+        /// </summary>
+        private SqliteConnection CreateConnection()
+        {
+            var connection = new SqliteConnection(connectionString);
+            connection.Open();
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "PRAGMA busy_timeout = 5000;";
+                cmd.ExecuteNonQuery();
+            }
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "PRAGMA journal_mode = WAL;";
+                cmd.ExecuteNonQuery();
+            }
+
+            return connection;
+        }
+
         public void VoteAdd(string option)
         {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
+            using var connection = CreateConnection();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "INSERT INTO Vote (\"Option\") VALUES ($option)";
             cmd.Parameters.AddWithValue("$option", option);
@@ -34,8 +65,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
 
         public VoteReport VoteReportGet()
         {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
+            using var connection = CreateConnection();
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT " +
@@ -73,14 +103,12 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// </summary>
         public void TestConnection()
         {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
+            using var connection = CreateConnection();
         }
 
         public void EnsureSchema()
         {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
+            using var connection = CreateConnection();
 
             using (var checkCmd = connection.CreateCommand())
             {
