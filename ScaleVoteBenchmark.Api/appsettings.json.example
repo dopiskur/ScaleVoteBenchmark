@@ -37,10 +37,11 @@
   },
 
   "Load": {
-    "CpuIterationsPerVote": 200000,
-    "MemoryMegabytesPerVote": 5,
-    "DiskWriteKilobytesPerVote": 64,
-    "NetworkLatencyMillisecondsPerVote": 20
+    "// Note": "Each value below is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
+    "CpuIterationsPerVote": { "Min": 150000, "Max": 250000 },
+    "MemoryMegabytesPerVote": { "Min": 3, "Max": 8 },
+    "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
+    "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 }
   },
 
   "Jwt": {

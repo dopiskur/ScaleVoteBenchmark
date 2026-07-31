@@ -25,8 +25,9 @@ namespace ScaleVoteBenchmark.Api.Controllers
         /// load-generation script exercises token validation as part of
         /// the benchmark, not just the vote write itself. Before writing
         /// to the database, simulated CPU, memory, disk write and network
-        /// latency load is executed, whose intensity is defined in the
-        /// appsettings.json file.
+        /// latency load is executed - each intensity is picked fresh, at
+        /// random, from the Min/Max range defined in the appsettings.json
+        /// file (a fixed value is just a range where Min equals Max).
         /// </summary>
         [HttpPost("add")]
         [Authorize]
@@ -37,10 +38,10 @@ namespace ScaleVoteBenchmark.Api.Controllers
                 return BadRequest("Allowed values are only 'yes' or 'no'.");
             }
 
-            int cpuIterations = int.Parse(configuration["Load:CpuIterationsPerVote"] ?? "0");
-            int memoryMegabytes = int.Parse(configuration["Load:MemoryMegabytesPerVote"] ?? "0");
-            int diskWriteKilobytes = int.Parse(configuration["Load:DiskWriteKilobytesPerVote"] ?? "0");
-            int networkLatencyMilliseconds = int.Parse(configuration["Load:NetworkLatencyMillisecondsPerVote"] ?? "0");
+            int cpuIterations = RandomizedLoadValue("CpuIterationsPerVote");
+            int memoryMegabytes = RandomizedLoadValue("MemoryMegabytesPerVote");
+            int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
+            int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
 
             LoadSimulator.SimulateCpuLoad(cpuIterations);
             LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
@@ -77,6 +78,21 @@ namespace ScaleVoteBenchmark.Api.Controllers
             repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
 
             return Ok(report);
+        }
+
+        /// <summary>
+        /// Reads "Load:{settingName}:Min" and "Load:{settingName}:Max"
+        /// from appsettings.json and returns a value picked at random
+        /// (inclusive) from that range. If Max is not greater than Min,
+        /// Min is returned as-is, so a fixed intensity is just a range
+        /// where Min equals Max.
+        /// </summary>
+        private int RandomizedLoadValue(string settingName)
+        {
+            int min = int.Parse(configuration[$"Load:{settingName}:Min"] ?? "0");
+            int max = int.Parse(configuration[$"Load:{settingName}:Max"] ?? "0");
+
+            return max > min ? Random.Shared.Next(min, max + 1) : min;
         }
     }
 }

@@ -4,7 +4,7 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
-The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote`) — that's the purpose of the benchmark. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
+The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load — that's the purpose of the benchmark. Each load type's intensity is defined in `appsettings.json` as a `Min`/`Max` range (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote`), and a fresh random value within that range is picked for every vote; use `Min == Max` for a fixed value. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
 The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
@@ -92,10 +92,10 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 | `Jwt:ExpirationMinutes` | `Jwt__ExpirationMinutes` |
 | `AdminUser:Username` | `AdminUser__Username` |
 | `AdminUser:Password` | `AdminUser__Password` |
-| `Load:CpuIterationsPerVote` | `Load__CpuIterationsPerVote` |
-| `Load:MemoryMegabytesPerVote` | `Load__MemoryMegabytesPerVote` |
-| `Load:DiskWriteKilobytesPerVote` | `Load__DiskWriteKilobytesPerVote` |
-| `Load:NetworkLatencyMillisecondsPerVote` | `Load__NetworkLatencyMillisecondsPerVote` |
+| `Load:CpuIterationsPerVote:Min` / `:Max` | `Load__CpuIterationsPerVote__Min` / `__Max` |
+| `Load:MemoryMegabytesPerVote:Min` / `:Max` | `Load__MemoryMegabytesPerVote__Min` / `__Max` |
+| `Load:DiskWriteKilobytesPerVote:Min` / `:Max` | `Load__DiskWriteKilobytesPerVote__Min` / `__Max` |
+| `Load:NetworkLatencyMillisecondsPerVote:Min` / `:Max` | `Load__NetworkLatencyMillisecondsPerVote__Min` / `__Max` |
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
 | `Cache:Enabled` | `Cache__Enabled` |
 | `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
@@ -123,7 +123,7 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 
 - `DatabaseProvider` — `"MsSql"`, `"MySql"`, `"PostgreSql"` or `"Sqlite"`, selects which repository implementation is used
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
-- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote` and `Load:NetworkLatencyMillisecondsPerVote` — intensity of the artificial CPU, memory, disk write and network latency load per vote. The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleVoteBenchmark/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
+- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote` and `Load:NetworkLatencyMillisecondsPerVote` — each is a `{ "Min": ..., "Max": ... }` object; a fresh random value in that inclusive range is picked for every vote (`Min == Max` gives a fixed value, same as before this became a range). The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleVoteBenchmark/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true
