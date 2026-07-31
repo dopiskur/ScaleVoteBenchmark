@@ -16,8 +16,8 @@ Rješenje sadrži tri projekta:
 | MySqlConnector | 2.6.1 |
 | Microsoft.Extensions.Caching.Memory | 10.0.10 |
 | Microsoft.Extensions.Configuration.Abstractions | 10.0.0 |
-| Azure.Identity | 1.11.3 |
-| Microsoft.Identity.Client | 4.60.3 |
+| Azure.Identity | 1.21.0 |
+| Microsoft.Identity.Client | 4.87.0 |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 |
 
 Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana je uz verziju .NET runtimea (dio je ASP.NET Core dijeljenog frameworka), zbog čega je cijelo rješenje prebačeno na .NET 10 kako bi verzija 10.0.10 uopće bila korištiva. `Microsoft.Extensions.*` paketi nisu na isti način vezani uz runtime, ali se drže usklađenima radi jednostavnosti održavanja.
