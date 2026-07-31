@@ -1,0 +1,49 @@
+name: Deploy Web to Azure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ScaleVoteBenchmark.Web/**'
+      - 'ScaleVoteBenchmark.Lib/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: YOUR-WEB-APP-SERVICE-NAME
+  DOTNET_VERSION: '10.0.x'
+  PROJECT_PATH: ScaleVoteBenchmark.Web/ScaleVoteBenchmark.Web.csproj
+  PUBLISH_DIR: ${{ github.workspace }}/publish/web
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repozitorija
+        uses: actions/checkout@v4
+
+      - name: Postavljanje .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.PUBLISH_DIR }}
+
+      - name: Deploy na Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_WEB }}
+          package: ${{ env.PUBLISH_DIR }}

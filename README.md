@@ -40,6 +40,47 @@ Oba načina koriste isti connection string za adresu poslužitelja i naziv baze;
 
 Bez ove provjere, pogrešna konfiguracija baze inače se ne bi primijetila sve do prvog stvarnog glasa ili dohvaćanja rezultata (`SqlRepository`/`MySqlRepository` otvaraju konekciju tek "lijeno", kod stvarnog poziva, a ne pri pokretanju aplikacije).
 
+## Deploy putem GitHub Actions (odvojeno za API i Web)
+
+U `.github/workflows/` nalaze se dva odvojena workflowa:
+
+- **`deploy-api.yml`** — gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, aktivira se samo na promjene unutar `ScaleVoteBenchmark.Api/` ili `ScaleVoteBenchmark.Lib/`
+- **`deploy-web.yml`** — gradi i deploya `ScaleVoteBenchmark.Web` na Azure App Service, aktivira se samo na promjene unutar `ScaleVoteBenchmark.Web/` ili `ScaleVoteBenchmark.Lib/`
+
+Svaki workflow deploya na **svoj vlastiti App Service resurs** (odvojeno skaliranje, odvojen deploy ciklus), kako je i predviđeno arhitekturom rješenja.
+
+### Priprema prije prvog pokretanja workflowa
+
+1. Kreirati dva Azure App Service resursa (npr. `scalevotebenchmark-api` i `scalevotebenchmark-web`), s .NET 10 runtimeom
+2. U oba `.yml` workflowa zamijeniti `YOUR-API-APP-SERVICE-NAME` / `YOUR-WEB-APP-SERVICE-NAME` stvarnim nazivima App Service resursa
+3. Preuzeti *Publish Profile* za svaki App Service (Azure Portal → App Service → "Get publish profile") i spremiti ih u GitHub repozitoriju pod **Settings → Secrets and variables → Actions**:
+   - `AZURE_WEBAPP_PUBLISH_PROFILE_API`
+   - `AZURE_WEBAPP_PUBLISH_PROFILE_WEB`
+
+### appsettings.json na Azureu — Application Settings, ne datoteka
+
+Budući da je `appsettings.json` namjerno u `.gitignore` (sadrži tajne), **ne postoji u repozitoriju niti u onome što se deploya**. Umjesto toga, sve postavke treba postaviti kao **Application Settings** u Azure Portalu (App Service → Configuration), gdje se ugniježđeni ključevi pišu s dvostrukom podvlakom `__`:
+
+| appsettings.json ključ | Application Setting naziv |
+| --- | --- |
+| `DatabaseProvider` | `DatabaseProvider` |
+| `UseManagedIdentity` | `UseManagedIdentity` |
+| `ConnectionStrings:MsSql` | `ConnectionStrings__MsSql` |
+| `ConnectionStrings:MySql` | `ConnectionStrings__MySql` |
+| `Jwt:Key` | `Jwt__Key` |
+| `Jwt:Issuer` | `Jwt__Issuer` |
+| `Jwt:Audience` | `Jwt__Audience` |
+| `Jwt:ExpirationMinutes` | `Jwt__ExpirationMinutes` |
+| `AdminUser:Username` | `AdminUser__Username` |
+| `AdminUser:Password` | `AdminUser__Password` |
+| `Load:CpuIterationsPerVote` | `Load__CpuIterationsPerVote` |
+| `Load:MemoryMegabytesPerVote` | `Load__MemoryMegabytesPerVote` |
+| `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
+| `AllowedWebOrigin` (samo API) | `AllowedWebOrigin` |
+| `ApiBaseUrl` (samo Web) | `ApiBaseUrl` |
+
+`AllowedWebOrigin` na API-ju treba pokazivati na stvarnu URL adresu deployanog Web App Servicea, a `ApiBaseUrl` na Webu treba pokazivati na stvarnu URL adresu deployanog API App Servicea — obje adrese poznate su tek nakon prvog deploya oba resursa.
+
 ## Priprema baze podataka
 
 Pokrenuti odgovarajuću skriptu iz `sql/` direktorija na odabranoj bazi:
