@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ScaleVoteBenchmark.Lib;
-using ScaleVoteBenchmark.Lib.Models;
+using ScaleVoteBenchmark.Api.Models;
 
 namespace ScaleVoteBenchmark.Api.Controllers
 {

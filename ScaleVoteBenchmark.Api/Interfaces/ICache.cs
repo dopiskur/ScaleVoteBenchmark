@@ -1,4 +1,4 @@
-namespace ScaleVoteBenchmark.Lib.Interfaces
+namespace ScaleVoteBenchmark.Api.Interfaces
 {
     /// <summary>
     /// Sučelje za pristup mehanizmu predmemorije.

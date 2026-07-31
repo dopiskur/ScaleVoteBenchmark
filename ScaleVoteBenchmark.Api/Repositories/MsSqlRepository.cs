@@ -1,9 +1,9 @@
 using Microsoft.Data.SqlClient;
-using ScaleVoteBenchmark.Lib.Azure;
-using ScaleVoteBenchmark.Lib.Interfaces;
-using ScaleVoteBenchmark.Lib.Models;
+using ScaleVoteBenchmark.Api.Azure;
+using ScaleVoteBenchmark.Api.Interfaces;
+using ScaleVoteBenchmark.Api.Models;
 
-namespace ScaleVoteBenchmark.Lib.Repositories
+namespace ScaleVoteBenchmark.Api.Repositories
 {
     /// <summary>
     /// Implementacija repozitorija za rad s Microsoft SQL Server / Azure SQL

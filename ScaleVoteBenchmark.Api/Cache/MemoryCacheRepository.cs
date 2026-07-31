@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
-using ScaleVoteBenchmark.Lib.Interfaces;
+using ScaleVoteBenchmark.Api.Interfaces;
 
-namespace ScaleVoteBenchmark.Lib.Cache
+namespace ScaleVoteBenchmark.Api.Cache
 {
     /// <summary>
     /// Implementacija predmemorije korištenjem nativne .NET klase

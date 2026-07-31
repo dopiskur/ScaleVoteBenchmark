@@ -1,4 +1,4 @@
-namespace ScaleVoteBenchmark.Lib.Models
+namespace ScaleVoteBenchmark.Api.Models
 {
     /// <summary>
     /// Model pojedinačnog glasa.

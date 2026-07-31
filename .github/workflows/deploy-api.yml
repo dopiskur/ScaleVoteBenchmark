@@ -6,7 +6,6 @@ on:
       - master
     paths:
       - 'ScaleVoteBenchmark.Api/**'
-      - 'ScaleVoteBenchmark.Lib/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 

@@ -1,8 +1,8 @@
 using MySqlConnector;
-using ScaleVoteBenchmark.Lib.Interfaces;
-using ScaleVoteBenchmark.Lib.Models;
+using ScaleVoteBenchmark.Api.Interfaces;
+using ScaleVoteBenchmark.Api.Models;
 
-namespace ScaleVoteBenchmark.Lib.Repositories
+namespace ScaleVoteBenchmark.Api.Repositories
 {
     /// <summary>
     /// Implementacija repozitorija za rad s Azure Database for MySQL

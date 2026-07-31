@@ -1,6 +1,6 @@
-using ScaleVoteBenchmark.Lib.Models;
+using ScaleVoteBenchmark.Api.Models;
 
-namespace ScaleVoteBenchmark.Lib.Interfaces
+namespace ScaleVoteBenchmark.Api.Interfaces
 {
     /// <summary>
     /// Zajedničko sučelje za pristup podatkovnom sloju, neovisno o tome

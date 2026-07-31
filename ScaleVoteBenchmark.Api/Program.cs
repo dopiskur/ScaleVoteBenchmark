@@ -1,9 +1,9 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using ScaleVoteBenchmark.Lib;
-using ScaleVoteBenchmark.Lib.Cache;
-using ScaleVoteBenchmark.Lib.Interfaces;
+using ScaleVoteBenchmark.Api;
+using ScaleVoteBenchmark.Api.Cache;
+using ScaleVoteBenchmark.Api.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 

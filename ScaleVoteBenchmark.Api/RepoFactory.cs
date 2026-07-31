@@ -1,8 +1,7 @@
-using Microsoft.Extensions.Configuration;
-using ScaleVoteBenchmark.Lib.Interfaces;
-using ScaleVoteBenchmark.Lib.Repositories;
+using ScaleVoteBenchmark.Api.Interfaces;
+using ScaleVoteBenchmark.Api.Repositories;
 
-namespace ScaleVoteBenchmark.Lib
+namespace ScaleVoteBenchmark.Api
 {
     /// <summary>
     /// Tvornička klasa koja, na temelju postavke "DatabaseProvider" u

@@ -2,10 +2,7 @@
 
 Rješenje je ciljano na **.NET 10 (LTS, podrška do studenog 2028.)**. Potreban je .NET 10 SDK.
 
-Rješenje sadrži dva projekta:
-
-- **ScaleVoteBenchmark.Lib** — class library s modelima, repozitorijima (MSSQL i MySQL), predmemorijom i simulacijom opterećenja
-- **ScaleVoteBenchmark.Api** — REST API, izdaje i validira JWT tokene, jedini komunicira s bazom podataka
+Rješenje sadrži jedan projekt, **ScaleVoteBenchmark.Api** — REST API koji izdaje i validira JWT tokene, jedini komunicira s bazom podataka, te sadrži modele, repozitorije (MSSQL i MySQL), predmemoriju i simulaciju opterećenja.
 
 Aplikacija nema korisničko sučelje — namjerno se koristi isključivo kao API koji vanjska skripta za generiranje opterećenja poziva izravno (npr. `POST /api/vote/add?option=yes` ili `?option=no`, nasumično birano po pozivu). Svaki poziv upisuje glas u bazu i usput generira umjetno CPU/memorijsko opterećenje čiji je intenzitet definiran u `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — to je svrha benchmarka. Rezultati (`GET /api/vote/counts`, zaštićeno JWT-om) kasnije se mogu očitati kao statistika direktno iz baze ili preko tog endpointa.
 
@@ -15,13 +12,11 @@ Aplikacija nema korisničko sučelje — namjerno se koristi isključivo kao API
 | --- | --- |
 | Microsoft.Data.SqlClient | 7.0.2 |
 | MySqlConnector | 2.6.1 |
-| Microsoft.Extensions.Caching.Memory | 10.0.10 |
-| Microsoft.Extensions.Configuration.Abstractions | 10.0.0 |
 | Azure.Identity | 1.21.0 |
-| Microsoft.Identity.Client | 4.87.0 |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 |
+| Swashbuckle.AspNetCore | 7.2.0 |
 
-Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana je uz verziju .NET runtimea (dio je ASP.NET Core dijeljenog frameworka), zbog čega je cijelo rješenje prebačeno na .NET 10 kako bi verzija 10.0.10 uopće bila korištiva. `Microsoft.Extensions.*` paketi nisu na isti način vezani uz runtime, ali se drže usklađenima radi jednostavnosti održavanja.
+Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana je uz verziju .NET runtimea (dio je ASP.NET Core dijeljenog frameworka), zbog čega je cijelo rješenje prebačeno na .NET 10 kako bi verzija 10.0.10 uopće bila korištiva. `Microsoft.Extensions.Caching.Memory` i `Microsoft.Extensions.Configuration.Abstractions` se ne navode zasebno jer dolaze već uključeni u ASP.NET Core dijeljeni framework (`Microsoft.NET.Sdk.Web`), pa nema potrebe za eksplicitnom paket-referencom.
 
 ## Spajanje na Azure SQL — dva podržana načina
 
@@ -43,7 +38,7 @@ Bez ove provjere, pogrešna konfiguracija baze inače se ne bi primijetila sve d
 
 ## Deploy putem GitHub Actions
 
-U `.github/workflows/` nalazi se workflow `deploy-api.yml` koji gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, a aktivira se na promjene unutar `ScaleVoteBenchmark.Api/`, `ScaleVoteBenchmark.Lib/` ili samog workflowa.
+U `.github/workflows/` nalazi se workflow `deploy-api.yml` koji gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, a aktivira se na promjene unutar `ScaleVoteBenchmark.Api/` ili samog workflowa.
 
 ### Priprema prije prvog pokretanja workflowa
 

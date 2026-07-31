@@ -1,7 +1,7 @@
 using Azure.Core;
 using Azure.Identity;
 
-namespace ScaleVoteBenchmark.Lib.Azure
+namespace ScaleVoteBenchmark.Api.Azure
 {
     /// <summary>
     /// Omogućava autentikaciju prema Azure SQL bazi putem Managed Identity

@@ -9,10 +9,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\ScaleVoteBenchmark.Lib\ScaleVoteBenchmark.Lib.csproj" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+    <PackageReference Include="MySqlConnector" Version="2.6.1" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
   </ItemGroup>
 
 </Project>

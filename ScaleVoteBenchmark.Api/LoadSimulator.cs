@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ScaleVoteBenchmark.Lib
+namespace ScaleVoteBenchmark.Api
 {
     /// <summary>
     /// Pomoćna klasa koja simulira procesorsko i memorijsko opterećenje
@@ -52,7 +52,7 @@ namespace ScaleVoteBenchmark.Lib
 
             // Prolazak kroz sve memorijske stranice kako bi se osiguralo
             // da je operacijski sustav stvarno rezervirao fizičku memoriju,
-            // a ne samo virtualni adresni prostor.
+            // a ne samo virtualno alocirale.
             long checksum = 0;
             for (int i = 0; i < buffer.Length; i += 4096)
             {
