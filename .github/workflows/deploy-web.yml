@@ -3,7 +3,7 @@ name: Deploy Web to Azure
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - 'ScaleVoteBenchmark.Web/**'
       - 'ScaleVoteBenchmark.Lib/**'
