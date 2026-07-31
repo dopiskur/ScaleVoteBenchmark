@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] - ScaleVoteBenchmark</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 60px; }
+        .vote-button { font-size: 2rem; padding: 20px 50px; margin: 15px; cursor: pointer; }
+        .results { font-size: 1.5rem; margin-top: 30px; }
+        form { display: inline; }
+        input[type="text"], input[type="password"] { padding: 8px; font-size: 1rem; margin: 5px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        @RenderBody()
+    </div>
+</body>
+</html>

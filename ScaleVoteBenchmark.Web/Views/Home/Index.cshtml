@@ -1,0 +1,19 @@
+@{
+    ViewData["Title"] = "Glasovanje";
+}
+
+<h1>Pas ili mačka?</h1>
+
+<form asp-controller="Home" asp-action="Vote" method="post">
+    <input type="hidden" name="option" value="pas" />
+    <button type="submit" class="vote-button">🐶 Pas</button>
+</form>
+
+<form asp-controller="Home" asp-action="Vote" method="post">
+    <input type="hidden" name="option" value="macka" />
+    <button type="submit" class="vote-button">🐱 Mačka</button>
+</form>
+
+<p style="margin-top: 40px;">
+    <a asp-controller="Login" asp-action="Index">Administratorska prijava</a>
+</p>

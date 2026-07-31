@@ -1,0 +1,53 @@
+using MySqlConnector;
+using ScaleVoteBenchmark.Lib.Interfaces;
+using ScaleVoteBenchmark.Lib.Models;
+
+namespace ScaleVoteBenchmark.Lib.Repositories
+{
+    /// <summary>
+    /// Implementacija repozitorija za rad s Azure Database for MySQL
+    /// bazom podataka. Sve funkcije komuniciraju isključivo putem
+    /// pohranjenih procedura, bez direktnih SELECT, INSERT, UPDATE ili
+    /// DELETE upita.
+    /// </summary>
+    public class MySqlRepository : IRepository
+    {
+        private readonly string connectionString;
+
+        public MySqlRepository(string connectionString)
+        {
+            this.connectionString = connectionString;
+        }
+
+        public void VoteAdd(string option)
+        {
+            using var connection = new MySqlConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "VoteAdd";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+            cmd.Parameters.AddWithValue("pOption", option);
+            cmd.ExecuteNonQuery();
+        }
+
+        public VoteCounts VoteCountsGet()
+        {
+            using var connection = new MySqlConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "VoteCountsGet";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+            using var dr = cmd.ExecuteReader();
+            var counts = new VoteCounts();
+
+            if (dr.Read())
+            {
+                counts.Pas = dr["Pas"] != DBNull.Value ? Convert.ToInt32(dr["Pas"]) : 0;
+                counts.Macka = dr["Macka"] != DBNull.Value ? Convert.ToInt32(dr["Macka"]) : 0;
+            }
+
+            return counts;
+        }
+    }
+}
