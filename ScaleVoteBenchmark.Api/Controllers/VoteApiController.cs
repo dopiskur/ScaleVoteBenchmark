@@ -12,6 +12,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
         private readonly IConfiguration configuration;
 
         private const string ResultsCacheKey = "VoteCountsCache";
+        private const string ReportCacheKey = "VoteReportCache";
 
         public VoteApiController(RepoFactory repoFactory, IConfiguration configuration)
         {
@@ -45,6 +46,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             // Invalidate the cached results after a new vote
             repoFactory.GetCache().RemoveItem(ResultsCacheKey);
+            repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();
         }
@@ -72,6 +74,31 @@ namespace ScaleVoteBenchmark.Api.Controllers
             repoFactory.GetCache().SetItem(ResultsCacheKey, counts, slidingExpiration);
 
             return Ok(counts);
+        }
+
+        /// <summary>
+        /// Returns the voting results with percentages, summed and
+        /// computed entirely by a stored procedure/function in the
+        /// database - the same pattern as VoteCountsGet. Access is
+        /// anonymous so the public dashboard on the application's root
+        /// URL can display it without a login.
+        /// </summary>
+        [HttpGet("report")]
+        [AllowAnonymous]
+        public ActionResult<VoteReport> VoteReportGet()
+        {
+            var cached = repoFactory.GetCache().GetItem<VoteReport>(ReportCacheKey);
+            if (cached != null)
+            {
+                return Ok(cached);
+            }
+
+            int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
+
+            var report = repoFactory.GetRepo().VoteReportGet();
+            repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
+
+            return Ok(report);
         }
     }
 }

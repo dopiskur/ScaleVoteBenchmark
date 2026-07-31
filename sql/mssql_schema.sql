@@ -9,7 +9,7 @@ GO
 
 CREATE TABLE dbo.Vote
 (
-    IDVote      INT IDENTITY(1,1) PRIMARY KEY,
+    IDVote      BIGINT IDENTITY(1,1) PRIMARY KEY,
     [Option]    VARCHAR(10) NOT NULL,
     DateCreated DATETIME2   NOT NULL DEFAULT SYSUTCDATETIME(),
 
@@ -50,6 +50,33 @@ BEGIN
     SELECT
         SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
         SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No]
+    FROM dbo.Vote;
+END
+GO
+
+-- ------------------------------------------------------------
+-- Stored procedure for retrieving the summed results with
+-- percentages, used by the public dashboard
+-- ------------------------------------------------------------
+IF OBJECT_ID('dbo.VoteReportGet', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.VoteReportGet;
+GO
+
+CREATE PROCEDURE dbo.VoteReportGet
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
+        SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No],
+        COUNT(*) AS [Total],
+        CASE WHEN COUNT(*) = 0 THEN 0
+             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)
+        END AS [YesPercent],
+        CASE WHEN COUNT(*) = 0 THEN 0
+             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)
+        END AS [NoPercent]
     FROM dbo.Vote;
 END
 GO

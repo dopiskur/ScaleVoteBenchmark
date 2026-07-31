@@ -50,6 +50,29 @@ namespace ScaleVoteBenchmark.Api.Repositories
             return counts;
         }
 
+        public VoteReport VoteReportGet()
+        {
+            using var connection = new MySqlConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "VoteReportGet";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+            using var dr = cmd.ExecuteReader();
+            var report = new VoteReport();
+
+            if (dr.Read())
+            {
+                report.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
+                report.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
+                report.Total = dr["Total"] != DBNull.Value ? Convert.ToInt32(dr["Total"]) : 0;
+                report.YesPercent = dr["YesPercent"] != DBNull.Value ? Convert.ToDecimal(dr["YesPercent"]) : 0;
+                report.NoPercent = dr["NoPercent"] != DBNull.Value ? Convert.ToDecimal(dr["NoPercent"]) : 0;
+            }
+
+            return report;
+        }
+
         /// <summary>
         /// Opens and immediately closes a connection to Azure Database
         /// for MySQL, without executing any query. The exception is

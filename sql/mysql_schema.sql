@@ -7,7 +7,7 @@ DROP TABLE IF EXISTS `Vote`;
 
 CREATE TABLE `Vote`
 (
-    `IDVote`      INT AUTO_INCREMENT PRIMARY KEY,
+    `IDVote`      BIGINT AUTO_INCREMENT PRIMARY KEY,
     `Option`      VARCHAR(10) NOT NULL,
     `DateCreated` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -43,6 +43,27 @@ BEGIN
     SELECT
         SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) AS `Yes`,
         SUM(CASE WHEN `Option` = 'no'  THEN 1 ELSE 0 END) AS `No`
+    FROM `Vote`;
+END $$
+
+DELIMITER ;
+
+-- ------------------------------------------------------------
+-- Stored procedure for retrieving the summed results with
+-- percentages, used by the public dashboard
+-- ------------------------------------------------------------
+DROP PROCEDURE IF EXISTS `VoteReportGet`;
+
+DELIMITER $$
+
+CREATE PROCEDURE `VoteReportGet`()
+BEGIN
+    SELECT
+        SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) AS `Yes`,
+        SUM(CASE WHEN `Option` = 'no'  THEN 1 ELSE 0 END) AS `No`,
+        COUNT(*) AS `Total`,
+        IF(COUNT(*) = 0, 0, ROUND(100.0 * SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)) AS `YesPercent`,
+        IF(COUNT(*) = 0, 0, ROUND(100.0 * SUM(CASE WHEN `Option` = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)) AS `NoPercent`
     FROM `Vote`;
 END $$
 

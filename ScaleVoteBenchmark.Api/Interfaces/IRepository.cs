@@ -15,6 +15,14 @@ namespace ScaleVoteBenchmark.Api.Interfaces
         VoteCounts VoteCountsGet();
 
         /// <summary>
+        /// Returns the vote report (counts and percentages per option),
+        /// fully summed and computed by a stored procedure/function in
+        /// the database - the same pattern as VoteCountsGet, just with
+        /// percentage columns added.
+        /// </summary>
+        VoteReport VoteReportGet();
+
+        /// <summary>
         /// Checks whether a connection to the database can be established
         /// using the currently configured connection string. Does not
         /// execute any query against the tables, only opens and closes

@@ -106,6 +106,11 @@ var app = builder.Build();
     }
 }
 
+// Serves the static dashboard page (wwwroot/index.html) at the
+// application's root URL.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

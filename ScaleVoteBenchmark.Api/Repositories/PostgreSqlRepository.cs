@@ -48,6 +48,28 @@ namespace ScaleVoteBenchmark.Api.Repositories
             return counts;
         }
 
+        public VoteReport VoteReportGet()
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT yes_count, no_count, total, yes_percent, no_percent FROM vote_report_get()";
+
+            using var dr = cmd.ExecuteReader();
+            var report = new VoteReport();
+
+            if (dr.Read())
+            {
+                report.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt32(dr["yes_count"]) : 0;
+                report.No = dr["no_count"] != DBNull.Value ? Convert.ToInt32(dr["no_count"]) : 0;
+                report.Total = dr["total"] != DBNull.Value ? Convert.ToInt32(dr["total"]) : 0;
+                report.YesPercent = dr["yes_percent"] != DBNull.Value ? Convert.ToDecimal(dr["yes_percent"]) : 0;
+                report.NoPercent = dr["no_percent"] != DBNull.Value ? Convert.ToDecimal(dr["no_percent"]) : 0;
+            }
+
+            return report;
+        }
+
         /// <summary>
         /// Opens and immediately closes a connection to Azure Database
         /// for PostgreSQL, without executing any query. The exception is
