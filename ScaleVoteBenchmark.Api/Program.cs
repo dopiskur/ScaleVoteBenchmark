@@ -44,6 +44,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "ScaleVoteBenchmark API",
+        Version = "v1",
+        Description = "REST API za glasovanje i dohvat rezultata, koristi se za testiranje skaliranja u Azureu."
+    });
+
+    var jwtScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Unijeti isključivo JWT token dobiven putem /api/auth/login (bez prefiksa 'Bearer ')."
+    };
+
+    options.AddSecurityDefinition("Bearer", jwtScheme);
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        { jwtScheme, Array.Empty<string>() }
+    });
+});
+
 var app = builder.Build();
 
 // ------------------------------------------------------------
@@ -84,6 +111,17 @@ var app = builder.Build();
 app.UseCors("ScaleVoteBenchmark.WebPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Swagger je namjerno dostupan isključivo u Development okruženju,
+// kako API dokumentacija ne bi bila javno izložena na Azureu.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ScaleVoteBenchmark API v1");
+    });
+}
 
 app.MapControllers();
 
