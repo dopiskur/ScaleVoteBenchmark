@@ -10,6 +10,8 @@ obj/
 .vscode/
 
 ## appsettings s tajnama - lokalne verzije se ne commitaju
+## Predlošci (appsettings.json.example) ostaju trackani, stvarne datoteke ne.
+appsettings.json
 appsettings.Development.json
 appsettings.Local.json
 
