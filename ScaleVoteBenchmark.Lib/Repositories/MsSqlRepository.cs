@@ -29,6 +29,15 @@ namespace ScaleVoteBenchmark.Lib.Repositories
             // Ako je omogućen Managed Identity način rada, lozinka se ne
             // koristi iz connection stringa, već se pribavlja privremeni
             // access token putem Azure AD identiteta aplikacije.
+            //
+            // SIGURNOSNA NAPOMENA: kada je useManagedIdentity=false (default),
+            // aplikacija se spaja klasičnim putem, korisničkim imenom i
+            // lozinkom sadržanima u connection stringu (appsettings.json).
+            // Ovaj način rada je namjerno zadržan radi jednostavnosti
+            // lokalnog razvoja i scenarija izvan Azure okruženja, no manje
+            // je siguran jer lozinka baze podataka ostaje u konfiguracijskoj
+            // datoteci u čitljivom obliku. Za produkcijsko okruženje u
+            // Azureu preporučuje se Managed Identity mod.
             if (useManagedIdentity)
             {
                 connection.AccessToken = AzureSqlAuthProvider.GetAccessToken();

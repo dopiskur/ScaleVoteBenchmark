@@ -22,9 +22,14 @@ Rješenje sadrži tri projekta:
 
 Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana je uz verziju .NET runtimea (dio je ASP.NET Core dijeljenog frameworka), zbog čega je cijelo rješenje prebačeno na .NET 10 kako bi verzija 10.0.10 uopće bila korištiva. `Microsoft.Extensions.*` paketi nisu na isti način vezani uz runtime, ali se drže usklađenima radi jednostavnosti održavanja.
 
-## Managed Identity (opcionalno)
+## Spajanje na Azure SQL — dva podržana načina
 
-Uz `Azure.Identity` paket dodana je mogućnost spajanja na Azure SQL bez lozinke u connection stringu. Postavljanjem `UseManagedIdentity: true` u `ScaleVoteBenchmark.Api/appsettings.json`, `MsSqlRepository` pribavlja privremeni pristupni token putem dodijeljenog Azure identiteta aplikacije (Managed Identity), umjesto korištenja korisničkog imena i lozinke iz connection stringa. Funkcionira samo kada je aplikacija pokrenuta unutar Azure okruženja (App Service, VM) s dodijeljenim identitetom koji ima pristup Azure SQL bazi.
+`ScaleVoteBenchmark.Api` podržava dva načina spajanja na Azure SQL, birana postavkom `UseManagedIdentity` u `appsettings.json`:
+
+- **`false` (default) — connection string autentikacija.** Koristi se klasičan `SqlConnection` s korisničkim imenom i lozinkom iz `ConnectionStrings:MsSql`. Jednostavno za lokalni razvoj i scenarije izvan Azurea, ali **manje sigurno** jer lozinka baze ostaje zapisana u konfiguracijskoj datoteci u čitljivom obliku.
+- **`true` — Managed Identity autentikacija.** Uz `Azure.Identity` paket, `MsSqlRepository` pribavlja privremeni pristupni token putem dodijeljenog Azure identiteta aplikacije, bez potrebe da lozinka uopće postoji u konfiguraciji. Funkcionira samo kada je aplikacija pokrenuta unutar Azure okruženja (App Service, VM) s dodijeljenim identitetom koji ima pristup Azure SQL bazi.
+
+Oba načina koriste isti connection string za adresu poslužitelja i naziv baze; u Managed Identity modu se iz njega samo ignorira dio s korisničkim imenom i lozinkom. MySQL grana (`MySqlRepository`) trenutno podržava isključivo connection string autentikaciju.
 
 ## Priprema baze podataka
 
