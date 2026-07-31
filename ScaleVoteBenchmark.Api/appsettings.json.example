@@ -7,10 +7,15 @@
   },
   "AllowedHosts": "*",
 
-  "DatabaseProvider": "MsSql",
+  "DatabaseProvider": "Sqlite",
 
   "// UseManagedIdentity": "false = connect via connection string (username/password, less secure); true = Azure AD Managed Identity",
   "UseManagedIdentity": false,
+
+  "Auth": {
+    "// Enabled": "true = GET /api/vote/counts requires a valid JWT (from POST /api/auth/login); false = it can be called without a token",
+    "Enabled": true
+  },
 
   "Startup": {
     "// FailFastOnDbCheck": "true = the application stops immediately if the database is unavailable at startup; false = only a warning is written to the log",
@@ -45,6 +50,6 @@
 
   "AdminUser": {
     "Username": "admin",
-    "Password": "admin123"
+    "Password": "admin"
   }
 }

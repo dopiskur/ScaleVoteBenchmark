@@ -22,7 +22,7 @@ namespace ScaleVoteBenchmark.Api
 
         public IRepository GetRepo()
         {
-            string provider = configuration["DatabaseProvider"] ?? "MsSql";
+            string provider = configuration["DatabaseProvider"] ?? "Sqlite";
 
             return provider switch
             {

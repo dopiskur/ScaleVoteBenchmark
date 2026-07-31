@@ -1,7 +1,9 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using ScaleVoteBenchmark.Api;
+using ScaleVoteBenchmark.Api.Auth;
 using ScaleVoteBenchmark.Api.Cache;
 using ScaleVoteBenchmark.Api.Interfaces;
 
@@ -40,6 +42,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+// Lets [Authorize]-protected endpoints be reached without a JWT token
+// when "Auth:Enabled" is set to false in appsettings.json.
+builder.Services.AddSingleton<IAuthorizationHandler, OptionalAuthorizationHandler>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

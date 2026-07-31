@@ -4,7 +4,7 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
-The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results (`GET /api/vote/counts`, protected by JWT) can later be read as statistics directly from the database or via that endpoint.
+The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results (`GET /api/vote/counts`) can later be read as statistics directly from the database or via that endpoint; whether it requires a JWT is controlled by `Auth:Enabled` (see below).
 
 The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database (the same pattern as `VoteCountsGet`, just with percentage columns added) — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
@@ -31,6 +31,10 @@ Note: the version of the `Microsoft.AspNetCore.Authentication.JwtBearer` package
 - **`true` — Managed Identity authentication.** Using the `Azure.Identity` package, `MsSqlRepository` obtains a temporary access token via the application's assigned Azure identity, without the password needing to exist in the configuration at all. Only works when the application is running inside an Azure environment (App Service, VM) with an assigned identity that has access to the Azure SQL database.
 
 Both modes use the same connection string for the server address and database name; in Managed Identity mode, the username/password portion is simply ignored. The MySQL (`MySqlRepository`), PostgreSQL (`PostgreSqlRepository`) and SQLite (`SqliteRepository`) branches currently support connection string authentication only.
+
+## Making JWT authentication optional
+
+`GET /api/vote/counts` is decorated with `[Authorize]` and normally requires a JWT obtained via `POST /api/auth/login`. Setting `Auth:Enabled` to `false` in `appsettings.json` makes it reachable without a token — useful when you just want to poll counts locally without dealing with login. This is implemented via `OptionalAuthorizationHandler` (`ScaleVoteBenchmark.Api/Auth/OptionalAuthorizationHandler.cs`), registered as an `IAuthorizationHandler` that succeeds every pending authorization requirement when the setting is off, so no controller code changes based on it. `POST /api/vote/add` and `GET /api/vote/report` are already anonymous regardless of this setting; `POST /api/auth/login` keeps working either way (in case you flip `Auth:Enabled` back on later). Defaults to `true`.
 
 ## SQLite — for local development and testing, no server required
 
@@ -71,6 +75,7 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 | --- | --- |
 | `DatabaseProvider` | `DatabaseProvider` |
 | `UseManagedIdentity` | `UseManagedIdentity` |
+| `Auth:Enabled` | `Auth__Enabled` |
 | `ConnectionStrings:MsSql` | `ConnectionStrings__MsSql` |
 | `ConnectionStrings:MySql` | `ConnectionStrings__MySql` |
 | `ConnectionStrings:PostgreSql` | `ConnectionStrings__PostgreSql` |
@@ -112,8 +117,9 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
 - `Load:CpuIterationsPerVote` and `Load:MemoryMegabytesPerVote` — intensity of the artificial CPU and memory load per vote
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for voting results; `false` disables caching so every `GET /api/vote/counts` goes straight to the database (useful when benchmarking database load alone, without cache influence)
+- `Auth:Enabled` — `true` (default) requires a JWT on `GET /api/vote/counts`; `false` makes it reachable without one
 - `Jwt:Key` — a random secret key, at least 32 characters
-- `AdminUser:Username` / `AdminUser:Password` — credentials for administrator login
+- `AdminUser:Username` / `AdminUser:Password` — credentials for administrator login (default `admin` / `admin`)
 
 ## Running
 
