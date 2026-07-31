@@ -3,9 +3,10 @@ using System.Security.Cryptography;
 namespace ScaleVoteBenchmark.Api
 {
     /// <summary>
-    /// Helper class that simulates CPU and memory load while processing a
-    /// single vote. Load intensity is defined exclusively through values
-    /// in the appsettings.json file, without needing to change the code.
+    /// Helper class that simulates CPU, memory, disk write and network
+    /// latency load while processing a single vote. Load intensity is
+    /// defined exclusively through values in the appsettings.json file,
+    /// without needing to change the code.
     /// </summary>
     public static class LoadSimulator
     {
@@ -106,6 +107,21 @@ namespace ScaleVoteBenchmark.Api
             {
                 File.Delete(path);
             }
+        }
+
+        /// <summary>
+        /// Simulates network latency (e.g. a call to a downstream
+        /// service) by asynchronously delaying for the given duration.
+        /// Uses Task.Delay rather than a blocking sleep, so the request
+        /// thread is released back to the pool for the duration of the
+        /// "wait" instead of being tied up - the same way a real async
+        /// network call would behave, and without artificially limiting
+        /// how much concurrent load the app can take.
+        /// </summary>
+        /// <param name="milliseconds">Delay duration in milliseconds.</param>
+        public static Task SimulateNetworkLatencyAsync(int milliseconds)
+        {
+            return milliseconds > 0 ? Task.Delay(milliseconds) : Task.CompletedTask;
         }
     }
 }
