@@ -9,6 +9,15 @@ namespace ScaleVoteBenchmark.Api
     /// </summary>
     public static class LoadSimulator
     {
+        private static readonly string DiskLoadDirectory = CreateDiskLoadDirectory();
+
+        private static string CreateDiskLoadDirectory()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "ScaleVoteBenchmark", "diskload");
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
         /// <summary>
         /// Simulates CPU load by repeatedly computing a SHA-256 hash
         /// value.
@@ -60,6 +69,43 @@ namespace ScaleVoteBenchmark.Api
 
             GC.KeepAlive(buffer);
             GC.KeepAlive(checksum);
+        }
+
+        /// <summary>
+        /// Simulates disk write load by writing a block of random data to
+        /// a temporary file and forcing it to be flushed to disk, then
+        /// deleting the file immediately. Each call uses its own
+        /// uniquely-named file so concurrent votes generate genuine,
+        /// non-contending disk I/O instead of serializing on a shared
+        /// file, and nothing accumulates on disk across a long benchmark
+        /// run.
+        /// </summary>
+        /// <param name="kilobytes">Size of the data block to write, in KB.</param>
+        public static void SimulateDiskLoad(int kilobytes)
+        {
+            if (kilobytes <= 0)
+            {
+                return;
+            }
+
+            byte[] buffer = new byte[kilobytes * 1024];
+            Random.Shared.NextBytes(buffer);
+
+            string path = Path.Combine(DiskLoadDirectory, $"{Guid.NewGuid():N}.tmp");
+
+            try
+            {
+                using var stream = new FileStream(
+                    path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                    bufferSize: 4096, FileOptions.WriteThrough);
+
+                stream.Write(buffer, 0, buffer.Length);
+                stream.Flush(flushToDisk: true);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
         }
     }
 }

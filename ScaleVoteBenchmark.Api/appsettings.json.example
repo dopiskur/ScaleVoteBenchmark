@@ -38,7 +38,8 @@
 
   "Load": {
     "CpuIterationsPerVote": 200000,
-    "MemoryMegabytesPerVote": 5
+    "MemoryMegabytesPerVote": 5,
+    "DiskWriteKilobytesPerVote": 64
   },
 
   "Jwt": {

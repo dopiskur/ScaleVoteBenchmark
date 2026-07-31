@@ -4,7 +4,7 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
-The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
+The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory and disk write load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`) — that's the purpose of the benchmark. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
 The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
@@ -59,7 +59,7 @@ Without this check, an incorrect database configuration would otherwise go unnot
 
 ## API endpoints
 
-- `POST /api/vote/add?option=yes|no` — records a vote and generates the artificial CPU/memory load; requires a JWT if `Auth:Enabled` is `true` (see above)
+- `POST /api/vote/add?option=yes|no` — records a vote and generates the artificial CPU/memory/disk load; requires a JWT if `Auth:Enabled` is `true` (see above)
 - `GET /api/vote/report` — anonymous; returns `{ yes, no, total, yesPercent, noPercent }`, all computed by the database
 - `POST /api/auth/login` — anonymous; body `{ "username": "...", "password": "..." }`, returns `{ "token": "..." }` on success
 
@@ -94,6 +94,7 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 | `AdminUser:Password` | `AdminUser__Password` |
 | `Load:CpuIterationsPerVote` | `Load__CpuIterationsPerVote` |
 | `Load:MemoryMegabytesPerVote` | `Load__MemoryMegabytesPerVote` |
+| `Load:DiskWriteKilobytesPerVote` | `Load__DiskWriteKilobytesPerVote` |
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
 | `Cache:Enabled` | `Cache__Enabled` |
 | `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
@@ -121,7 +122,7 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 
 - `DatabaseProvider` — `"MsSql"`, `"MySql"`, `"PostgreSql"` or `"Sqlite"`, selects which repository implementation is used
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
-- `Load:CpuIterationsPerVote` and `Load:MemoryMegabytesPerVote` — intensity of the artificial CPU and memory load per vote
+- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote` and `Load:DiskWriteKilobytesPerVote` — intensity of the artificial CPU, memory and disk write load per vote. The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleVoteBenchmark/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true

@@ -24,8 +24,9 @@ namespace ScaleVoteBenchmark.Api.Controllers
         /// authorization (see "Auth:Enabled" in appsettings.json) so the
         /// load-generation script exercises token validation as part of
         /// the benchmark, not just the vote write itself. Before writing
-        /// to the database, a simulated CPU and memory load is executed,
-        /// whose intensity is defined in the appsettings.json file.
+        /// to the database, simulated CPU, memory and disk write load is
+        /// executed, whose intensity is defined in the appsettings.json
+        /// file.
         /// </summary>
         [HttpPost("add")]
         [Authorize]
@@ -38,9 +39,11 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             int cpuIterations = int.Parse(configuration["Load:CpuIterationsPerVote"] ?? "0");
             int memoryMegabytes = int.Parse(configuration["Load:MemoryMegabytesPerVote"] ?? "0");
+            int diskWriteKilobytes = int.Parse(configuration["Load:DiskWriteKilobytesPerVote"] ?? "0");
 
             LoadSimulator.SimulateCpuLoad(cpuIterations);
             LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
+            LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
 
             repoFactory.GetRepo().VoteAdd(option);
 
