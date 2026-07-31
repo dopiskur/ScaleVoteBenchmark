@@ -14,6 +14,11 @@
   "// UseManagedIdentity": "false = spajanje putem connection stringa (korisnicko ime/lozinka, manje sigurno); true = Azure AD Managed Identity",
   "UseManagedIdentity": false,
 
+  "Startup": {
+    "// FailFastOnDbCheck": "true = aplikacija se odmah zaustavi ako baza nije dostupna pri pokretanju; false = samo se ispise upozorenje u log",
+    "FailFastOnDbCheck": true
+  },
+
   "ConnectionStrings": {
     "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleVoteBenchmarkDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=False;",
     "MySql": "Server=YOUR-SERVER.mysql.database.azure.com;Port=3306;Database=ScaleVoteBenchmarkDb;Uid=YOUR-USER;Pwd=YOUR-PASSWORD;SslMode=Required;"

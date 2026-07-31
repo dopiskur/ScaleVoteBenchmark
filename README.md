@@ -31,6 +31,15 @@ Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana 
 
 Oba načina koriste isti connection string za adresu poslužitelja i naziv baze; u Managed Identity modu se iz njega samo ignorira dio s korisničkim imenom i lozinkom. MySQL grana (`MySqlRepository`) trenutno podržava isključivo connection string autentikaciju.
 
+## Provjera dostupnosti baze pri pokretanju
+
+`ScaleVoteBenchmark.Api` pri svakom pokretanju odmah pokušava otvoriti konekciju prema konfiguriranoj bazi podataka (bez izvršavanja upita), prije nego što počne primati HTTP zahtjeve. Ponašanje pri neuspjehu bira se postavkom `Startup:FailFastOnDbCheck`:
+
+- **`true` (default)** — aplikacija se odmah zaustavlja uz jasnu grešku u konzoli/logu ako baza nije dostupna (kriva lozinka, pogrešan poslužitelj, zatvoren firewall na Azureu)
+- **`false`** — greška se samo zapisuje kao kritični log zapis, a aplikacija nastavlja raditi; korisno ako želiš da API ostane dostupan (npr. za health-check endpoint) i dok baza privremeno ne radi
+
+Bez ove provjere, pogrešna konfiguracija baze inače se ne bi primijetila sve do prvog stvarnog glasa ili dohvaćanja rezultata (`SqlRepository`/`MySqlRepository` otvaraju konekciju tek "lijeno", kod stvarnog poziva, a ne pri pokretanju aplikacije).
+
 ## Priprema baze podataka
 
 Pokrenuti odgovarajuću skriptu iz `sql/` direktorija na odabranoj bazi:

@@ -49,5 +49,17 @@ namespace ScaleVoteBenchmark.Lib.Repositories
 
             return counts;
         }
+
+        /// <summary>
+        /// Otvara i odmah zatvara konekciju prema Azure Database for MySQL,
+        /// bez izvršavanja bilo kakvog upita. Iznimka se namjerno ne hvata
+        /// ovdje, već se propušta pozivatelju kako bi startup logika
+        /// aplikacije mogla ispisati jasnu poruku o grešci.
+        /// </summary>
+        public void TestConnection()
+        {
+            using var connection = new MySqlConnection(connectionString);
+            connection.Open();
+        }
     }
 }
