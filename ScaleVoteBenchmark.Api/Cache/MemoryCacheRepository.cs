@@ -4,9 +4,9 @@ using ScaleVoteBenchmark.Api.Interfaces;
 namespace ScaleVoteBenchmark.Api.Cache
 {
     /// <summary>
-    /// Implementacija predmemorije korištenjem nativne .NET klase
-    /// "MemoryCache". Koristi se za privremeno spremanje rezultata
-    /// glasovanja kako bi se smanjio broj upita prema podatkovnom sloju.
+    /// Cache implementation using the native .NET "MemoryCache" class.
+    /// Used to temporarily store voting results in order to reduce the
+    /// number of queries against the data layer.
     /// </summary>
     public class MemoryCacheRepository : ICache
     {

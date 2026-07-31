@@ -3,10 +3,10 @@ using ScaleVoteBenchmark.Api.Models;
 namespace ScaleVoteBenchmark.Api.Interfaces
 {
     /// <summary>
-    /// Zajedničko sučelje za pristup podatkovnom sloju, neovisno o tome
-    /// radi li se o MSSQL (Azure SQL) ili MySQL (Azure Database for MySQL)
-    /// implementaciji. Sve funkcije komuniciraju isključivo putem
-    /// pohranjenih procedura.
+    /// Common interface for accessing the data layer, regardless of
+    /// whether it's the MSSQL (Azure SQL) or MySQL (Azure Database for
+    /// MySQL) implementation. All functions communicate exclusively
+    /// through stored procedures.
     /// </summary>
     public interface IRepository
     {
@@ -15,13 +15,13 @@ namespace ScaleVoteBenchmark.Api.Interfaces
         VoteCounts VoteCountsGet();
 
         /// <summary>
-        /// Provjerava je li moguće uspostaviti konekciju s bazom podataka
-        /// koristeći trenutno konfigurirani connection string. Ne izvršava
-        /// nikakav upit nad tablicama, isključivo otvara i zatvara
-        /// konekciju. Namijenjeno provjeri pri pokretanju aplikacije, kako
-        /// bi se pogrešna konfiguracija (kriva lozinka, nedostupan
-        /// poslužitelj, zatvoren firewall na Azureu) prijavila odmah, a ne
-        /// tek kod prvog stvarnog zahtjeva korisnika.
+        /// Checks whether a connection to the database can be established
+        /// using the currently configured connection string. Does not
+        /// execute any query against the tables, only opens and closes
+        /// the connection. Intended for checking at application startup,
+        /// so that an incorrect configuration (wrong password,
+        /// unreachable server, closed firewall on Azure) is reported
+        /// immediately, rather than only on the first real user request.
         /// </summary>
         void TestConnection();
     }

@@ -1,61 +1,63 @@
 # ScaleVoteBenchmark
 
-Rješenje je ciljano na **.NET 10 (LTS, podrška do studenog 2028.)**. Potreban je .NET 10 SDK.
+The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
-Rješenje sadrži jedan projekt, **ScaleVoteBenchmark.Api** — REST API koji izdaje i validira JWT tokene, jedini komunicira s bazom podataka, te sadrži modele, repozitorije (MSSQL i MySQL), predmemoriju i simulaciju opterećenja.
+The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL and PostgreSQL), caching, and load simulation.
 
-Aplikacija nema korisničko sučelje — namjerno se koristi isključivo kao API koji vanjska skripta za generiranje opterećenja poziva izravno (npr. `POST /api/vote/add?option=yes` ili `?option=no`, nasumično birano po pozivu). Svaki poziv upisuje glas u bazu i usput generira umjetno CPU/memorijsko opterećenje čiji je intenzitet definiran u `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — to je svrha benchmarka. Rezultati (`GET /api/vote/counts`, zaštićeno JWT-om) kasnije se mogu očitati kao statistika direktno iz baze ili preko tog endpointa.
+The application has no user interface — it is intentionally used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results (`GET /api/vote/counts`, protected by JWT) can later be read as statistics directly from the database or via that endpoint.
 
-## Verzije paketa
+## Package versions
 
-| Paket | Verzija |
+| Package | Version |
 | --- | --- |
 | Microsoft.Data.SqlClient | 7.0.2 |
 | MySqlConnector | 2.6.1 |
+| Npgsql | 10.0.3 |
 | Azure.Identity | 1.21.0 |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 |
 | Swashbuckle.AspNetCore | 7.2.0 |
 
-Napomena: verzija paketa `Microsoft.AspNetCore.Authentication.JwtBearer` vezana je uz verziju .NET runtimea (dio je ASP.NET Core dijeljenog frameworka), zbog čega je cijelo rješenje prebačeno na .NET 10 kako bi verzija 10.0.10 uopće bila korištiva. `Microsoft.Extensions.Caching.Memory` i `Microsoft.Extensions.Configuration.Abstractions` se ne navode zasebno jer dolaze već uključeni u ASP.NET Core dijeljeni framework (`Microsoft.NET.Sdk.Web`), pa nema potrebe za eksplicitnom paket-referencom.
+Note: the version of the `Microsoft.AspNetCore.Authentication.JwtBearer` package is tied to the .NET runtime version (it's part of the ASP.NET Core shared framework), which is why the entire solution was moved to .NET 10 so that version 10.0.10 could even be used. `Microsoft.Extensions.Caching.Memory` and `Microsoft.Extensions.Configuration.Abstractions` are not listed separately because they already come bundled with the ASP.NET Core shared framework (`Microsoft.NET.Sdk.Web`), so there's no need for an explicit package reference.
 
-## Spajanje na Azure SQL — dva podržana načina
+## Connecting to Azure SQL — two supported modes
 
-`ScaleVoteBenchmark.Api` podržava dva načina spajanja na Azure SQL, birana postavkom `UseManagedIdentity` u `appsettings.json`:
+`ScaleVoteBenchmark.Api` supports two ways of connecting to Azure SQL, selected via the `UseManagedIdentity` setting in `appsettings.json`:
 
-- **`false` (default) — connection string autentikacija.** Koristi se klasičan `SqlConnection` s korisničkim imenom i lozinkom iz `ConnectionStrings:MsSql`. Jednostavno za lokalni razvoj i scenarije izvan Azurea, ali **manje sigurno** jer lozinka baze ostaje zapisana u konfiguracijskoj datoteci u čitljivom obliku.
-- **`true` — Managed Identity autentikacija.** Uz `Azure.Identity` paket, `MsSqlRepository` pribavlja privremeni pristupni token putem dodijeljenog Azure identiteta aplikacije, bez potrebe da lozinka uopće postoji u konfiguraciji. Funkcionira samo kada je aplikacija pokrenuta unutar Azure okruženja (App Service, VM) s dodijeljenim identitetom koji ima pristup Azure SQL bazi.
+- **`false` (default) — connection string authentication.** Uses a classic `SqlConnection` with the username and password from `ConnectionStrings:MsSql`. Simple for local development and scenarios outside Azure, but **less secure** because the database password remains stored in the configuration file in plain text.
+- **`true` — Managed Identity authentication.** Using the `Azure.Identity` package, `MsSqlRepository` obtains a temporary access token via the application's assigned Azure identity, without the password needing to exist in the configuration at all. Only works when the application is running inside an Azure environment (App Service, VM) with an assigned identity that has access to the Azure SQL database.
 
-Oba načina koriste isti connection string za adresu poslužitelja i naziv baze; u Managed Identity modu se iz njega samo ignorira dio s korisničkim imenom i lozinkom. MySQL grana (`MySqlRepository`) trenutno podržava isključivo connection string autentikaciju.
+Both modes use the same connection string for the server address and database name; in Managed Identity mode, the username/password portion is simply ignored. The MySQL (`MySqlRepository`) and PostgreSQL (`PostgreSqlRepository`) branches currently support connection string authentication only.
 
-## Provjera dostupnosti baze pri pokretanju
+## Database availability check at startup
 
-`ScaleVoteBenchmark.Api` pri svakom pokretanju odmah pokušava otvoriti konekciju prema konfiguriranoj bazi podataka (bez izvršavanja upita), prije nego što počne primati HTTP zahtjeve. Ponašanje pri neuspjehu bira se postavkom `Startup:FailFastOnDbCheck`:
+`ScaleVoteBenchmark.Api` immediately tries to open a connection to the configured database (without executing a query) on every startup, before it starts accepting HTTP requests. Behavior on failure is selected via the `Startup:FailFastOnDbCheck` setting:
 
-- **`true` (default)** — aplikacija se odmah zaustavlja uz jasnu grešku u konzoli/logu ako baza nije dostupna (kriva lozinka, pogrešan poslužitelj, zatvoren firewall na Azureu)
-- **`false`** — greška se samo zapisuje kao kritični log zapis, a aplikacija nastavlja raditi; korisno ako želiš da API ostane dostupan (npr. za health-check endpoint) i dok baza privremeno ne radi
+- **`true` (default)** — the application stops immediately with a clear error in the console/log if the database is unavailable (wrong password, wrong server, closed firewall on Azure)
+- **`false`** — the error is only written as a critical log entry, and the application keeps running; useful if you want the API to remain available (e.g. for a health-check endpoint) while the database is temporarily down
 
-Bez ove provjere, pogrešna konfiguracija baze inače se ne bi primijetila sve do prvog stvarnog glasa ili dohvaćanja rezultata (`SqlRepository`/`MySqlRepository` otvaraju konekciju tek "lijeno", kod stvarnog poziva, a ne pri pokretanju aplikacije).
+Without this check, an incorrect database configuration would otherwise go unnoticed until the first real vote or result retrieval (`MsSqlRepository`/`MySqlRepository`/`PostgreSqlRepository` only open a connection "lazily", on an actual call, not at application startup).
 
-## Deploy putem GitHub Actions
+## Deploying via GitHub Actions
 
-U `.github/workflows/` nalazi se workflow `deploy-api.yml` koji gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, a aktivira se na promjene unutar `ScaleVoteBenchmark.Api/` ili samog workflowa.
+The `.github/workflows/` folder contains the `deploy-api.yml` workflow, which builds and deploys `ScaleVoteBenchmark.Api` to Azure App Service, triggered on changes within `ScaleVoteBenchmark.Api/` or the workflow file itself.
 
-### Priprema prije prvog pokretanja workflowa
+### Setup before running the workflow for the first time
 
-1. Kreirati Azure App Service resurs (npr. `scalevotebenchmark-api`), s .NET 10 runtimeom
-2. U `deploy-api.yml` zamijeniti `YOUR-API-APP-SERVICE-NAME` stvarnim nazivom App Service resursa
-3. Preuzeti *Publish Profile* (Azure Portal → App Service → "Get publish profile") i spremiti ga u GitHub repozitoriju pod **Settings → Secrets and variables → Actions** kao `AZURE_WEBAPP_PUBLISH_PROFILE_API`
+1. Create an Azure App Service resource (e.g. `scalevotebenchmark-api`), with the .NET 10 runtime
+2. In `deploy-api.yml`, replace `YOUR-API-APP-SERVICE-NAME` with the actual App Service resource name
+3. Download the *Publish Profile* (Azure Portal → App Service → "Get publish profile") and store it in the GitHub repository under **Settings → Secrets and variables → Actions** as `AZURE_WEBAPP_PUBLISH_PROFILE_API`
 
-### appsettings.json na Azureu — Application Settings, ne datoteka
+### appsettings.json on Azure — Application Settings, not a file
 
-Budući da je `appsettings.json` namjerno u `.gitignore` (sadrži tajne), **ne postoji u repozitoriju niti u onome što se deploya**. Umjesto toga, sve postavke treba postaviti kao **Application Settings** u Azure Portalu (App Service → Configuration), gdje se ugniježđeni ključevi pišu s dvostrukom podvlakom `__`:
+Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets), **it does not exist in the repository or in what gets deployed**. Instead, all settings should be configured as **Application Settings** in the Azure Portal (App Service → Configuration), where nested keys are written with a double underscore `__`:
 
-| appsettings.json ključ | Application Setting naziv |
+| appsettings.json key | Application Setting name |
 | --- | --- |
 | `DatabaseProvider` | `DatabaseProvider` |
 | `UseManagedIdentity` | `UseManagedIdentity` |
 | `ConnectionStrings:MsSql` | `ConnectionStrings__MsSql` |
 | `ConnectionStrings:MySql` | `ConnectionStrings__MySql` |
+| `ConnectionStrings:PostgreSql` | `ConnectionStrings__PostgreSql` |
 | `Jwt:Key` | `Jwt__Key` |
 | `Jwt:Issuer` | `Jwt__Issuer` |
 | `Jwt:Audience` | `Jwt__Audience` |
@@ -68,37 +70,38 @@ Budući da je `appsettings.json` namjerno u `.gitignore` (sadrži tajne), **ne p
 | `Cache:Enabled` | `Cache__Enabled` |
 | `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
 
-## Priprema baze podataka
+## Database setup
 
-Pokrenuti odgovarajuću skriptu iz `sql/` direktorija na odabranoj bazi:
+Run the appropriate script from the `sql/` directory against the chosen database:
 
-- `sql/mssql_schema.sql` za Azure SQL
-- `sql/mysql_schema.sql` za Azure Database for MySQL
+- `sql/mssql_schema.sql` for Azure SQL
+- `sql/mysql_schema.sql` for Azure Database for MySQL
+- `sql/postgresql_schema.sql` for Azure Database for PostgreSQL
 
-## Konfiguracija
+## Configuration
 
-Prije prvog pokretanja potrebno je napraviti kopiju predloška:
+Before the first run, make a copy of the template:
 
 ```bash
 cp ScaleVoteBenchmark.Api/appsettings.json.example ScaleVoteBenchmark.Api/appsettings.json
 ```
 
-Stvarna `appsettings.json` datoteka namjerno je u `.gitignore` (sadrži connection stringove i tajne), dok `appsettings.json.example` ostaje pod verzijskom kontrolom kao predložak.
+The real `appsettings.json` file is intentionally in `.gitignore` (it contains connection strings and secrets), while `appsettings.json.example` stays under version control as a template.
 
-U `ScaleVoteBenchmark.Api/appsettings.json` potrebno je postaviti:
+In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 
-- `DatabaseProvider` — `"MsSql"` ili `"MySql"`, bira koja se implementacija repozitorija koristi
-- `ConnectionStrings:MsSql` i `ConnectionStrings:MySql` — connection stringovi za obje baze (nije potrebno da oba budu ispravna, koristi se samo onaj koji odgovara odabranom provideru)
-- `Load:CpuIterationsPerVote` i `Load:MemoryMegabytesPerVote` — intenzitet umjetnog CPU i memorijskog opterećenja po glasu
-- `Cache:Enabled` — `true` (default) uključuje MemoryCache za rezultate glasovanja; `false` isključuje predmemoriju pa svaki `GET /api/vote/counts` ide izravno na bazu (korisno kad se benchmarkira i samo opterećenje baze bez utjecaja cachea)
-- `Jwt:Key` — nasumični tajni ključ, minimalno 32 znaka
-- `AdminUser:Username` / `AdminUser:Password` — kredencijali za administratorsku prijavu
+- `DatabaseProvider` — `"MsSql"`, `"MySql"` or `"PostgreSql"`, selects which repository implementation is used
+- `ConnectionStrings:MsSql`, `ConnectionStrings:MySql` and `ConnectionStrings:PostgreSql` — connection strings for all three databases (none of the others need to be valid, only the one matching the selected provider is used)
+- `Load:CpuIterationsPerVote` and `Load:MemoryMegabytesPerVote` — intensity of the artificial CPU and memory load per vote
+- `Cache:Enabled` — `true` (default) enables the MemoryCache for voting results; `false` disables caching so every `GET /api/vote/counts` goes straight to the database (useful when benchmarking database load alone, without cache influence)
+- `Jwt:Key` — a random secret key, at least 32 characters
+- `AdminUser:Username` / `AdminUser:Password` — credentials for administrator login
 
-## Pokretanje
+## Running
 
 ```bash
 cd ScaleVoteBenchmark.Api
 dotnet run
 ```
 
-Glasovi se generiraju izravnim pozivima na `POST /api/vote/add?option=yes` ili `POST /api/vote/add?option=no` (anonimni pristup, bez potrebe za JWT tokenom) — npr. skriptom za load testing koja nasumično bira `yes`/`no` po pozivu. Zbrojeni rezultati dostupni su na `GET /api/vote/counts` (zahtijeva JWT dobiven putem `POST /api/auth/login`), a mogu se i izravno očitati iz tablice `Vote` u bazi.
+Votes are generated by calling `POST /api/vote/add?option=yes` or `POST /api/vote/add?option=no` directly (anonymous access, no JWT token needed) — e.g. by a load-testing script that randomly picks `yes`/`no` per call. Summed results are available at `GET /api/vote/counts` (requires a JWT obtained via `POST /api/auth/login`), and can also be read directly from the `Vote` table in the database.

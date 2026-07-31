@@ -1,6 +1,6 @@
 -- ============================================================
--- Skripta za Azure SQL (Microsoft SQL Server)
--- Tablica i pohranjene procedure za voting aplikaciju
+-- Script for Azure SQL (Microsoft SQL Server)
+-- Table and stored procedures for the voting application
 -- ============================================================
 
 IF OBJECT_ID('dbo.Vote', 'U') IS NOT NULL
@@ -18,7 +18,7 @@ CREATE TABLE dbo.Vote
 GO
 
 -- ------------------------------------------------------------
--- Pohranjena procedura za unos glasa
+-- Stored procedure for inserting a vote
 -- ------------------------------------------------------------
 IF OBJECT_ID('dbo.VoteAdd', 'P') IS NOT NULL
     DROP PROCEDURE dbo.VoteAdd;
@@ -36,7 +36,7 @@ END
 GO
 
 -- ------------------------------------------------------------
--- Pohranjena procedura za dohvaćanje zbrojenih rezultata
+-- Stored procedure for retrieving the summed results
 -- ------------------------------------------------------------
 IF OBJECT_ID('dbo.VoteCountsGet', 'P') IS NOT NULL
     DROP PROCEDURE dbo.VoteCountsGet;

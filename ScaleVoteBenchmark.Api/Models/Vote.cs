@@ -1,14 +1,14 @@
 namespace ScaleVoteBenchmark.Api.Models
 {
     /// <summary>
-    /// Model pojedinačnog glasa.
+    /// Model of a single vote.
     /// </summary>
     public class Vote
     {
         public int? IDVote { get; set; }
 
         /// <summary>
-        /// Vrijednost "yes" ili "no".
+        /// Value "yes" or "no".
         /// </summary>
         public string? Option { get; set; }
 
@@ -16,7 +16,7 @@ namespace ScaleVoteBenchmark.Api.Models
     }
 
     /// <summary>
-    /// Zbrojeni rezultati glasovanja po opciji.
+    /// Summed voting results per option.
     /// </summary>
     public class VoteCounts
     {

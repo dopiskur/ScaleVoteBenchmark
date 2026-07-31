@@ -6,10 +6,10 @@ using ScaleVoteBenchmark.Api.Models;
 namespace ScaleVoteBenchmark.Api.Repositories
 {
     /// <summary>
-    /// Implementacija repozitorija za rad s Microsoft SQL Server / Azure SQL
-    /// bazom podataka. Sve funkcije komuniciraju isključivo putem
-    /// pohranjenih procedura, bez direktnih SELECT, INSERT, UPDATE ili
-    /// DELETE upita.
+    /// Repository implementation for working with a Microsoft SQL Server
+    /// / Azure SQL database. All functions communicate exclusively
+    /// through stored procedures, without direct SELECT, INSERT, UPDATE
+    /// or DELETE queries.
     /// </summary>
     public class MsSqlRepository : IRepository
     {
@@ -26,18 +26,20 @@ namespace ScaleVoteBenchmark.Api.Repositories
         {
             var connection = new SqlConnection(connectionString);
 
-            // Ako je omogućen Managed Identity način rada, lozinka se ne
-            // koristi iz connection stringa, već se pribavlja privremeni
-            // access token putem Azure AD identiteta aplikacije.
+            // If Managed Identity mode is enabled, the password is not
+            // used from the connection string; instead, a temporary
+            // access token is obtained via the application's Azure AD
+            // identity.
             //
-            // SIGURNOSNA NAPOMENA: kada je useManagedIdentity=false (default),
-            // aplikacija se spaja klasičnim putem, korisničkim imenom i
-            // lozinkom sadržanima u connection stringu (appsettings.json).
-            // Ovaj način rada je namjerno zadržan radi jednostavnosti
-            // lokalnog razvoja i scenarija izvan Azure okruženja, no manje
-            // je siguran jer lozinka baze podataka ostaje u konfiguracijskoj
-            // datoteci u čitljivom obliku. Za produkcijsko okruženje u
-            // Azureu preporučuje se Managed Identity mod.
+            // SECURITY NOTE: when useManagedIdentity=false (default), the
+            // application connects the classic way, using the username
+            // and password contained in the connection string
+            // (appsettings.json). This mode is intentionally kept for
+            // simplicity of local development and scenarios outside
+            // Azure, but it is less secure because the database password
+            // remains in the configuration file in plain text. For a
+            // production environment in Azure, Managed Identity mode is
+            // recommended.
             if (useManagedIdentity)
             {
                 connection.AccessToken = AzureSqlAuthProvider.GetAccessToken();
@@ -78,10 +80,11 @@ namespace ScaleVoteBenchmark.Api.Repositories
         }
 
         /// <summary>
-        /// Otvara i odmah zatvara konekciju prema Azure SQL bazi, bez
-        /// izvršavanja bilo kakvog upita. Iznimka se namjerno ne hvata
-        /// ovdje, već se propušta pozivatelju kako bi startup logika
-        /// aplikacije mogla ispisati jasnu poruku o grešci.
+        /// Opens and immediately closes a connection to the Azure SQL
+        /// database, without executing any query. The exception is
+        /// intentionally not caught here; it is passed to the caller so
+        /// the application's startup logic can print a clear error
+        /// message.
         /// </summary>
         public void TestConnection()
         {

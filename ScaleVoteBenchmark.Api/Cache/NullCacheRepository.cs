@@ -3,9 +3,9 @@ using ScaleVoteBenchmark.Api.Interfaces;
 namespace ScaleVoteBenchmark.Api.Cache
 {
     /// <summary>
-    /// Implementacija predmemorije koja ne sprema ništa - koristi se kada
-    /// je "Cache:Enabled" u appsettings.json postavljen na false, kako bi
-    /// svaki zahtjev za rezultatima uvijek išao izravno na bazu podataka.
+    /// Cache implementation that stores nothing - used when
+    /// "Cache:Enabled" in appsettings.json is set to false, so every
+    /// request for results always goes straight to the database.
     /// </summary>
     public class NullCacheRepository : ICache
     {

@@ -4,21 +4,21 @@ using Azure.Identity;
 namespace ScaleVoteBenchmark.Api.Azure
 {
     /// <summary>
-    /// Omogućava autentikaciju prema Azure SQL bazi putem Managed Identity
-    /// mehanizma, umjesto klasičnog korisničkog imena i lozinke u
-    /// connection stringu. Koristi se isključivo kada je u appsettings.json
-    /// postavka "UseManagedIdentity" postavljena na true, a aplikacija se
-    /// izvršava unutar Azure okruženja (App Service, VM) koje ima
-    /// dodijeljen identitet.
+    /// Enables authentication against Azure SQL via the Managed Identity
+    /// mechanism, instead of a classic username and password in the
+    /// connection string. Used exclusively when the "UseManagedIdentity"
+    /// setting in appsettings.json is set to true, and the application is
+    /// running inside an Azure environment (App Service, VM) that has an
+    /// assigned identity.
     /// </summary>
     public static class AzureSqlAuthProvider
     {
         private const string SqlResourceScope = "https://database.windows.net/.default";
 
         /// <summary>
-        /// Dohvaća access token putem DefaultAzureCredential lanca
-        /// (redoslijedom: Managed Identity, Azure CLI, Visual Studio, itd.),
-        /// koji se potom postavlja kao AccessToken na SqlConnection objekt.
+        /// Retrieves an access token via the DefaultAzureCredential chain
+        /// (in order: Managed Identity, Azure CLI, Visual Studio, etc.),
+        /// which is then set as the AccessToken on the SqlConnection object.
         /// </summary>
         public static string GetAccessToken()
         {

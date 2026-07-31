@@ -21,8 +21,8 @@ namespace ScaleVoteBenchmark.Api.Controllers
         }
 
         /// <summary>
-        /// Provjerava administratorske kredencijale i, u slučaju uspjeha,
-        /// vraća JWT token korišten za pristup zaštićenim funkcijama.
+        /// Verifies administrator credentials and, on success, returns
+        /// the JWT token used to access protected functions.
         /// </summary>
         [HttpPost("login")]
         public ActionResult<string> Login([FromBody] LoginRequest request)
@@ -32,7 +32,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             if (request.Username != adminUsername || request.Password != adminPassword)
             {
-                return Unauthorized("Neispravno korisničko ime ili lozinka.");
+                return Unauthorized("Invalid username or password.");
             }
 
             string token = JwtTokenProvider.CreateToken(

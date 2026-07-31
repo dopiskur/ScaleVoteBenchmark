@@ -20,11 +20,11 @@ namespace ScaleVoteBenchmark.Api.Controllers
         }
 
         /// <summary>
-        /// Zaprima glas za opciju "yes" ili "no". Pristup je anoniman
-        /// kako bi skripta za generiranje opterećenja mogla pozivati
-        /// endpoint izravno, bez autentikacije. Prije upisa u bazu
-        /// izvršava se simulirano procesorsko i memorijsko opterećenje,
-        /// čiji je intenzitet definiran u appsettings.json datoteci.
+        /// Accepts a vote for the "yes" or "no" option. Access is anonymous
+        /// so the load-generation script can call the endpoint directly,
+        /// without authentication. Before writing to the database, a
+        /// simulated CPU and memory load is executed, whose intensity is
+        /// defined in the appsettings.json file.
         /// </summary>
         [HttpPost("add")]
         [AllowAnonymous]
@@ -32,7 +32,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
         {
             if (option != "yes" && option != "no")
             {
-                return BadRequest("Dozvoljene vrijednosti su isključivo 'yes' ili 'no'.");
+                return BadRequest("Allowed values are only 'yes' or 'no'.");
             }
 
             int cpuIterations = int.Parse(configuration["Load:CpuIterationsPerVote"] ?? "0");
@@ -43,19 +43,18 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             repoFactory.GetRepo().VoteAdd(option);
 
-            // Poništavanje predmemorije rezultata nakon novog glasa
+            // Invalidate the cached results after a new vote
             repoFactory.GetCache().RemoveItem(ResultsCacheKey);
 
             return Ok();
         }
 
         /// <summary>
-        /// Vraća trenutne zbrojene rezultate glasovanja. Zaštićeno JWT
-        /// autorizacijom kako bi rezultatima u stvarnom vremenu mogao
-        /// pristupiti isključivo administrativni korisnik. Rezultat se
-        /// kratkotrajno sprema u predmemoriju kako bi se rasteretio
-        /// podatkovni sloj u slučaju čestog dohvaćanja (npr. polling
-        /// stranice u stvarnom vremenu).
+        /// Returns the current summed voting results. Protected by JWT
+        /// authorization so only an administrative user can access
+        /// real-time results. The result is cached briefly to relieve the
+        /// data layer in case of frequent retrieval (e.g. real-time page
+        /// polling).
         /// </summary>
         [HttpGet("counts")]
         [Authorize]

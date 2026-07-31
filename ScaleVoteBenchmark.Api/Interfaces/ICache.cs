@@ -1,7 +1,7 @@
 namespace ScaleVoteBenchmark.Api.Interfaces
 {
     /// <summary>
-    /// Sučelje za pristup mehanizmu predmemorije.
+    /// Interface for accessing the caching mechanism.
     /// </summary>
     public interface ICache
     {

@@ -1,6 +1,6 @@
 -- ============================================================
--- Skripta za Azure Database for MySQL
--- Tablica i pohranjene procedure za voting aplikaciju
+-- Script for Azure Database for MySQL
+-- Table and stored procedures for the voting application
 -- ============================================================
 
 DROP TABLE IF EXISTS `Vote`;
@@ -15,7 +15,7 @@ CREATE TABLE `Vote`
 );
 
 -- ------------------------------------------------------------
--- Pohranjena procedura za unos glasa
+-- Stored procedure for inserting a vote
 -- ------------------------------------------------------------
 DROP PROCEDURE IF EXISTS `VoteAdd`;
 
@@ -32,7 +32,7 @@ END $$
 DELIMITER ;
 
 -- ------------------------------------------------------------
--- Pohranjena procedura za dohvaćanje zbrojenih rezultata
+-- Stored procedure for retrieving the summed results
 -- ------------------------------------------------------------
 DROP PROCEDURE IF EXISTS `VoteCountsGet`;
 

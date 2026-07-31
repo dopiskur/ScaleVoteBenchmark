@@ -3,18 +3,17 @@ using System.Security.Cryptography;
 namespace ScaleVoteBenchmark.Api
 {
     /// <summary>
-    /// Pomoćna klasa koja simulira procesorsko i memorijsko opterećenje
-    /// prilikom obrade jednog glasa. Intenzitet opterećenja definira se
-    /// isključivo kroz vrijednosti u appsettings.json datoteci, bez
-    /// potrebe za izmjenom koda.
+    /// Helper class that simulates CPU and memory load while processing a
+    /// single vote. Load intensity is defined exclusively through values
+    /// in the appsettings.json file, without needing to change the code.
     /// </summary>
     public static class LoadSimulator
     {
         /// <summary>
-        /// Simulira procesorsko opterećenje ponavljanim izračunom
-        /// SHA-256 hash vrijednosti.
+        /// Simulates CPU load by repeatedly computing a SHA-256 hash
+        /// value.
         /// </summary>
-        /// <param name="iterations">Broj ponavljanja hash kalkulacije.</param>
+        /// <param name="iterations">Number of hash computation repetitions.</param>
         public static void SimulateCpuLoad(int iterations)
         {
             if (iterations <= 0)
@@ -32,12 +31,12 @@ namespace ScaleVoteBenchmark.Api
         }
 
         /// <summary>
-        /// Simulira memorijsko opterećenje alokacijom bloka podataka
-        /// zadane veličine. Blok se u potpunosti popunjava nasumičnim
-        /// vrijednostima kako bi se memorijske stranice stvarno
-        /// rezervirale, a ne samo virtualno alocirale.
+        /// Simulates memory load by allocating a block of data of the
+        /// given size. The block is fully filled with random values so
+        /// the memory pages are actually reserved, not just virtually
+        /// allocated.
         /// </summary>
-        /// <param name="megabytes">Veličina bloka memorije u MB.</param>
+        /// <param name="megabytes">Size of the memory block in MB.</param>
         public static void SimulateMemoryLoad(int megabytes)
         {
             if (megabytes <= 0)
@@ -50,9 +49,9 @@ namespace ScaleVoteBenchmark.Api
 
             Random.Shared.NextBytes(buffer);
 
-            // Prolazak kroz sve memorijske stranice kako bi se osiguralo
-            // da je operacijski sustav stvarno rezervirao fizičku memoriju,
-            // a ne samo virtualno alocirale.
+            // Walk through all memory pages to ensure the operating
+            // system actually reserved physical memory, not just virtual
+            // address space.
             long checksum = 0;
             for (int i = 0; i < buffer.Length; i += 4096)
             {

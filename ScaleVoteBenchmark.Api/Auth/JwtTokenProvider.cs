@@ -6,8 +6,8 @@ using Microsoft.IdentityModel.Tokens;
 namespace ScaleVoteBenchmark.Api.Auth
 {
     /// <summary>
-    /// Kreira digitalno potpisane JWT tokene za administratorske
-    /// korisnike, koristeći HMAC-SHA256 algoritam potpisa.
+    /// Creates digitally signed JWT tokens for administrative users,
+    /// using the HMAC-SHA256 signature algorithm.
     /// </summary>
     public class JwtTokenProvider
     {

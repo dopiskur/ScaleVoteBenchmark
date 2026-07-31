@@ -48,7 +48,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "ScaleVoteBenchmark API",
         Version = "v1",
-        Description = "REST API za glasovanje i dohvat rezultata, koristi se za testiranje skaliranja u Azureu."
+        Description = "REST API for voting and result retrieval, used for testing scaling in Azure."
     });
 
     var jwtScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
@@ -58,7 +58,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Unijeti isključivo JWT token dobiven putem /api/auth/login (bez prefiksa 'Bearer ')."
+        Description = "Enter only the JWT token obtained from /api/auth/login (without the 'Bearer ' prefix)."
     };
 
     options.AddSecurityDefinition("Bearer", jwtScheme);
@@ -71,11 +71,12 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // ------------------------------------------------------------
-// Provjera dostupnosti baze podataka pri pokretanju aplikacije.
-// Umjesto da se pogrešan connection string otkrije tek kod prvog
-// stvarnog HTTP zahtjeva, greška se ovdje odmah ispisuje u konzolu.
-// Ponašanje pri neuspjehu (zaustavi aplikaciju ili samo upozori) bira
-// se postavkom "Startup:FailFastOnDbCheck" u appsettings.json.
+// Database availability check at application startup.
+// Instead of a wrong connection string only being discovered on
+// the first real HTTP request, the error is printed to the
+// console immediately here. The behavior on failure (stop the
+// application or just warn) is chosen via the
+// "Startup:FailFastOnDbCheck" setting in appsettings.json.
 // ------------------------------------------------------------
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupDbCheck");
@@ -87,15 +88,15 @@ var app = builder.Build();
     try
     {
         repoFactory.GetRepo().TestConnection();
-        logger.LogInformation("Provjera konekcije s bazom podataka uspješna (DatabaseProvider={Provider}).",
+        logger.LogInformation("Database connection check succeeded (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
     }
     catch (Exception ex)
     {
         logger.LogCritical(ex,
-            "Provjera konekcije s bazom podataka NEUSPJEŠNA (DatabaseProvider={Provider}). " +
-            "Provjeri ConnectionStrings u appsettings.json, firewall pravila na Azureu i " +
-            "je li baza pokrenuta.",
+            "Database connection check FAILED (DatabaseProvider={Provider}). " +
+            "Check ConnectionStrings in appsettings.json, firewall rules on Azure and " +
+            "whether the database is running.",
             app.Configuration["DatabaseProvider"]);
 
         if (failFast)
@@ -108,8 +109,9 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Swagger je namjerno dostupan isključivo u Development okruženju,
-// kako API dokumentacija ne bi bila javno izložena na Azureu.
+// Swagger is intentionally available only in the Development
+// environment, so the API documentation is not publicly exposed
+// on Azure.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
