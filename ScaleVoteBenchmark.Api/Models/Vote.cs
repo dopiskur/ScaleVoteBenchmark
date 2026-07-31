@@ -16,15 +16,6 @@ namespace ScaleVoteBenchmark.Api.Models
     }
 
     /// <summary>
-    /// Summed voting results per option.
-    /// </summary>
-    public class VoteCounts
-    {
-        public int Yes { get; set; }
-        public int No { get; set; }
-    }
-
-    /// <summary>
     /// Vote report (counts and percentages per option), fully computed by
     /// the database. The API only maps the columns returned by the
     /// stored procedure/function into this model - no percentage math

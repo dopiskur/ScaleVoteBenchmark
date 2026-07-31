@@ -36,25 +36,6 @@ END
 GO
 
 -- ------------------------------------------------------------
--- Stored procedure for retrieving the summed results
--- ------------------------------------------------------------
-IF OBJECT_ID('dbo.VoteCountsGet', 'P') IS NOT NULL
-    DROP PROCEDURE dbo.VoteCountsGet;
-GO
-
-CREATE PROCEDURE dbo.VoteCountsGet
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    SELECT
-        SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
-        SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No]
-    FROM dbo.Vote;
-END
-GO
-
--- ------------------------------------------------------------
 -- Stored procedure for retrieving the summed results with
 -- percentages, used by the public dashboard
 -- ------------------------------------------------------------

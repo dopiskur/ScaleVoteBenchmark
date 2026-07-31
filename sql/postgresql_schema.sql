@@ -27,24 +27,6 @@ END;
 $$;
 
 -- ------------------------------------------------------------
--- Stored function for retrieving the summed results
--- ------------------------------------------------------------
-DROP FUNCTION IF EXISTS vote_counts_get();
-
-CREATE FUNCTION vote_counts_get()
-RETURNS TABLE(yes_count INT, no_count INT)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END)::INT AS yes_count,
-        SUM(CASE WHEN option = 'no'  THEN 1 ELSE 0 END)::INT AS no_count
-    FROM vote;
-END;
-$$;
-
--- ------------------------------------------------------------
 -- Stored function for retrieving the summed results with
 -- percentages, used by the public dashboard
 -- ------------------------------------------------------------

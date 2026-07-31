@@ -32,23 +32,6 @@ END $$
 DELIMITER ;
 
 -- ------------------------------------------------------------
--- Stored procedure for retrieving the summed results
--- ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS `VoteCountsGet`;
-
-DELIMITER $$
-
-CREATE PROCEDURE `VoteCountsGet`()
-BEGIN
-    SELECT
-        SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) AS `Yes`,
-        SUM(CASE WHEN `Option` = 'no'  THEN 1 ELSE 0 END) AS `No`
-    FROM `Vote`;
-END $$
-
-DELIMITER ;
-
--- ------------------------------------------------------------
 -- Stored procedure for retrieving the summed results with
 -- percentages, used by the public dashboard
 -- ------------------------------------------------------------

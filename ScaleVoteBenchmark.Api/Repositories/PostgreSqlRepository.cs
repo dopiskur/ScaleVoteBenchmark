@@ -30,25 +30,6 @@ namespace ScaleVoteBenchmark.Api.Repositories
             cmd.ExecuteNonQuery();
         }
 
-        public VoteCounts VoteCountsGet()
-        {
-            using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT yes_count, no_count FROM vote_counts_get()";
-
-            using var dr = cmd.ExecuteReader();
-            var counts = new VoteCounts();
-
-            if (dr.Read())
-            {
-                counts.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt32(dr["yes_count"]) : 0;
-                counts.No = dr["no_count"] != DBNull.Value ? Convert.ToInt32(dr["no_count"]) : 0;
-            }
-
-            return counts;
-        }
-
         public VoteReport VoteReportGet()
         {
             using var connection = new NpgsqlConnection(connectionString);

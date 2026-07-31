@@ -12,13 +12,10 @@ namespace ScaleVoteBenchmark.Api.Interfaces
     {
         void VoteAdd(string option);
 
-        VoteCounts VoteCountsGet();
-
         /// <summary>
         /// Returns the vote report (counts and percentages per option),
         /// fully summed and computed by a stored procedure/function in
-        /// the database - the same pattern as VoteCountsGet, just with
-        /// percentage columns added.
+        /// the database.
         /// </summary>
         VoteReport VoteReportGet();
 

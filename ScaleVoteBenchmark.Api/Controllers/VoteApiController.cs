@@ -11,7 +11,6 @@ namespace ScaleVoteBenchmark.Api.Controllers
         private readonly RepoFactory repoFactory;
         private readonly IConfiguration configuration;
 
-        private const string ResultsCacheKey = "VoteCountsCache";
         private const string ReportCacheKey = "VoteReportCache";
 
         public VoteApiController(RepoFactory repoFactory, IConfiguration configuration)
@@ -21,14 +20,15 @@ namespace ScaleVoteBenchmark.Api.Controllers
         }
 
         /// <summary>
-        /// Accepts a vote for the "yes" or "no" option. Access is anonymous
-        /// so the load-generation script can call the endpoint directly,
-        /// without authentication. Before writing to the database, a
-        /// simulated CPU and memory load is executed, whose intensity is
-        /// defined in the appsettings.json file.
+        /// Accepts a vote for the "yes" or "no" option. Protected by JWT
+        /// authorization (see "Auth:Enabled" in appsettings.json) so the
+        /// load-generation script exercises token validation as part of
+        /// the benchmark, not just the vote write itself. Before writing
+        /// to the database, a simulated CPU and memory load is executed,
+        /// whose intensity is defined in the appsettings.json file.
         /// </summary>
         [HttpPost("add")]
-        [AllowAnonymous]
+        [Authorize]
         public ActionResult VoteAdd([FromQuery] string option)
         {
             if (option != "yes" && option != "no")
@@ -44,44 +44,17 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             repoFactory.GetRepo().VoteAdd(option);
 
-            // Invalidate the cached results after a new vote
-            repoFactory.GetCache().RemoveItem(ResultsCacheKey);
+            // Invalidate the cached report after a new vote
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();
         }
 
         /// <summary>
-        /// Returns the current summed voting results. Protected by JWT
-        /// authorization so only an administrative user can access
-        /// real-time results. The result is cached briefly to relieve the
-        /// data layer in case of frequent retrieval (e.g. real-time page
-        /// polling).
-        /// </summary>
-        [HttpGet("counts")]
-        [Authorize]
-        public ActionResult<VoteCounts> VoteCountsGet()
-        {
-            var cached = repoFactory.GetCache().GetItem<VoteCounts>(ResultsCacheKey);
-            if (cached != null)
-            {
-                return Ok(cached);
-            }
-
-            int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
-
-            var counts = repoFactory.GetRepo().VoteCountsGet();
-            repoFactory.GetCache().SetItem(ResultsCacheKey, counts, slidingExpiration);
-
-            return Ok(counts);
-        }
-
-        /// <summary>
         /// Returns the voting results with percentages, summed and
         /// computed entirely by a stored procedure/function in the
-        /// database - the same pattern as VoteCountsGet. Access is
-        /// anonymous so the public dashboard on the application's root
-        /// URL can display it without a login.
+        /// database. Access is anonymous so the public dashboard on the
+        /// application's root URL can display it without a login.
         /// </summary>
         [HttpGet("report")]
         [AllowAnonymous]

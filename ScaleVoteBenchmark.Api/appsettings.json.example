@@ -13,8 +13,8 @@
   "UseManagedIdentity": false,
 
   "Auth": {
-    "// Enabled": "true = GET /api/vote/counts requires a valid JWT (from POST /api/auth/login); false = it can be called without a token",
-    "Enabled": true
+    "// Enabled": "true = POST /api/vote/add requires a valid JWT (from POST /api/auth/login); false = it can be called without a token",
+    "Enabled": false
   },
 
   "Startup": {

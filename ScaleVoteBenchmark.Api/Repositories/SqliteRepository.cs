@@ -32,29 +32,6 @@ namespace ScaleVoteBenchmark.Api.Repositories
             cmd.ExecuteNonQuery();
         }
 
-        public VoteCounts VoteCountsGet()
-        {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT " +
-                "SUM(CASE WHEN \"Option\" = 'yes' THEN 1 ELSE 0 END) AS Yes, " +
-                "SUM(CASE WHEN \"Option\" = 'no'  THEN 1 ELSE 0 END) AS No " +
-                "FROM Vote";
-
-            using var dr = cmd.ExecuteReader();
-            var counts = new VoteCounts();
-
-            if (dr.Read())
-            {
-                counts.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
-                counts.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
-            }
-
-            return counts;
-        }
-
         public VoteReport VoteReportGet()
         {
             using var connection = new SqliteConnection(connectionString);

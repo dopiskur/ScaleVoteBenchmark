@@ -4,9 +4,9 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
-The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results (`GET /api/vote/counts`) can later be read as statistics directly from the database or via that endpoint; whether it requires a JWT is controlled by `Auth:Enabled` (see below).
+The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU/memory load whose intensity is defined in `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — that's the purpose of the benchmark. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
-The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database (the same pattern as `VoteCountsGet`, just with percentage columns added) — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
+The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
 ## Package versions
 
@@ -32,9 +32,9 @@ Note: the version of the `Microsoft.AspNetCore.Authentication.JwtBearer` package
 
 Both modes use the same connection string for the server address and database name; in Managed Identity mode, the username/password portion is simply ignored. The MySQL (`MySqlRepository`), PostgreSQL (`PostgreSqlRepository`) and SQLite (`SqliteRepository`) branches currently support connection string authentication only.
 
-## Making JWT authentication optional
+## JWT authentication on voting
 
-`GET /api/vote/counts` is decorated with `[Authorize]` and normally requires a JWT obtained via `POST /api/auth/login`. Setting `Auth:Enabled` to `false` in `appsettings.json` makes it reachable without a token — useful when you just want to poll counts locally without dealing with login. This is implemented via `OptionalAuthorizationHandler` (`ScaleVoteBenchmark.Api/Auth/OptionalAuthorizationHandler.cs`), registered as an `IAuthorizationHandler` that succeeds every pending authorization requirement when the setting is off, so no controller code changes based on it. `POST /api/vote/add` and `GET /api/vote/report` are already anonymous regardless of this setting; `POST /api/auth/login` keeps working either way (in case you flip `Auth:Enabled` back on later). Defaults to `true`.
+`POST /api/vote/add` is decorated with `[Authorize]`. Setting `Auth:Enabled` to `true` in `appsettings.json` makes it require a JWT obtained via `POST /api/auth/login`, so a load-generation script exercises token validation as part of the benchmark, not just the vote write itself. This is implemented via `OptionalAuthorizationHandler` (`ScaleVoteBenchmark.Api/Auth/OptionalAuthorizationHandler.cs`), registered as an `IAuthorizationHandler` that succeeds every pending authorization requirement while the setting is off, so no controller code changes based on it. `GET /api/vote/report` is always anonymous regardless of this setting (it backs the public dashboard); `POST /api/auth/login` keeps working either way. Defaults to `false` (frictionless anonymous load, no login needed).
 
 ## SQLite — for local development and testing, no server required
 
@@ -56,6 +56,12 @@ Creating tables/procedures requires DDL permissions on the configured database u
 - **`false`** — the error is only written as a critical log entry, and the application keeps running; useful if you want the API to remain available (e.g. for a health-check endpoint) while the database is temporarily down
 
 Without this check, an incorrect database configuration would otherwise go unnoticed until the first real vote or result retrieval (`MsSqlRepository`/`MySqlRepository`/`PostgreSqlRepository`/`SqliteRepository` only open a connection "lazily", on an actual call, not at application startup).
+
+## API endpoints
+
+- `POST /api/vote/add?option=yes|no` — records a vote and generates the artificial CPU/memory load; requires a JWT if `Auth:Enabled` is `true` (see above)
+- `GET /api/vote/report` — anonymous; returns `{ yes, no, total, yesPercent, noPercent }`, all computed by the database
+- `POST /api/auth/login` — anonymous; body `{ "username": "...", "password": "..." }`, returns `{ "token": "..." }` on success
 
 ## Deploying via GitHub Actions
 
@@ -116,8 +122,8 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 - `DatabaseProvider` — `"MsSql"`, `"MySql"`, `"PostgreSql"` or `"Sqlite"`, selects which repository implementation is used
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
 - `Load:CpuIterationsPerVote` and `Load:MemoryMegabytesPerVote` — intensity of the artificial CPU and memory load per vote
-- `Cache:Enabled` — `true` (default) enables the MemoryCache for voting results; `false` disables caching so every `GET /api/vote/counts` goes straight to the database (useful when benchmarking database load alone, without cache influence)
-- `Auth:Enabled` — `true` (default) requires a JWT on `GET /api/vote/counts`; `false` makes it reachable without one
+- `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
+- `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true
 - `AdminUser:Username` / `AdminUser:Password` — credentials for administrator login (default `admin` / `admin`)
 
@@ -128,7 +134,7 @@ cd ScaleVoteBenchmark.Api
 dotnet run
 ```
 
-Votes are generated by calling `POST /api/vote/add?option=yes` or `POST /api/vote/add?option=no` directly (anonymous access, no JWT token needed) — e.g. by a load-testing script that randomly picks `yes`/`no` per call. Summed results are available at `GET /api/vote/counts` (requires a JWT obtained via `POST /api/auth/login`), and can also be read directly from the `Vote` table in the database. The live percentage dashboard is at the application's root URL and needs no login, backed by the anonymous `GET /api/vote/report` endpoint.
+Votes are generated by calling `POST /api/vote/add?option=yes` or `POST /api/vote/add?option=no` — a load-testing script that randomly picks `yes`/`no` per call needs a JWT first (`POST /api/auth/login` with `AdminUser:Username`/`AdminUser:Password`) only if `Auth:Enabled` is `true`. Results can be read directly from the `Vote` table in the database. The live percentage dashboard is at the application's root URL and needs no login, backed by the anonymous `GET /api/vote/report` endpoint.
 
 ## Vote table primary key
 

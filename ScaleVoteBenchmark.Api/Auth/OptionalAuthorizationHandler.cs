@@ -6,9 +6,9 @@ namespace ScaleVoteBenchmark.Api.Auth
     /// Lets [Authorize]-protected endpoints be reached without a JWT
     /// token when "Auth:Enabled" in appsettings.json is set to false -
     /// succeeds every pending authorization requirement so the
-    /// requirement never actually gets evaluated. When enabled (the
-    /// default), this handler does nothing and normal JWT authorization
-    /// applies.
+    /// requirement never actually gets evaluated. When enabled, this
+    /// handler does nothing and normal JWT authorization applies.
+    /// Defaults to disabled (false) if the setting is missing entirely.
     /// </summary>
     public class OptionalAuthorizationHandler : IAuthorizationHandler
     {
@@ -21,7 +21,7 @@ namespace ScaleVoteBenchmark.Api.Auth
 
         public Task HandleAsync(AuthorizationHandlerContext context)
         {
-            bool authEnabled = !bool.TryParse(configuration["Auth:Enabled"], out bool enabled) || enabled;
+            bool authEnabled = bool.TryParse(configuration["Auth:Enabled"], out bool enabled) && enabled;
             if (!authEnabled)
             {
                 foreach (var requirement in context.PendingRequirements.ToList())

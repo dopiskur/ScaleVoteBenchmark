@@ -33,17 +33,6 @@ BEGIN
     VALUES (@Option, SYSUTCDATETIME());
 END",
 
-            @"CREATE PROCEDURE dbo.VoteCountsGet
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    SELECT
-        SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
-        SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No]
-    FROM dbo.Vote;
-END",
-
             @"CREATE PROCEDURE dbo.VoteReportGet
 AS
 BEGIN
@@ -82,14 +71,6 @@ BEGIN
     VALUES (pOption, UTC_TIMESTAMP());
 END",
 
-            @"CREATE PROCEDURE `VoteCountsGet`()
-BEGIN
-    SELECT
-        SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) AS `Yes`,
-        SUM(CASE WHEN `Option` = 'no'  THEN 1 ELSE 0 END) AS `No`
-    FROM `Vote`;
-END",
-
             @"CREATE PROCEDURE `VoteReportGet`()
 BEGIN
     SELECT
@@ -117,19 +98,6 @@ AS $$
 BEGIN
     INSERT INTO vote (option, date_created)
     VALUES (p_option, now() AT TIME ZONE 'utc');
-END;
-$$;",
-
-            @"CREATE FUNCTION vote_counts_get()
-RETURNS TABLE(yes_count INT, no_count INT)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END)::INT AS yes_count,
-        SUM(CASE WHEN option = 'no'  THEN 1 ELSE 0 END)::INT AS no_count
-    FROM vote;
 END;
 $$;",
 

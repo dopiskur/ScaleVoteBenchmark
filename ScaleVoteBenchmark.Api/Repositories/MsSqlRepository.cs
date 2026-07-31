@@ -60,26 +60,6 @@ namespace ScaleVoteBenchmark.Api.Repositories
             cmd.ExecuteNonQuery();
         }
 
-        public VoteCounts VoteCountsGet()
-        {
-            using var connection = CreateConnection();
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "VoteCountsGet";
-            cmd.CommandType = System.Data.CommandType.StoredProcedure;
-
-            using var dr = cmd.ExecuteReader();
-            var counts = new VoteCounts();
-
-            if (dr.Read())
-            {
-                counts.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
-                counts.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
-            }
-
-            return counts;
-        }
-
         public VoteReport VoteReportGet()
         {
             using var connection = CreateConnection();
