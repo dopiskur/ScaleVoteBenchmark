@@ -71,11 +71,15 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // ------------------------------------------------------------
-// Database availability check at application startup.
-// Instead of a wrong connection string only being discovered on
-// the first real HTTP request, the error is printed to the
-// console immediately here. The behavior on failure (stop the
-// application or just warn) is chosen via the
+// Database availability check and schema bootstrap at application
+// startup. Instead of a wrong connection string (or a missing
+// table) only being discovered on the first real HTTP request,
+// the error is printed to the console immediately here.
+// EnsureSchema() creates the Vote table and its stored
+// procedures/functions using the same connection details from
+// appsettings.json, but only if they do not already exist - an
+// already-provisioned database is never touched. The behavior on
+// failure (stop the application or just warn) is chosen via the
 // "Startup:FailFastOnDbCheck" setting in appsettings.json.
 // ------------------------------------------------------------
 {
@@ -87,16 +91,22 @@ var app = builder.Build();
 
     try
     {
-        repoFactory.GetRepo().TestConnection();
+        var repo = repoFactory.GetRepo();
+        repo.TestConnection();
         logger.LogInformation("Database connection check succeeded (DatabaseProvider={Provider}).",
+            app.Configuration["DatabaseProvider"]);
+
+        repo.EnsureSchema();
+        logger.LogInformation("Database schema check completed (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
     }
     catch (Exception ex)
     {
         logger.LogCritical(ex,
-            "Database connection check FAILED (DatabaseProvider={Provider}). " +
-            "Check ConnectionStrings in appsettings.json, firewall rules on Azure and " +
-            "whether the database is running.",
+            "Database connection or schema check FAILED (DatabaseProvider={Provider}). " +
+            "Check ConnectionStrings in appsettings.json, firewall rules on Azure, " +
+            "whether the database is running, and whether the configured user has " +
+            "permission to create tables/procedures.",
             app.Configuration["DatabaseProvider"]);
 
         if (failFast)

@@ -32,5 +32,13 @@ namespace ScaleVoteBenchmark.Api.Interfaces
         /// immediately, rather than only on the first real user request.
         /// </summary>
         void TestConnection();
+
+        /// <summary>
+        /// Creates the Vote table and its stored procedures/functions if
+        /// they do not already exist, using the same connection details
+        /// configured in appsettings.json. Does nothing if the schema is
+        /// already present, so existing data is never touched.
+        /// </summary>
+        void EnsureSchema();
     }
 }

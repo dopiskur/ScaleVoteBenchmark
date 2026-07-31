@@ -32,6 +32,9 @@ namespace ScaleVoteBenchmark.Api
                 "PostgreSql" => new PostgreSqlRepository(configuration.GetConnectionString("PostgreSql")
                     ?? throw new InvalidOperationException("Missing connection string 'PostgreSql' in appsettings.json.")),
 
+                "Sqlite" => new SqliteRepository(configuration.GetConnectionString("Sqlite")
+                    ?? throw new InvalidOperationException("Missing connection string 'Sqlite' in appsettings.json.")),
+
                 "MsSql" => new MsSqlRepository(
                     configuration.GetConnectionString("MsSql")
                         ?? throw new InvalidOperationException("Missing connection string 'MsSql' in appsettings.json."),

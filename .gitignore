@@ -15,6 +15,11 @@ appsettings.json
 appsettings.Development.json
 appsettings.Local.json
 
+## Local SQLite database file (DatabaseProvider = Sqlite)
+*.db
+*.db-shm
+*.db-wal
+
 ## OS
 .DS_Store
 Thumbs.db

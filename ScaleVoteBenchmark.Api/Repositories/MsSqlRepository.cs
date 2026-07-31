@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using ScaleVoteBenchmark.Api.Azure;
 using ScaleVoteBenchmark.Api.Interfaces;
 using ScaleVoteBenchmark.Api.Models;
+using ScaleVoteBenchmark.Api.Schema;
 
 namespace ScaleVoteBenchmark.Api.Repositories
 {
@@ -113,6 +114,28 @@ namespace ScaleVoteBenchmark.Api.Repositories
         {
             using var connection = CreateConnection();
             connection.Open();
+        }
+
+        public void EnsureSchema()
+        {
+            using var connection = CreateConnection();
+            connection.Open();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT OBJECT_ID('dbo.Vote', 'U')";
+                if (checkCmd.ExecuteScalar() is not DBNull and not null)
+                {
+                    return;
+                }
+            }
+
+            foreach (var batch in SchemaScripts.MsSql)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
+                cmd.ExecuteNonQuery();
+            }
         }
     }
 }

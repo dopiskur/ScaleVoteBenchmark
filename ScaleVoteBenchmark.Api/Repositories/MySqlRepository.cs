@@ -1,6 +1,7 @@
 using MySqlConnector;
 using ScaleVoteBenchmark.Api.Interfaces;
 using ScaleVoteBenchmark.Api.Models;
+using ScaleVoteBenchmark.Api.Schema;
 
 namespace ScaleVoteBenchmark.Api.Repositories
 {
@@ -84,6 +85,31 @@ namespace ScaleVoteBenchmark.Api.Repositories
         {
             using var connection = new MySqlConnection(connectionString);
             connection.Open();
+        }
+
+        public void EnsureSchema()
+        {
+            using var connection = new MySqlConnection(connectionString);
+            connection.Open();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText =
+                    "SELECT COUNT(*) FROM information_schema.tables " +
+                    "WHERE table_schema = DATABASE() AND table_name = 'Vote'";
+                var count = Convert.ToInt32(checkCmd.ExecuteScalar());
+                if (count > 0)
+                {
+                    return;
+                }
+            }
+
+            foreach (var batch in SchemaScripts.MySql)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
+                cmd.ExecuteNonQuery();
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using Npgsql;
 using ScaleVoteBenchmark.Api.Interfaces;
 using ScaleVoteBenchmark.Api.Models;
+using ScaleVoteBenchmark.Api.Schema;
 
 namespace ScaleVoteBenchmark.Api.Repositories
 {
@@ -81,6 +82,28 @@ namespace ScaleVoteBenchmark.Api.Repositories
         {
             using var connection = new NpgsqlConnection(connectionString);
             connection.Open();
+        }
+
+        public void EnsureSchema()
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            connection.Open();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT to_regclass('public.vote')";
+                if (checkCmd.ExecuteScalar() is not DBNull and not null)
+                {
+                    return;
+                }
+            }
+
+            foreach (var batch in SchemaScripts.PostgreSql)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
+                cmd.ExecuteNonQuery();
+            }
         }
     }
 }
