@@ -23,6 +23,8 @@
   },
 
   "Cache": {
+    "// Enabled": "true = rezultati glasovanja se predmemoriraju (MemoryCache); false = svaki dohvat ide izravno na bazu",
+    "Enabled": true,
     "SlidingExpirationMinutes": 5
   },
 

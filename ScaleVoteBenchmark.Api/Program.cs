@@ -8,9 +8,18 @@ using ScaleVoteBenchmark.Api.Interfaces;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache();
 
-builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
+bool cacheEnabled = !bool.TryParse(builder.Configuration["Cache:Enabled"], out bool ce) || ce;
+if (cacheEnabled)
+{
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
+}
+else
+{
+    builder.Services.AddSingleton<ICache, NullCacheRepository>();
+}
+
 builder.Services.AddScoped<RepoFactory>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

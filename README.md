@@ -65,6 +65,8 @@ Budući da je `appsettings.json` namjerno u `.gitignore` (sadrži tajne), **ne p
 | `Load:CpuIterationsPerVote` | `Load__CpuIterationsPerVote` |
 | `Load:MemoryMegabytesPerVote` | `Load__MemoryMegabytesPerVote` |
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
+| `Cache:Enabled` | `Cache__Enabled` |
+| `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
 
 ## Priprema baze podataka
 
@@ -88,6 +90,7 @@ U `ScaleVoteBenchmark.Api/appsettings.json` potrebno je postaviti:
 - `DatabaseProvider` — `"MsSql"` ili `"MySql"`, bira koja se implementacija repozitorija koristi
 - `ConnectionStrings:MsSql` i `ConnectionStrings:MySql` — connection stringovi za obje baze (nije potrebno da oba budu ispravna, koristi se samo onaj koji odgovara odabranom provideru)
 - `Load:CpuIterationsPerVote` i `Load:MemoryMegabytesPerVote` — intenzitet umjetnog CPU i memorijskog opterećenja po glasu
+- `Cache:Enabled` — `true` (default) uključuje MemoryCache za rezultate glasovanja; `false` isključuje predmemoriju pa svaki `GET /api/vote/counts` ide izravno na bazu (korisno kad se benchmarkira i samo opterećenje baze bez utjecaja cachea)
 - `Jwt:Key` — nasumični tajni ključ, minimalno 32 znaka
 - `AdminUser:Username` / `AdminUser:Password` — kredencijali za administratorsku prijavu
 
