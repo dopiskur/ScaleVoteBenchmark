@@ -13,7 +13,7 @@ CREATE TABLE dbo.Vote
     [Option]    VARCHAR(10) NOT NULL,
     DateCreated DATETIME2   NOT NULL DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT CK_Vote_Option CHECK ([Option] IN ('pas', 'macka'))
+    CONSTRAINT CK_Vote_Option CHECK ([Option] IN ('yes', 'no'))
 );
 GO
 
@@ -48,8 +48,8 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT
-        SUM(CASE WHEN [Option] = 'pas'   THEN 1 ELSE 0 END) AS Pas,
-        SUM(CASE WHEN [Option] = 'macka' THEN 1 ELSE 0 END) AS Macka
+        SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
+        SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No]
     FROM dbo.Vote;
 END
 GO

@@ -43,8 +43,8 @@ namespace ScaleVoteBenchmark.Lib.Repositories
 
             if (dr.Read())
             {
-                counts.Pas = dr["Pas"] != DBNull.Value ? Convert.ToInt32(dr["Pas"]) : 0;
-                counts.Macka = dr["Macka"] != DBNull.Value ? Convert.ToInt32(dr["Macka"]) : 0;
+                counts.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
+                counts.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
             }
 
             return counts;

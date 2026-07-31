@@ -8,7 +8,7 @@ namespace ScaleVoteBenchmark.Lib.Models
         public int? IDVote { get; set; }
 
         /// <summary>
-        /// Vrijednost "pas" ili "macka".
+        /// Vrijednost "yes" ili "no".
         /// </summary>
         public string? Option { get; set; }
 
@@ -20,7 +20,7 @@ namespace ScaleVoteBenchmark.Lib.Models
     /// </summary>
     public class VoteCounts
     {
-        public int Pas { get; set; }
-        public int Macka { get; set; }
+        public int Yes { get; set; }
+        public int No { get; set; }
     }
 }

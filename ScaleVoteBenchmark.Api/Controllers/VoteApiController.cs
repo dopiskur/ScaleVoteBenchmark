@@ -21,19 +21,19 @@ namespace ScaleVoteBenchmark.Api.Controllers
         }
 
         /// <summary>
-        /// Zaprima glas za opciju "pas" ili "macka". Pristup je anoniman
-        /// jer glasovanje mora biti dostupno svim korisnicima landing
-        /// stranice. Prije upisa u bazu izvršava se simulirano
-        /// procesorsko i memorijsko opterećenje, čiji je intenzitet
-        /// definiran u appsettings.json datoteci.
+        /// Zaprima glas za opciju "yes" ili "no". Pristup je anoniman
+        /// kako bi skripta za generiranje opterećenja mogla pozivati
+        /// endpoint izravno, bez autentikacije. Prije upisa u bazu
+        /// izvršava se simulirano procesorsko i memorijsko opterećenje,
+        /// čiji je intenzitet definiran u appsettings.json datoteci.
         /// </summary>
         [HttpPost("add")]
         [AllowAnonymous]
         public ActionResult VoteAdd([FromQuery] string option)
         {
-            if (option != "pas" && option != "macka")
+            if (option != "yes" && option != "no")
             {
-                return BadRequest("Dozvoljene vrijednosti su isključivo 'pas' ili 'macka'.");
+                return BadRequest("Dozvoljene vrijednosti su isključivo 'yes' ili 'no'.");
             }
 
             int cpuIterations = int.Parse(configuration["Load:CpuIterationsPerVote"] ?? "0");

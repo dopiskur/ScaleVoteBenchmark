@@ -13,18 +13,6 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
 builder.Services.AddScoped<RepoFactory>();
 
-// CORS - dozvoljava pozive isključivo s ScaleVoteBenchmark.Web aplikacije.
-// Adresu je potrebno prilagoditi stvarnoj domeni MVC aplikacije.
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("ScaleVoteBenchmark.WebPolicy", policy =>
-    {
-        policy.WithOrigins(builder.Configuration["AllowedWebOrigin"] ?? "http://localhost:5100")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -108,7 +96,6 @@ var app = builder.Build();
     }
 }
 
-app.UseCors("ScaleVoteBenchmark.WebPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 

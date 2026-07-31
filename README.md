@@ -2,11 +2,12 @@
 
 Rješenje je ciljano na **.NET 10 (LTS, podrška do studenog 2028.)**. Potreban je .NET 10 SDK.
 
-Rješenje sadrži tri projekta:
+Rješenje sadrži dva projekta:
 
 - **ScaleVoteBenchmark.Lib** — class library s modelima, repozitorijima (MSSQL i MySQL), predmemorijom i simulacijom opterećenja
 - **ScaleVoteBenchmark.Api** — REST API, izdaje i validira JWT tokene, jedini komunicira s bazom podataka
-- **ScaleVoteBenchmark.Web** — MVC prezentacijski sloj, sa slojem poslovne logike komunicira isključivo putem HTTP poziva prema ScaleVoteBenchmark.Api
+
+Aplikacija nema korisničko sučelje — namjerno se koristi isključivo kao API koji vanjska skripta za generiranje opterećenja poziva izravno (npr. `POST /api/vote/add?option=yes` ili `?option=no`, nasumično birano po pozivu). Svaki poziv upisuje glas u bazu i usput generira umjetno CPU/memorijsko opterećenje čiji je intenzitet definiran u `appsettings.json` (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`) — to je svrha benchmarka. Rezultati (`GET /api/vote/counts`, zaštićeno JWT-om) kasnije se mogu očitati kao statistika direktno iz baze ili preko tog endpointa.
 
 ## Verzije paketa
 
@@ -40,22 +41,15 @@ Oba načina koriste isti connection string za adresu poslužitelja i naziv baze;
 
 Bez ove provjere, pogrešna konfiguracija baze inače se ne bi primijetila sve do prvog stvarnog glasa ili dohvaćanja rezultata (`SqlRepository`/`MySqlRepository` otvaraju konekciju tek "lijeno", kod stvarnog poziva, a ne pri pokretanju aplikacije).
 
-## Deploy putem GitHub Actions (odvojeno za API i Web)
+## Deploy putem GitHub Actions
 
-U `.github/workflows/` nalaze se dva odvojena workflowa:
-
-- **`deploy-api.yml`** — gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, aktivira se samo na promjene unutar `ScaleVoteBenchmark.Api/` ili `ScaleVoteBenchmark.Lib/`
-- **`deploy-web.yml`** — gradi i deploya `ScaleVoteBenchmark.Web` na Azure App Service, aktivira se samo na promjene unutar `ScaleVoteBenchmark.Web/` ili `ScaleVoteBenchmark.Lib/`
-
-Svaki workflow deploya na **svoj vlastiti App Service resurs** (odvojeno skaliranje, odvojen deploy ciklus), kako je i predviđeno arhitekturom rješenja.
+U `.github/workflows/` nalazi se workflow `deploy-api.yml` koji gradi i deploya `ScaleVoteBenchmark.Api` na Azure App Service, a aktivira se na promjene unutar `ScaleVoteBenchmark.Api/`, `ScaleVoteBenchmark.Lib/` ili samog workflowa.
 
 ### Priprema prije prvog pokretanja workflowa
 
-1. Kreirati dva Azure App Service resursa (npr. `scalevotebenchmark-api` i `scalevotebenchmark-web`), s .NET 10 runtimeom
-2. U oba `.yml` workflowa zamijeniti `YOUR-API-APP-SERVICE-NAME` / `YOUR-WEB-APP-SERVICE-NAME` stvarnim nazivima App Service resursa
-3. Preuzeti *Publish Profile* za svaki App Service (Azure Portal → App Service → "Get publish profile") i spremiti ih u GitHub repozitoriju pod **Settings → Secrets and variables → Actions**:
-   - `AZURE_WEBAPP_PUBLISH_PROFILE_API`
-   - `AZURE_WEBAPP_PUBLISH_PROFILE_WEB`
+1. Kreirati Azure App Service resurs (npr. `scalevotebenchmark-api`), s .NET 10 runtimeom
+2. U `deploy-api.yml` zamijeniti `YOUR-API-APP-SERVICE-NAME` stvarnim nazivom App Service resursa
+3. Preuzeti *Publish Profile* (Azure Portal → App Service → "Get publish profile") i spremiti ga u GitHub repozitoriju pod **Settings → Secrets and variables → Actions** kao `AZURE_WEBAPP_PUBLISH_PROFILE_API`
 
 ### appsettings.json na Azureu — Application Settings, ne datoteka
 
@@ -76,10 +70,6 @@ Budući da je `appsettings.json` namjerno u `.gitignore` (sadrži tajne), **ne p
 | `Load:CpuIterationsPerVote` | `Load__CpuIterationsPerVote` |
 | `Load:MemoryMegabytesPerVote` | `Load__MemoryMegabytesPerVote` |
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
-| `AllowedWebOrigin` (samo API) | `AllowedWebOrigin` |
-| `ApiBaseUrl` (samo Web) | `ApiBaseUrl` |
-
-`AllowedWebOrigin` na API-ju treba pokazivati na stvarnu URL adresu deployanog Web App Servicea, a `ApiBaseUrl` na Webu treba pokazivati na stvarnu URL adresu deployanog API App Servicea — obje adrese poznate su tek nakon prvog deploya oba resursa.
 
 ## Priprema baze podataka
 
@@ -90,11 +80,10 @@ Pokrenuti odgovarajuću skriptu iz `sql/` direktorija na odabranoj bazi:
 
 ## Konfiguracija
 
-Prije prvog pokretanja, u oba projekta potrebno je napraviti kopiju predloška:
+Prije prvog pokretanja potrebno je napraviti kopiju predloška:
 
 ```bash
 cp ScaleVoteBenchmark.Api/appsettings.json.example ScaleVoteBenchmark.Api/appsettings.json
-cp ScaleVoteBenchmark.Web/appsettings.json.example ScaleVoteBenchmark.Web/appsettings.json
 ```
 
 Stvarna `appsettings.json` datoteka namjerno je u `.gitignore` (sadrži connection stringove i tajne), dok `appsettings.json.example` ostaje pod verzijskom kontrolom kao predložak.
@@ -107,22 +96,11 @@ U `ScaleVoteBenchmark.Api/appsettings.json` potrebno je postaviti:
 - `Jwt:Key` — nasumični tajni ključ, minimalno 32 znaka
 - `AdminUser:Username` / `AdminUser:Password` — kredencijali za administratorsku prijavu
 
-U `ScaleVoteBenchmark.Web/appsettings.json` potrebno je postaviti:
-
-- `ApiBaseUrl` — adresa na kojoj se pokreće ScaleVoteBenchmark.Api
-
-Napomena: ScaleVoteBenchmark.Web namjerno nema connection stringove niti direktan pristup bazi podataka — cijela komunikacija s podatkovnim slojem odvija se preko ScaleVoteBenchmark.Api, čime su API i MVC dio potpuno odvojeni i mogu se zasebno pokretati, deployati i skalirati.
-
 ## Pokretanje
 
 ```bash
-# Terminal 1 - API
 cd ScaleVoteBenchmark.Api
-dotnet run
-
-# Terminal 2 - MVC
-cd ScaleVoteBenchmark.Web
 dotnet run
 ```
 
-Potrebno je uskladiti port na kojem se pokreće ScaleVoteBenchmark.Api s vrijednošću `ApiBaseUrl` u `ScaleVoteBenchmark.Web/appsettings.json`, kao i s vrijednošću `AllowedWebOrigin` u `ScaleVoteBenchmark.Api/appsettings.json` (CORS).
+Glasovi se generiraju izravnim pozivima na `POST /api/vote/add?option=yes` ili `POST /api/vote/add?option=no` (anonimni pristup, bez potrebe za JWT tokenom) — npr. skriptom za load testing koja nasumično bira `yes`/`no` po pozivu. Zbrojeni rezultati dostupni su na `GET /api/vote/counts` (zahtijeva JWT dobiven putem `POST /api/auth/login`), a mogu se i izravno očitati iz tablice `Vote` u bazi.

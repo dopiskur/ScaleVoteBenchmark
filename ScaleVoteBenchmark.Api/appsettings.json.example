@@ -7,8 +7,6 @@
   },
   "AllowedHosts": "*",
 
-  "AllowedWebOrigin": "http://localhost:5100",
-
   "DatabaseProvider": "MsSql",
 
   "// UseManagedIdentity": "false = spajanje putem connection stringa (korisnicko ime/lozinka, manje sigurno); true = Azure AD Managed Identity",
@@ -36,7 +34,7 @@
   "Jwt": {
     "Key": "REPLACE-WITH-A-LONG-RANDOM-SECRET-KEY-MIN-32-CHARS",
     "Issuer": "ScaleVoteBenchmark.Api",
-    "Audience": "ScaleVoteBenchmark.Web",
+    "Audience": "ScaleVoteBenchmark.Clients",
     "ExpirationMinutes": 60
   },
 
