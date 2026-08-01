@@ -6,12 +6,6 @@ using ScaleTrigger.Schema;
 
 namespace ScaleTrigger.Repositories
 {
-    /// <summary>
-    /// Repository implementation for working with an Azure Database for
-    /// PostgreSQL database. All functions communicate exclusively through
-    /// stored procedures/functions, without direct SELECT, INSERT, UPDATE
-    /// or DELETE queries.
-    /// </summary>
     public class PostgreSqlRepository : IRepository
     {
         private readonly string connectionString;
@@ -29,8 +23,7 @@ namespace ScaleTrigger.Repositories
             cmd.CommandText = "CALL vote_add(@option, @payload, @hashIterations)";
             cmd.Parameters.AddWithValue("option", option);
 
-            // AddWithValue can't infer a Postgres type from a bare
-            // DBNull.Value, so the parameter type is set explicitly.
+            // AddWithValue can't infer a type from a bare DBNull.Value.
             cmd.Parameters.Add(new NpgsqlParameter("payload", NpgsqlDbType.Bytea)
             {
                 Value = (object?)payload ?? DBNull.Value
@@ -67,13 +60,7 @@ namespace ScaleTrigger.Repositories
             return report;
         }
 
-        /// <summary>
-        /// Opens and immediately closes a connection to Azure Database
-        /// for PostgreSQL, without executing any query. The exception is
-        /// intentionally not caught here; it is passed to the caller so
-        /// the application's startup logic can print a clear error
-        /// message.
-        /// </summary>
+        /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
         public async Task TestConnectionAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
@@ -107,11 +94,8 @@ namespace ScaleTrigger.Repositories
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
 
-            // No separate shrink step needed here (unlike MSSQL/SQLite):
-            // DROP TABLE deletes the underlying file(s) for that table
-            // immediately, reclaiming its disk space as part of the drop
-            // itself - there is nothing left afterwards for VACUUM FULL
-            // to reclaim.
+            // No separate shrink step: DROP TABLE frees the underlying
+            // file(s) immediately, so there's nothing left for VACUUM.
             foreach (var batch in SchemaScripts.PostgreSqlDrop)
             {
                 using var cmd = connection.CreateCommand();

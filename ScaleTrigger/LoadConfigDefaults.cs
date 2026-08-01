@@ -3,12 +3,9 @@ using ScaleTrigger.Models;
 namespace ScaleTrigger
 {
     /// <summary>
-    /// Reads the seed values for every LoadConfig setting from
-    /// appsettings.json's "Load" section. Used both at startup (via
-    /// LoadConfigEnsureSeededAsync, a no-op if the table already has
-    /// rows) and by VoteApiController.Reset(), which drops and recreates
-    /// the schema from scratch - the same list of names as
-    /// LoadConfigApiController.KnownSettingNames.
+    /// Reads LoadConfig's seed values from appsettings.json's "Load"
+    /// section. Shared by Program.cs (startup) and VoteApiController.Reset() -
+    /// keep in sync with LoadConfigApiController.KnownSettingNames.
     /// </summary>
     public static class LoadConfigDefaults
     {

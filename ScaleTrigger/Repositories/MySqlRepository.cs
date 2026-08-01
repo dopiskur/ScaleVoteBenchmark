@@ -5,12 +5,6 @@ using ScaleTrigger.Schema;
 
 namespace ScaleTrigger.Repositories
 {
-    /// <summary>
-    /// Repository implementation for working with an Azure Database for
-    /// MySQL database. All functions communicate exclusively through
-    /// stored procedures, without direct SELECT, INSERT, UPDATE or
-    /// DELETE queries.
-    /// </summary>
     public class MySqlRepository : IRepository
     {
         private readonly string connectionString;
@@ -29,8 +23,7 @@ namespace ScaleTrigger.Repositories
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("pOption", option);
 
-            // AddWithValue can't infer a MySQL type from a bare
-            // DBNull.Value, so the parameter type is set explicitly.
+            // AddWithValue can't infer a type from a bare DBNull.Value.
             cmd.Parameters.Add(new MySqlParameter("pPayload", MySqlDbType.LongBlob)
             {
                 Value = (object?)payload ?? DBNull.Value
@@ -66,13 +59,7 @@ namespace ScaleTrigger.Repositories
             return report;
         }
 
-        /// <summary>
-        /// Opens and immediately closes a connection to Azure Database
-        /// for MySQL, without executing any query. The exception is
-        /// intentionally not caught here; it is passed to the caller so
-        /// the application's startup logic can print a clear error
-        /// message.
-        /// </summary>
+        /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
         public async Task TestConnectionAsync()
         {
             using var connection = new MySqlConnection(connectionString);
@@ -109,11 +96,8 @@ namespace ScaleTrigger.Repositories
             using var connection = new MySqlConnection(connectionString);
             await connection.OpenAsync();
 
-            // No separate shrink step needed here (unlike MSSQL/SQLite):
-            // with InnoDB's default file-per-table storage (used by Azure
-            // Database for MySQL), DROP TABLE deletes that table's .ibd
-            // file immediately, reclaiming its disk space as part of the
-            // drop itself.
+            // No separate shrink step: InnoDB's file-per-table storage
+            // frees each table's .ibd file as part of DROP TABLE itself.
             foreach (var batch in SchemaScripts.MySqlDrop)
             {
                 using var cmd = connection.CreateCommand();

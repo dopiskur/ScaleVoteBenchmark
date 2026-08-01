@@ -2,12 +2,6 @@ using System.Security.Cryptography;
 
 namespace ScaleTrigger
 {
-    /// <summary>
-    /// Helper class that simulates CPU, memory, disk write and network
-    /// latency load while processing a single vote. Load intensity is
-    /// defined exclusively through values in the appsettings.json file,
-    /// without needing to change the code.
-    /// </summary>
     public static class LoadSimulator
     {
         private static readonly string DiskLoadDirectory = CreateDiskLoadDirectory();
@@ -19,11 +13,6 @@ namespace ScaleTrigger
             return path;
         }
 
-        /// <summary>
-        /// Simulates CPU load by repeatedly computing a SHA-256 hash
-        /// value.
-        /// </summary>
-        /// <param name="iterations">Number of hash computation repetitions.</param>
         public static void SimulateCpuLoad(int iterations)
         {
             if (iterations <= 0)
@@ -40,13 +29,6 @@ namespace ScaleTrigger
             }
         }
 
-        /// <summary>
-        /// Simulates memory load by allocating a block of data of the
-        /// given size. The block is fully filled with random values so
-        /// the memory pages are actually reserved, not just virtually
-        /// allocated.
-        /// </summary>
-        /// <param name="megabytes">Size of the memory block in MB.</param>
         public static void SimulateMemoryLoad(int megabytes)
         {
             if (megabytes <= 0)
@@ -59,9 +41,7 @@ namespace ScaleTrigger
 
             Random.Shared.NextBytes(buffer);
 
-            // Walk through all memory pages to ensure the operating
-            // system actually reserved physical memory, not just virtual
-            // address space.
+            // Touch every page so the OS actually reserves physical memory, not just address space.
             long checksum = 0;
             for (int i = 0; i < buffer.Length; i += 4096)
             {
@@ -72,16 +52,7 @@ namespace ScaleTrigger
             GC.KeepAlive(checksum);
         }
 
-        /// <summary>
-        /// Simulates disk write load by writing a block of random data to
-        /// a temporary file and forcing it to be flushed to disk, then
-        /// deleting the file immediately. Each call uses its own
-        /// uniquely-named file so concurrent votes generate genuine,
-        /// non-contending disk I/O instead of serializing on a shared
-        /// file, and nothing accumulates on disk across a long benchmark
-        /// run.
-        /// </summary>
-        /// <param name="kilobytes">Size of the data block to write, in KB.</param>
+        /// <summary>Each call uses its own uniquely-named file so concurrent votes don't serialize on a shared one.</summary>
         public static void SimulateDiskLoad(int kilobytes)
         {
             if (kilobytes <= 0)
@@ -109,16 +80,7 @@ namespace ScaleTrigger
             }
         }
 
-        /// <summary>
-        /// Simulates network latency (e.g. a call to a downstream
-        /// service) by asynchronously delaying for the given duration.
-        /// Uses Task.Delay rather than a blocking sleep, so the request
-        /// thread is released back to the pool for the duration of the
-        /// "wait" instead of being tied up - the same way a real async
-        /// network call would behave, and without artificially limiting
-        /// how much concurrent load the app can take.
-        /// </summary>
-        /// <param name="milliseconds">Delay duration in milliseconds.</param>
+        /// <summary>Task.Delay, not a blocking sleep, so the request thread is freed for the wait.</summary>
         public static Task SimulateNetworkLatencyAsync(int milliseconds)
         {
             return milliseconds > 0 ? Task.Delay(milliseconds) : Task.CompletedTask;

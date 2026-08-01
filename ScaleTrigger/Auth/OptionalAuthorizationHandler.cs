@@ -2,23 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace ScaleTrigger.Auth
 {
-    /// <summary>
-    /// Marks an authorization requirement as one that can be bypassed
-    /// when "Auth:Enabled" is false. Only endpoints using the
-    /// "OptionalJwt" policy (see Program.cs) get this requirement - an
-    /// endpoint using plain [Authorize] instead would always require a
-    /// valid JWT, unaffected by "Auth:Enabled".
-    /// </summary>
     public class OptionalJwtRequirement : IAuthorizationRequirement
     {
     }
 
-    /// <summary>
-    /// Satisfies OptionalJwtRequirement either when "Auth:Enabled" is
-    /// false in appsettings.json (bypassing the JWT check entirely), or
-    /// when it's true and the caller is actually authenticated. Defaults
-    /// to disabled (false) if the setting is missing entirely.
-    /// </summary>
+    /// <summary>Bypasses the JWT check entirely when "Auth:Enabled" is false; defaults to disabled if unset.</summary>
     public class OptionalAuthorizationHandler : AuthorizationHandler<OptionalJwtRequirement>
     {
         private readonly IConfiguration configuration;

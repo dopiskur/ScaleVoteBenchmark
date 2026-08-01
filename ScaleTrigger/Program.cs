@@ -46,9 +46,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    // Used by POST /api/vote/add, POST /api/loadconfig and
-    // POST /api/vote/reset: requires a JWT only when "Auth:Enabled" is
-    // true in appsettings.json - see OptionalAuthorizationHandler.
     options.AddPolicy("OptionalJwt", policy => policy.Requirements.Add(new OptionalJwtRequirement()));
 });
 
@@ -83,18 +80,7 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// ------------------------------------------------------------
-// Database availability check and schema bootstrap at application
-// startup. Instead of a wrong connection string (or a missing
-// table) only being discovered on the first real HTTP request,
-// the error is printed to the console immediately here.
-// EnsureSchema() creates the Vote table and its stored
-// procedures/functions using the same connection details from
-// appsettings.json, but only if they do not already exist - an
-// already-provisioned database is never touched. The behavior on
-// failure (stop the application or just warn) is chosen via the
-// "Startup:FailFastOnDbCheck" setting in appsettings.json.
-// ------------------------------------------------------------
+// Fails fast (or just warns) here instead of on the first real request - see "Startup:FailFastOnDbCheck".
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupDbCheck");
     bool failFast = !bool.TryParse(app.Configuration["Startup:FailFastOnDbCheck"], out bool ff) || ff;
@@ -113,14 +99,6 @@ var app = builder.Build();
         logger.LogInformation("Database schema check completed (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
 
-        // Seeds LoadConfig from appsettings.json's "Load" section, but
-        // only the very first time the table is created - after that,
-        // the table is the source of truth and this section of
-        // appsettings.json is no longer read. See
-        // LoadConfigApiController for how the dashboard edits it,
-        // LoadConfigRefreshService for how those edits reach votes, and
-        // VoteApiController.Reset() for the other caller of this same
-        // seeding logic.
         var loadDefaults = LoadConfigDefaults.ReadFrom(app.Configuration);
         await repo.LoadConfigEnsureSeededAsync(loadDefaults);
 
@@ -144,17 +122,13 @@ var app = builder.Build();
     }
 }
 
-// Serves the static dashboard page (wwwroot/index.html) at the
-// application's root URL.
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Swagger is intentionally available only in the Development
-// environment, so the API documentation is not publicly exposed
-// on Azure.
+// Swagger only in Development, so it's not publicly exposed on Azure.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

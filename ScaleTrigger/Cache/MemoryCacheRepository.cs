@@ -3,11 +3,6 @@ using ScaleTrigger.Interfaces;
 
 namespace ScaleTrigger.Cache
 {
-    /// <summary>
-    /// Cache implementation using the native .NET "MemoryCache" class.
-    /// Used to temporarily store voting results in order to reduce the
-    /// number of queries against the data layer.
-    /// </summary>
     public class MemoryCacheRepository : ICache
     {
         private readonly IMemoryCache cache;

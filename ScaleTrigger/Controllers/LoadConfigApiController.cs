@@ -8,10 +8,6 @@ namespace ScaleTrigger.Controllers
     [Route("api/loadconfig")]
     public class LoadConfigApiController : ControllerBase
     {
-        /// <summary>
-        /// The only SettingName values LoadConfig is seeded with (see
-        /// Program.cs) - anything else in an update request is rejected.
-        /// </summary>
         private static readonly string[] KnownSettingNames =
         {
             "CpuIterationsPerVote",
@@ -32,14 +28,7 @@ namespace ScaleTrigger.Controllers
             this.loadConfigCache = loadConfigCache;
         }
 
-        /// <summary>
-        /// Returns the current LoadConfig rows straight from the
-        /// database (not the cache), so the dashboard always shows what
-        /// is actually persisted, even a moment before
-        /// LoadConfigRefreshService's next tick. Anonymous, same as
-        /// GET /api/vote/report - these are benchmark-tuning values, not
-        /// sensitive data.
-        /// </summary>
+        /// <summary>Reads straight from the database, not the cache, so it's never a tick stale.</summary>
         [HttpGet]
         [AllowAnonymous]
         public async Task<ActionResult<List<LoadConfigSetting>>> Get()
@@ -47,17 +36,7 @@ namespace ScaleTrigger.Controllers
             return Ok(await repoFactory.GetRepo().LoadConfigGetAsync());
         }
 
-        /// <summary>
-        /// Updates one or more LoadConfig rows by SettingName. Requires a
-        /// JWT only when "Auth:Enabled" is true (same "OptionalJwt" policy
-        /// as POST /api/vote/add), so the dashboard's "Save changes"
-        /// button needs no login while auth is off - unlike
-        /// POST /api/vote/cleanup, this only tunes benchmark intensity,
-        /// it doesn't destroy data. Refreshes LoadConfigCache immediately
-        /// after a successful update, so the new values take effect on
-        /// the very next vote rather than waiting for
-        /// LoadConfigRefreshService's next tick.
-        /// </summary>
+        /// <summary>Refreshes LoadConfigCache immediately so the update applies to the very next vote.</summary>
         [HttpPost]
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult> Update([FromBody] List<LoadConfigSetting> settings)

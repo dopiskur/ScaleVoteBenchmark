@@ -1,15 +1,6 @@
 namespace ScaleTrigger
 {
-    /// <summary>
-    /// Polls the LoadConfig table on a fixed interval and refreshes
-    /// LoadConfigCache, so edits made via the dashboard's "Save" button
-    /// take effect on the next tick without restarting the app. The
-    /// interval is the "ConfigRefresh" row in LoadConfig itself (seconds,
-    /// default 1 - seeded from appsettings.json's Load:ConfigRefresh the
-    /// first time the table is created, same as every other setting),
-    /// re-read from the cache on every tick so an edit to it takes effect
-    /// on the following cycle.
-    /// </summary>
+    /// <summary>Polls LoadConfig into LoadConfigCache; the interval is itself the "ConfigRefresh" row, re-read every tick.</summary>
     public class LoadConfigRefreshService(
         IServiceScopeFactory scopeFactory,
         LoadConfigCache cache,

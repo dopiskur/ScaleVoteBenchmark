@@ -7,12 +7,6 @@ using ScaleTrigger.Schema;
 
 namespace ScaleTrigger.Repositories
 {
-    /// <summary>
-    /// Repository implementation for working with a Microsoft SQL Server
-    /// / Azure SQL database. All functions communicate exclusively
-    /// through stored procedures, without direct SELECT, INSERT, UPDATE
-    /// or DELETE queries.
-    /// </summary>
     public class MsSqlRepository : IRepository
     {
         private readonly string connectionString;
@@ -28,20 +22,9 @@ namespace ScaleTrigger.Repositories
         {
             var connection = new SqlConnection(connectionString);
 
-            // If Managed Identity mode is enabled, the password is not
-            // used from the connection string; instead, a temporary
-            // access token is obtained via the application's Azure AD
-            // identity.
-            //
-            // SECURITY NOTE: when useManagedIdentity=false (default), the
-            // application connects the classic way, using the username
-            // and password contained in the connection string
-            // (appsettings.json). This mode is intentionally kept for
-            // simplicity of local development and scenarios outside
-            // Azure, but it is less secure because the database password
-            // remains in the configuration file in plain text. For a
-            // production environment in Azure, Managed Identity mode is
-            // recommended.
+            // Default (false) uses the connection string's plain-text
+            // password - simpler for local dev, but less secure than
+            // Managed Identity, which is recommended in Azure.
             if (useManagedIdentity)
             {
                 connection.AccessToken = await AzureSqlAuthProvider.GetAccessTokenAsync();
@@ -59,8 +42,7 @@ namespace ScaleTrigger.Repositories
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("@Option", option);
 
-            // AddWithValue can't infer a SQL type from a bare
-            // DBNull.Value, so the parameter type is set explicitly.
+            // AddWithValue can't infer a type from a bare DBNull.Value.
             cmd.Parameters.Add(new SqlParameter("@Payload", SqlDbType.VarBinary, -1)
             {
                 Value = (object?)payload ?? DBNull.Value
@@ -95,13 +77,7 @@ namespace ScaleTrigger.Repositories
             return report;
         }
 
-        /// <summary>
-        /// Opens and immediately closes a connection to the Azure SQL
-        /// database, without executing any query. The exception is
-        /// intentionally not caught here; it is passed to the caller so
-        /// the application's startup logic can print a clear error
-        /// message.
-        /// </summary>
+        /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
         public async Task TestConnectionAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -139,10 +115,8 @@ namespace ScaleTrigger.Repositories
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Best-effort: reclaims the space the dropped objects freed,
-            // for both the data and log files. Not fatal if this fails
-            // (e.g. insufficient permission on a shared/managed instance)
-            // - the destructive part already succeeded above.
+            // Best-effort: reclaims data + log file space; may fail on a
+            // shared/managed instance without sufficient permission.
             try
             {
                 using var shrinkCmd = connection.CreateCommand();
@@ -151,8 +125,7 @@ namespace ScaleTrigger.Repositories
             }
             catch
             {
-                // Ignored - shrinking is a nice-to-have, not required for
-                // the reset itself to be considered successful.
+                // Shrinking is a nice-to-have.
             }
         }
 

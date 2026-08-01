@@ -3,12 +3,6 @@ using ScaleTrigger.Repositories;
 
 namespace ScaleTrigger
 {
-    /// <summary>
-    /// Factory class that, based on the "DatabaseProvider" setting in
-    /// appsettings.json, returns the correct repository implementation
-    /// (MsSql or MySql), without the rest of the code needing to worry
-    /// about which database is used behind the scenes.
-    /// </summary>
     public class RepoFactory
     {
         private readonly IConfiguration configuration;

@@ -7,12 +7,9 @@ using ScaleTrigger.Schema;
 namespace ScaleTrigger.Repositories
 {
     /// <summary>
-    /// Repository implementation for working with a local SQLite database
-    /// file. Intended for local development and testing without needing
-    /// a real Azure SQL/MySQL/PostgreSQL server. SQLite has no stored
-    /// procedure/function support, so unlike the other three
-    /// repositories this one runs plain parameterized SQL directly
-    /// instead of calling stored routines.
+    /// SQLite has no stored procedure/function support, so unlike the
+    /// other three repositories this one runs plain parameterized SQL
+    /// directly instead of calling stored routines.
     /// </summary>
     public class SqliteRepository : IRepository
     {
@@ -24,16 +21,11 @@ namespace ScaleTrigger.Repositories
         }
 
         /// <summary>
-        /// Opens a connection and applies the settings SQLite needs to
-        /// cope with concurrent votes: a busy timeout so a connection
-        /// that finds the database momentarily locked by another writer
-        /// retries instead of immediately throwing "database is locked"
-        /// (SQLite Error 5), and WAL journal mode so readers (the
-        /// dashboard polling /api/vote/report) don't block writers and
-        /// vice versa. WAL mode is persisted in the database file itself,
-        /// but is set on every connection anyway since it's a cheap no-op
-        /// once already enabled, and covers databases created before
-        /// this was added.
+        /// busy_timeout avoids "database is locked" (Error 5) under
+        /// concurrent writers; WAL mode lets readers and writers avoid
+        /// blocking each other. Set on every connection since re-applying
+        /// is a cheap no-op and covers databases created before this was
+        /// added.
         /// </summary>
         private async Task<SqliteConnection> CreateConnectionAsync()
         {
@@ -56,16 +48,11 @@ namespace ScaleTrigger.Repositories
         }
 
         /// <summary>
-        /// Simulates CPU load inside the database engine itself (as
-        /// opposed to CpuIterationsPerVote, which runs in the application
-        /// before VoteAddAsync is even called). SQLite has neither stored
-        /// procedures nor a built-in hash function, so this registers a
-        /// SHA-256 scalar function on the connection and chains it
-        /// "iterations" times via a recursive CTE - the closest
-        /// equivalent available to a hashing loop inside a stored
-        /// procedure. The actual hashing still runs as .NET code, but
-        /// dispatched from and driven by the SQL engine, matching how the
-        /// other three providers do it inside VoteAdd.
+        /// SQLite has neither stored procedures nor a built-in hash
+        /// function, so this registers a SHA-256 scalar function and
+        /// chains it via a recursive CTE - the closest equivalent to a
+        /// hashing loop inside a stored procedure, matching the other
+        /// three providers' VoteAdd.
         /// </summary>
         private static async Task RunHashLoopAsync(SqliteConnection connection, int iterations)
         {
@@ -145,12 +132,7 @@ namespace ScaleTrigger.Repositories
             return report;
         }
 
-        /// <summary>
-        /// Opens and immediately closes a connection to the SQLite
-        /// database file. SQLite creates the file automatically on first
-        /// connection if it does not yet exist, so this effectively
-        /// always succeeds as long as the configured path is writable.
-        /// </summary>
+        /// <summary>SQLite creates the file on first connection, so this succeeds as long as the path is writable.</summary>
         public async Task TestConnectionAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -188,10 +170,7 @@ namespace ScaleTrigger.Repositories
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Truncate the WAL file back to empty, then VACUUM to shrink
-            // the main database file - both are best-effort in the sense
-            // that the destructive DROPs above already succeeded
-            // regardless of whether reclaiming disk space also works.
+            // Best-effort: the DROPs above already succeeded regardless.
             try
             {
                 using var checkpointCmd = connection.CreateCommand();
@@ -204,8 +183,7 @@ namespace ScaleTrigger.Repositories
             }
             catch
             {
-                // Ignored - shrinking is a nice-to-have, not required for
-                // the reset itself to be considered successful.
+                // Shrinking is a nice-to-have.
             }
         }
 

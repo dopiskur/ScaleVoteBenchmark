@@ -22,22 +22,10 @@ namespace ScaleTrigger.Controllers
         }
 
         /// <summary>
-        /// Accepts a vote for the "yes" or "no" option. Protected by JWT
-        /// authorization (see "Auth:Enabled" in appsettings.json) so the
-        /// load-generation script exercises token validation as part of
-        /// the benchmark, not just the vote write itself. Before writing
-        /// to the database, simulated CPU, memory, disk write and network
-        /// latency load is executed in the application itself - each
-        /// intensity is picked fresh, at random, from the Min/Max range
-        /// currently in LoadConfigCache (a fixed value is just a range
-        /// where Min equals Max). PayloadBytesPerVote and
-        /// DbHashIterationsPerVote instead simulate load inside the
-        /// database: a non-zero PayloadBytesPerVote generates that many
-        /// random bytes and inserts them into the Payload table alongside
-        /// the vote (blob write throughput); a non-zero
-        /// DbHashIterationsPerVote makes VoteAdd itself run that many
-        /// chained hash computations before the insert (database CPU
-        /// load) - see IRepository.VoteAddAsync.
+        /// CPU/memory/disk/network load runs here, in the application.
+        /// PayloadBytesPerVote and DbHashIterationsPerVote instead
+        /// simulate load inside the database itself - see
+        /// IRepository.VoteAddAsync.
         /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
@@ -68,19 +56,11 @@ namespace ScaleTrigger.Controllers
             }
 
             await repoFactory.GetRepo().VoteAddAsync(option, payload, dbHashIterations);
-
-            // Invalidate the cached report after a new vote
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();
         }
 
-        /// <summary>
-        /// Returns the voting results with percentages, summed and
-        /// computed entirely by a stored procedure/function in the
-        /// database. Access is anonymous so the public dashboard on the
-        /// application's root URL can display it without a login.
-        /// </summary>
         [HttpGet("report")]
         [AllowAnonymous]
         public async Task<ActionResult<VoteReport>> VoteReportGet()
@@ -99,20 +79,7 @@ namespace ScaleTrigger.Controllers
             return Ok(report);
         }
 
-        /// <summary>
-        /// Fully resets the database: drops Vote, Payload and LoadConfig
-        /// (and their stored procedures/functions) via
-        /// IRepository.DropSchemaAsync(), which also shrinks the freed
-        /// disk space, then recreates the schema from scratch
-        /// (EnsureSchemaAsync()) and reseeds LoadConfig from
-        /// appsettings.json's "Load" section (LoadConfigEnsureSeededAsync,
-        /// via the same LoadConfigDefaults helper Program.cs uses at
-        /// startup) - so afterwards the database looks exactly like a
-        /// brand new one. Requires a JWT only when "Auth:Enabled" is true
-        /// (same "OptionalJwt" policy as POST /api/vote/add and
-        /// POST /api/loadconfig), so the dashboard's "Reset database"
-        /// button needs no login while auth is off.
-        /// </summary>
+        /// <summary>Drops and recreates the schema, so the database ends up looking brand new.</summary>
         [HttpPost("reset")]
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult> Reset()
@@ -131,12 +98,6 @@ namespace ScaleTrigger.Controllers
             return Ok();
         }
 
-        /// <summary>
-        /// Returns a value picked at random (inclusive) from the setting's
-        /// current Min/Max range in LoadConfigCache. If Max is not greater
-        /// than Min, Min is returned as-is, so a fixed intensity is just a
-        /// range where Min equals Max.
-        /// </summary>
         private int RandomizedLoadValue(string settingName)
         {
             var (min, max) = loadConfigCache.Get(settingName);

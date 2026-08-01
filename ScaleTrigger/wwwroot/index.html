@@ -180,6 +180,10 @@
     border-top: none;
   }
 
+  .loadconfig-row--single {
+    grid-template-columns: 1fr 90px;
+  }
+
   .loadconfig-label {
     font-size: 13px;
     color: var(--text-primary);
@@ -269,10 +273,9 @@
     <div class="card">
       <p class="group-title">Refresh</p>
       <p class="group-subtitle">How often the app polls this table for changes.</p>
-      <div class="loadconfig-row">
+      <div class="loadconfig-row loadconfig-row--single">
         <span class="loadconfig-col-heading">Setting</span>
-        <span class="loadconfig-col-heading">Min</span>
-        <span class="loadconfig-col-heading">Max</span>
+        <span class="loadconfig-col-heading">Seconds</span>
       </div>
       <div id="loadconfig-rows-refresh"></div>
 
@@ -353,8 +356,7 @@
       }
 
       try {
-        // Tries without a token first - only prompts for login if the API
-        // comes back 401 (i.e. Auth:Enabled is true server-side).
+        // Only prompts for login if the API comes back 401.
         loadConfigStatusEl.textContent = 'Resetting database…';
         let resetResponse = await fetch('/api/vote/reset', { method: 'POST' });
 
@@ -404,7 +406,7 @@
     setInterval(refresh, 4000);
 
     const LOAD_CONFIG_LABELS = {
-      ConfigRefresh: { label: 'Poll interval', unit: 'seconds', group: 'refresh' },
+      ConfigRefresh: { label: 'Poll interval', group: 'refresh', single: true },
       CpuIterationsPerVote: { label: 'CPU', unit: 'hash iterations', group: 'application' },
       MemoryMegabytesPerVote: { label: 'Memory', unit: 'MB', group: 'application' },
       DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
@@ -430,7 +432,7 @@
         const info = LOAD_CONFIG_LABELS[setting.settingName] || { label: setting.settingName, unit: '', group: 'application' };
 
         const row = document.createElement('div');
-        row.className = 'loadconfig-row';
+        row.className = 'loadconfig-row' + (info.single ? ' loadconfig-row--single' : '');
         row.dataset.settingName = setting.settingName;
 
         const labelCell = document.createElement('div');
@@ -443,23 +445,36 @@
           labelCell.appendChild(unitEl);
         }
 
-        const minInput = document.createElement('input');
-        minInput.type = 'number';
-        minInput.min = '0';
-        minInput.className = 'loadconfig-input';
-        minInput.dataset.field = 'min';
-        minInput.value = setting.min;
-
-        const maxInput = document.createElement('input');
-        maxInput.type = 'number';
-        maxInput.min = '0';
-        maxInput.className = 'loadconfig-input';
-        maxInput.dataset.field = 'max';
-        maxInput.value = setting.max;
-
         row.appendChild(labelCell);
-        row.appendChild(minInput);
-        row.appendChild(maxInput);
+
+        if (info.single) {
+          // Still saved as Min === Max under the hood.
+          const valueInput = document.createElement('input');
+          valueInput.type = 'number';
+          valueInput.min = '0';
+          valueInput.className = 'loadconfig-input';
+          valueInput.dataset.field = 'value';
+          valueInput.value = setting.min;
+          row.appendChild(valueInput);
+        } else {
+          const minInput = document.createElement('input');
+          minInput.type = 'number';
+          minInput.min = '0';
+          minInput.className = 'loadconfig-input';
+          minInput.dataset.field = 'min';
+          minInput.value = setting.min;
+
+          const maxInput = document.createElement('input');
+          maxInput.type = 'number';
+          maxInput.min = '0';
+          maxInput.className = 'loadconfig-input';
+          maxInput.dataset.field = 'max';
+          maxInput.value = setting.max;
+
+          row.appendChild(minInput);
+          row.appendChild(maxInput);
+        }
+
         loadConfigRowsEls[info.group].appendChild(row);
       }
     }
@@ -482,11 +497,18 @@
         ...loadConfigRowsEls.application.querySelectorAll('.loadconfig-row'),
         ...loadConfigRowsEls.database.querySelectorAll('.loadconfig-row')
       ];
-      const settings = rows.map(row => ({
-        settingName: row.dataset.settingName,
-        min: Number(row.querySelector('[data-field="min"]').value),
-        max: Number(row.querySelector('[data-field="max"]').value)
-      }));
+      const settings = rows.map(row => {
+        const valueInput = row.querySelector('[data-field="value"]');
+        if (valueInput) {
+          const value = Number(valueInput.value);
+          return { settingName: row.dataset.settingName, min: value, max: value };
+        }
+        return {
+          settingName: row.dataset.settingName,
+          min: Number(row.querySelector('[data-field="min"]').value),
+          max: Number(row.querySelector('[data-field="max"]').value)
+        };
+      });
 
       const invalid = settings.find(s => !Number.isInteger(s.min) || !Number.isInteger(s.max) || s.min < 0 || s.min > s.max);
       if (invalid) {

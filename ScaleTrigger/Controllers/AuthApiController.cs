@@ -20,10 +20,6 @@ namespace ScaleTrigger.Controllers
             public string Password { get; set; } = string.Empty;
         }
 
-        /// <summary>
-        /// Verifies administrator credentials and, on success, returns
-        /// the JWT token used to access protected functions.
-        /// </summary>
         [HttpPost("login")]
         public ActionResult<string> Login([FromBody] LoginRequest request)
         {

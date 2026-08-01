@@ -1,13 +1,6 @@
 namespace ScaleTrigger.Schema
 {
-    /// <summary>
-    /// SQL batches used to bootstrap the database schema on first run
-    /// (see RepoFactory-created repositories' EnsureSchema()). Each
-    /// repository only executes these when the Vote table does not yet
-    /// exist, so an already-provisioned database (and its data) is never
-    /// touched. This is the only definition of the schema - there is no
-    /// separate copy to keep in sync.
-    /// </summary>
+    /// <summary>SQL batches used to bootstrap the schema. Each repository only runs these when its tables don't exist yet.</summary>
     public static class SchemaScripts
     {
         public static readonly string[] MsSql =
@@ -39,9 +32,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Simulates CPU load inside the database engine itself (as opposed
-    -- to CpuIterationsPerVote, which runs in the application before this
-    -- procedure is even called). 0 = skip entirely, just insert.
+    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
     IF @HashIterations > 0
     BEGIN
         DECLARE @HashState VARBINARY(32) = HASHBYTES('SHA2_256', CAST(NEWID() AS VARBINARY(16)));
@@ -123,9 +114,7 @@ BEGIN
     DECLARE hashState CHAR(64);
     DECLARE i INT DEFAULT 0;
 
-    -- Simulates CPU load inside the database engine itself (as opposed
-    -- to CpuIterationsPerVote, which runs in the application before this
-    -- procedure is even called). 0 = skip entirely, just insert.
+    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
     IF pHashIterations > 0 THEN
         SET hashState = SHA2(UUID(), 256);
         WHILE i < pHashIterations DO
@@ -190,9 +179,7 @@ DECLARE
     hash_state  BYTEA;
     i           INT;
 BEGIN
-    -- Simulates CPU load inside the database engine itself (as opposed
-    -- to CpuIterationsPerVote, which runs in the application before this
-    -- procedure is even called). 0 = skip entirely, just insert.
+    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
     IF p_hash_iterations > 0 THEN
         hash_state := sha256(convert_to(p_option || clock_timestamp()::TEXT, 'UTF8'));
         FOR i IN 1..p_hash_iterations LOOP
@@ -242,11 +229,7 @@ END;
 $$;",
         };
 
-        // SQLite has no stored procedure/function support, so
-        // SqliteRepository runs plain SQL directly - this batch only
-        // creates the table. DateCreated is filled by SQLite's built-in
-        // CURRENT_TIMESTAMP default (always UTC), mirroring the other
-        // providers' behavior of stamping the vote's insert time.
+        // No stored routines - SqliteRepository runs plain SQL directly.
         public static readonly string[] Sqlite =
         {
             @"CREATE TABLE Vote
@@ -265,18 +248,8 @@ $$;",
 );",
         };
 
-        // ------------------------------------------------------------
-        // LoadConfig: holds the Load:* Min/Max ranges (CPU/memory/disk/
-        // network/payload intensity per vote) as live, editable rows
-        // instead of static appsettings.json values. Seeded once from
-        // appsettings.json the first time the table is created (see
-        // IRepository.LoadConfigEnsureSeededAsync); after that, the
-        // table is the source of truth and appsettings.json's "Load"
-        // section is no longer read. LoadConfigRefreshService polls it
-        // on a timer (appsettings.json "ConfigRefresh", seconds) and the
-        // dashboard can edit it directly, so intensities can be tuned
-        // without restarting the app.
-        // ------------------------------------------------------------
+        // LoadConfig: live, editable Min/Max ranges, seeded once from
+        // appsettings.json's "Load" section (see LoadConfigEnsureSeededAsync).
         public static readonly string[] MsSqlLoadConfig =
         {
             @"CREATE TABLE dbo.LoadConfig
@@ -373,9 +346,6 @@ END;
 $$;",
         };
 
-        // No stored routines here either, for the same reason as the
-        // Vote/Payload table above - SqliteRepository runs plain
-        // parameterized SQL directly against this table instead.
         public static readonly string[] SqliteLoadConfig =
         {
             @"CREATE TABLE LoadConfig
@@ -387,16 +357,8 @@ $$;",
 );",
         };
 
-        // ------------------------------------------------------------
-        // Drops every object the two batches above create (Vote, Payload,
-        // LoadConfig and their stored procedures/functions), used by
-        // IRepository.DropSchemaAsync() to fully reset the database:
-        // drop everything, shrink the freed space, then EnsureSchemaAsync()
-        // + LoadConfigEnsureSeededAsync() recreate and reseed it exactly
-        // as if the database were brand new. IF EXISTS-style checks make
-        // each statement safe to run even if a prior reset already
-        // removed some of these objects.
-        // ------------------------------------------------------------
+        // Used by DropSchemaAsync(); IF EXISTS makes each statement safe
+        // to rerun even if a prior reset already removed some of these.
         public static readonly string[] MsSqlDrop =
         {
             @"IF OBJECT_ID('dbo.LoadConfigSet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigSet;",

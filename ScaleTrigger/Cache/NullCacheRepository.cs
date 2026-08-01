@@ -2,11 +2,7 @@ using ScaleTrigger.Interfaces;
 
 namespace ScaleTrigger.Cache
 {
-    /// <summary>
-    /// Cache implementation that stores nothing - used when
-    /// "Cache:Enabled" in appsettings.json is set to false, so every
-    /// request for results always goes straight to the database.
-    /// </summary>
+    /// <summary>No-op cache, used when "Cache:Enabled" is false.</summary>
     public class NullCacheRepository : ICache
     {
         public T? GetItem<T>(string key) where T : class => null;

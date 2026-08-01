@@ -5,10 +5,6 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace ScaleTrigger.Auth
 {
-    /// <summary>
-    /// Creates digitally signed JWT tokens for administrative users,
-    /// using the HMAC-SHA256 signature algorithm.
-    /// </summary>
     public class JwtTokenProvider
     {
         public static string CreateToken(string key, string issuer, string audience, int expirationMinutes, string username)
