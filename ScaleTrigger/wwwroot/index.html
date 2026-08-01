@@ -110,20 +110,6 @@
     color: var(--text-primary);
   }
 
-  .meta {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 14px;
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-
-  .payload {
-    margin-top: 6px;
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-
   .status {
     margin-top: 16px;
     font-size: 12px;
@@ -328,11 +314,10 @@
             </div>
           </div>
 
-          <div class="meta">
-            <span id="total">Total votes: —</span>
-            <span id="updated">—</span>
-          </div>
-          <div class="payload" id="payload">Payload rows: —</div>
+          <p class="group-title">Details</p>
+          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
         </div>
 
         <p class="status" id="status">Loading…</p>
@@ -341,7 +326,8 @@
 
         <div class="card">
           <p class="group-title">Hardware</p>
-          <p class="group-subtitle" id="hw-info">Loading hardware info…</p>
+          <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
+          <div id="hw-rows"></div>
 
           <p class="group-title">Results</p>
           <p class="group-subtitle">Median of repeated measurements.</p>
@@ -419,9 +405,9 @@
 
         yesPercentEl.textContent = yesPercent + '%';
         noPercentEl.textContent = noPercent + '%';
-        totalEl.textContent = 'Total votes: ' + (report.total ?? 0);
-        updatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
-        payloadEl.textContent = 'Payload rows: ' + payloadCount + ' (' + formatPayloadSize(payloadBytes) + ')';
+        totalEl.textContent = (report.total ?? 0).toLocaleString();
+        updatedEl.textContent = new Date().toLocaleTimeString();
+        payloadEl.textContent = payloadCount.toLocaleString() + ' rows (' + formatPayloadSize(payloadBytes) + ')';
         statusEl.textContent = (report.total ?? 0) === 0 ? 'No records found.' : '';
         statusEl.classList.remove('status--error');
 
@@ -492,8 +478,37 @@
       }
     });
 
-    refresh();
-    setInterval(refresh, 4000);
+    // Paused while the tab is hidden so background/minimized dashboards don't
+    // keep generating request traffic of their own alongside the intended load.
+    let refreshTimer = null;
+
+    function startRefreshPolling() {
+      if (refreshTimer !== null) {
+        return;
+      }
+      refresh();
+      refreshTimer = setInterval(refresh, 4000);
+    }
+
+    function stopRefreshPolling() {
+      if (refreshTimer === null) {
+        return;
+      }
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopRefreshPolling();
+      } else {
+        startRefreshPolling();
+      }
+    });
+
+    if (!document.hidden) {
+      startRefreshPolling();
+    }
 
     const LOAD_CONFIG_LABELS = {
       ConfigRefresh: { label: 'Poll interval', group: 'refresh', single: true },
@@ -639,12 +654,42 @@
 
     loadLoadConfig();
 
-    const hwInfoEl = document.getElementById('hw-info');
+    const hwStatusEl = document.getElementById('hw-status');
+    const hwRowsEl = document.getElementById('hw-rows');
     const benchmarkBtn = document.getElementById('benchmark-btn');
     const benchmarkStatusEl = document.getElementById('benchmark-status');
     const benchCpuEl = document.getElementById('bench-cpu');
     const benchMemoryEl = document.getElementById('bench-memory');
     const benchDiskEl = document.getElementById('bench-disk');
+
+    function renderHardwareRows(hw) {
+      hwRowsEl.innerHTML = '';
+
+      const rows = [
+        ['Environment', hw.environment],
+        ['CPU', hw.cpu],
+        ['Logical processors', hw.processorCount],
+        ['RAM', hw.totalMemoryMb.toLocaleString() + ' MB'],
+        ['Disk', hw.diskTotalGb + ' GB']
+      ];
+
+      for (const [label, value] of rows) {
+        const row = document.createElement('div');
+        row.className = 'bench-row';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'loadconfig-label';
+        labelEl.textContent = label;
+
+        const valueEl = document.createElement('span');
+        valueEl.className = 'bench-value';
+        valueEl.textContent = value;
+
+        row.appendChild(labelEl);
+        row.appendChild(valueEl);
+        hwRowsEl.appendChild(row);
+      }
+    }
 
     async function loadHardwareInfo() {
       try {
@@ -653,10 +698,11 @@
           throw new Error('unavailable');
         }
         const hw = await response.json();
-        hwInfoEl.textContent = hw.environment + ' — CPU: ' + hw.cpu + ' (' + hw.processorCount + ' vCPUs), RAM: ' +
-          hw.totalMemoryMb.toLocaleString() + ' MB, Disk: ' + hw.diskTotalGb + ' GB';
+        hwStatusEl.textContent = '';
+        renderHardwareRows(hw);
       } catch (err) {
-        hwInfoEl.textContent = 'Could not load hardware info.';
+        hwStatusEl.textContent = 'Could not load hardware info.';
+        hwRowsEl.innerHTML = '';
       }
     }
 
