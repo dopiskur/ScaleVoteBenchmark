@@ -4,7 +4,7 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 The solution contains a single project, **ScaleTrigger** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
-The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load — that's the purpose of the benchmark. Each load type's intensity is defined in `appsettings.json` as a `Min`/`Max` range (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote`), and a fresh random value within that range is picked for every vote; use `Min == Max` for a fixed value. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
+The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load — that's the purpose of the benchmark. Each load type's intensity is a `Min`/`Max` range held in the `LoadConfig` database table (see "Live-tunable load intensity" below), and a fresh random value within that range is picked for every vote; use `Min == Max` for a fixed value. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
 The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleTrigger/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
@@ -46,6 +46,14 @@ Right after the database connection check succeeds, `ScaleTrigger` calls `Ensure
 
 Creating tables/procedures requires DDL permissions on the configured database user — if that user only has DML rights (as might be the case against a shared/managed production database), `EnsureSchemaAsync()` will fail. That failure is treated the same as a failed connection check and follows `Startup:FailFastOnDbCheck` (see below): either the app refuses to start, or it logs a critical error and continues, in which case ask a DBA to provision the schema manually, using the exact DDL from `ScaleTrigger/Schema/SchemaScripts.cs`.
 
+## Live-tunable load intensity (LoadConfig)
+
+The five `Load:*` intensities (`CpuIterationsPerVote`, `MemoryMegabytesPerVote`, `DiskWriteKilobytesPerVote`, `NetworkLatencyMillisecondsPerVote`, `PayloadBytesPerVote`) live in a `LoadConfig` database table, not in `appsettings.json`, so they can be tuned while the app keeps running:
+
+- **First run only:** right after schema provisioning, `LoadConfigEnsureSeededAsync()` creates the `LoadConfig` table (if missing) and, only if it's still empty, inserts one row per setting using the `Min`/`Max` values from `appsettings.json`'s `Load` section. On every later startup the table already has rows, so this is a no-op and `appsettings.json`'s `Load` section is no longer read.
+- **Editing:** the dashboard (application root URL) has a "Load configuration" section showing all five current ranges with editable Min/Max fields and a "Save changes" button. Saving prompts for the admin login (same as "Database cleanup") and calls `POST /api/loadconfig`, which validates (`0 <= Min <= Max`, known setting names only) and updates the table.
+- **Reaching running votes:** `LoadConfigCache` is an in-memory snapshot that `VoteApiController` reads on every vote (no per-vote database round-trip). `LoadConfigRefreshService` re-reads the whole table into that cache every `ConfigRefresh` seconds (default 10, see `appsettings.json`) - and a successful `POST /api/loadconfig` also refreshes it immediately, so a save takes effect on the very next vote rather than waiting for the next poll.
+
 ## Database availability check at startup
 
 `ScaleTrigger` immediately tries to open a connection to the configured database (without executing a query) on every startup, before it starts accepting HTTP requests. Behavior on failure is selected via the `Startup:FailFastOnDbCheck` setting:
@@ -60,6 +68,8 @@ Without this check, an incorrect database configuration would otherwise go unnot
 - `POST /api/vote/add?option=yes|no` — records a vote and generates the artificial CPU/memory/disk/network-latency load; requires a JWT if `Auth:Enabled` is `true` (see above)
 - `GET /api/vote/report` — anonymous; returns `{ yes, no, total, yesPercent, noPercent }`, all computed by the database
 - `POST /api/auth/login` — anonymous; body `{ "username": "...", "password": "..." }`, returns `{ "token": "..." }` on success
+- `GET /api/loadconfig` — anonymous; returns the current `[{ settingName, min, max }, ...]` rows from `LoadConfig` (see "Live-tunable load intensity" above)
+- `POST /api/loadconfig` — always requires a JWT (plain `[Authorize]`, regardless of `Auth:Enabled`); body is the same array shape, updates by `settingName`
 
 ## Deploying via GitHub Actions
 
@@ -94,6 +104,7 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 | `Load:MemoryMegabytesPerVote:Min` / `:Max` | `Load__MemoryMegabytesPerVote__Min` / `__Max` |
 | `Load:DiskWriteKilobytesPerVote:Min` / `:Max` | `Load__DiskWriteKilobytesPerVote__Min` / `__Max` |
 | `Load:NetworkLatencyMillisecondsPerVote:Min` / `:Max` | `Load__NetworkLatencyMillisecondsPerVote__Min` / `__Max` |
+| `ConfigRefresh` | `ConfigRefresh` |
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
 | `Cache:Enabled` | `Cache__Enabled` |
 | `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
@@ -116,7 +127,8 @@ In `ScaleTrigger/appsettings.json` you need to set:
 
 - `DatabaseProvider` — `"MsSql"`, `"MySql"`, `"PostgreSql"` or `"Sqlite"`, selects which repository implementation is used
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
-- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote` and `Load:NetworkLatencyMillisecondsPerVote` — each is a `{ "Min": ..., "Max": ... }` object; a fresh random value in that inclusive range is picked for every vote (`Min == Max` gives a fixed value, same as before this became a range). The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleTrigger/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
+- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote` and `Load:PayloadBytesPerVote` — each is a `{ "Min": ..., "Max": ... }` object, used only to seed the `LoadConfig` database table the very first time it's created (see "Live-tunable load intensity" above); edit the running values from the dashboard afterwards, not here. A fresh random value in the inclusive range is picked for every vote (`Min == Max` gives a fixed value). The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleTrigger/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
+- `ConfigRefresh` — seconds between polls of the `LoadConfig` table for values changed via the dashboard (default `10`); only affects how fast an edit takes effect
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true

@@ -10,13 +10,15 @@ namespace ScaleTrigger.Controllers
     {
         private readonly RepoFactory repoFactory;
         private readonly IConfiguration configuration;
+        private readonly LoadConfigCache loadConfigCache;
 
         private const string ReportCacheKey = "VoteReportCache";
 
-        public VoteApiController(RepoFactory repoFactory, IConfiguration configuration)
+        public VoteApiController(RepoFactory repoFactory, IConfiguration configuration, LoadConfigCache loadConfigCache)
         {
             this.repoFactory = repoFactory;
             this.configuration = configuration;
+            this.loadConfigCache = loadConfigCache;
         }
 
         /// <summary>
@@ -26,12 +28,12 @@ namespace ScaleTrigger.Controllers
         /// the benchmark, not just the vote write itself. Before writing
         /// to the database, simulated CPU, memory, disk write and network
         /// latency load is executed - each intensity is picked fresh, at
-        /// random, from the Min/Max range defined in the appsettings.json
-        /// file (a fixed value is just a range where Min equals Max). If
-        /// Load:PayloadBytesPerVote resolves to 0 for this vote, no
-        /// payload row is inserted at all - a non-zero value generates
-        /// that many random bytes and inserts them into the Payload
-        /// table alongside the vote, to benchmark blob write throughput.
+        /// random, from the Min/Max range currently in LoadConfigCache
+        /// (a fixed value is just a range where Min equals Max). If
+        /// PayloadBytesPerVote resolves to 0 for this vote, no payload
+        /// row is inserted at all - a non-zero value generates that many
+        /// random bytes and inserts them into the Payload table alongside
+        /// the vote, to benchmark blob write throughput.
         /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
@@ -110,16 +112,14 @@ namespace ScaleTrigger.Controllers
         }
 
         /// <summary>
-        /// Reads "Load:{settingName}:Min" and "Load:{settingName}:Max"
-        /// from appsettings.json and returns a value picked at random
-        /// (inclusive) from that range. If Max is not greater than Min,
-        /// Min is returned as-is, so a fixed intensity is just a range
-        /// where Min equals Max.
+        /// Returns a value picked at random (inclusive) from the setting's
+        /// current Min/Max range in LoadConfigCache. If Max is not greater
+        /// than Min, Min is returned as-is, so a fixed intensity is just a
+        /// range where Min equals Max.
         /// </summary>
         private int RandomizedLoadValue(string settingName)
         {
-            int min = int.Parse(configuration[$"Load:{settingName}:Min"] ?? "0");
-            int max = int.Parse(configuration[$"Load:{settingName}:Max"] ?? "0");
+            var (min, max) = loadConfigCache.Get(settingName);
 
             return max > min ? Random.Shared.Next(min, max + 1) : min;
         }

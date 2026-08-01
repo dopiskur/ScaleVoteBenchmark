@@ -222,5 +222,127 @@ $$;",
     DateCreated TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );",
         };
+
+        // ------------------------------------------------------------
+        // LoadConfig: holds the Load:* Min/Max ranges (CPU/memory/disk/
+        // network/payload intensity per vote) as live, editable rows
+        // instead of static appsettings.json values. Seeded once from
+        // appsettings.json the first time the table is created (see
+        // IRepository.LoadConfigEnsureSeededAsync); after that, the
+        // table is the source of truth and appsettings.json's "Load"
+        // section is no longer read. LoadConfigRefreshService polls it
+        // on a timer (appsettings.json "ConfigRefresh", seconds) and the
+        // dashboard can edit it directly, so intensities can be tuned
+        // without restarting the app.
+        // ------------------------------------------------------------
+        public static readonly string[] MsSqlLoadConfig =
+        {
+            @"CREATE TABLE dbo.LoadConfig
+(
+    SettingName VARCHAR(50) NOT NULL PRIMARY KEY,
+    MinValue    INT         NOT NULL,
+    MaxValue    INT         NOT NULL,
+    DateUpdated DATETIME2   NOT NULL DEFAULT SYSUTCDATETIME()
+);",
+
+            @"CREATE PROCEDURE dbo.LoadConfigGet
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT SettingName, MinValue, MaxValue
+    FROM dbo.LoadConfig
+    ORDER BY SettingName;
+END",
+
+            @"CREATE PROCEDURE dbo.LoadConfigSet
+    @SettingName VARCHAR(50),
+    @MinValue    INT,
+    @MaxValue    INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.LoadConfig
+    SET MinValue = @MinValue, MaxValue = @MaxValue, DateUpdated = SYSUTCDATETIME()
+    WHERE SettingName = @SettingName;
+END",
+        };
+
+        public static readonly string[] MySqlLoadConfig =
+        {
+            @"CREATE TABLE `LoadConfig`
+(
+    `SettingName` VARCHAR(50) NOT NULL PRIMARY KEY,
+    `MinValue`    INT NOT NULL,
+    `MaxValue`    INT NOT NULL,
+    `DateUpdated` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);",
+
+            @"CREATE PROCEDURE `LoadConfigGet`()
+BEGIN
+    SELECT `SettingName`, `MinValue`, `MaxValue`
+    FROM `LoadConfig`
+    ORDER BY `SettingName`;
+END",
+
+            @"CREATE PROCEDURE `LoadConfigSet`(
+    IN pSettingName VARCHAR(50),
+    IN pMinValue INT,
+    IN pMaxValue INT
+)
+BEGIN
+    UPDATE `LoadConfig`
+    SET `MinValue` = pMinValue, `MaxValue` = pMaxValue
+    WHERE `SettingName` = pSettingName;
+END",
+        };
+
+        public static readonly string[] PostgreSqlLoadConfig =
+        {
+            @"CREATE TABLE load_config
+(
+    setting_name VARCHAR(50) PRIMARY KEY,
+    min_value    INT       NOT NULL,
+    max_value    INT       NOT NULL,
+    date_updated TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
+);",
+
+            @"CREATE FUNCTION load_config_get()
+RETURNS TABLE(setting_name VARCHAR(50), min_value INT, max_value INT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT lc.setting_name, lc.min_value, lc.max_value
+    FROM load_config lc
+    ORDER BY lc.setting_name;
+END;
+$$;",
+
+            @"CREATE PROCEDURE load_config_set(p_setting_name VARCHAR(50), p_min_value INT, p_max_value INT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE load_config
+    SET min_value = p_min_value, max_value = p_max_value, date_updated = now() AT TIME ZONE 'utc'
+    WHERE setting_name = p_setting_name;
+END;
+$$;",
+        };
+
+        // No stored routines here either, for the same reason as the
+        // Vote/Payload table above - SqliteRepository runs plain
+        // parameterized SQL directly against this table instead.
+        public static readonly string[] SqliteLoadConfig =
+        {
+            @"CREATE TABLE LoadConfig
+(
+    SettingName TEXT    PRIMARY KEY,
+    MinValue    INTEGER NOT NULL,
+    MaxValue    INTEGER NOT NULL,
+    DateUpdated TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);",
+        };
     }
 }

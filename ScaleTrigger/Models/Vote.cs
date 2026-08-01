@@ -31,4 +31,15 @@ namespace ScaleTrigger.Models
         public int PayloadCount { get; set; }
         public long PayloadTotalBytes { get; set; }
     }
+
+    /// <summary>
+    /// One row of the LoadConfig table: the Min/Max range for a single
+    /// per-vote load intensity setting (e.g. "CpuIterationsPerVote").
+    /// </summary>
+    public class LoadConfigSetting
+    {
+        public string SettingName { get; set; } = string.Empty;
+        public int Min { get; set; }
+        public int Max { get; set; }
+    }
 }

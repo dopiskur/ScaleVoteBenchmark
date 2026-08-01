@@ -169,6 +169,82 @@
   .cleanup-btn:hover {
     background: var(--critical-wash);
   }
+
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 32px 0 4px;
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+  }
+
+  .loadconfig-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .loadconfig-row:first-of-type {
+    border-top: none;
+  }
+
+  .loadconfig-label {
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .loadconfig-unit {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: block;
+  }
+
+  .loadconfig-input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--page-plane);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+
+  .loadconfig-input:invalid {
+    border-color: var(--critical);
+  }
+
+  .loadconfig-col-heading {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  .save-btn {
+    margin-top: 16px;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--surface-1);
+    background: var(--series-yes);
+    border: 1px solid var(--series-yes);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .save-btn:hover {
+    opacity: 0.9;
+  }
 </style>
 </head>
 <body>
@@ -204,6 +280,20 @@
     <p class="status" id="status">Loading…</p>
 
     <button class="cleanup-btn" id="cleanup-btn" type="button">Database cleanup</button>
+
+    <p class="section-title">Load configuration</p>
+    <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one ConfigRefresh interval).</p>
+
+    <div class="card">
+      <div class="loadconfig-row">
+        <span class="loadconfig-col-heading">Setting</span>
+        <span class="loadconfig-col-heading">Min</span>
+        <span class="loadconfig-col-heading">Max</span>
+      </div>
+      <div id="loadconfig-rows"></div>
+      <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+      <p class="status" id="loadconfig-status"></p>
+    </div>
   </div>
 
   <script>
@@ -298,6 +388,126 @@
 
     refresh();
     setInterval(refresh, 4000);
+
+    const LOAD_CONFIG_LABELS = {
+      CpuIterationsPerVote: { label: 'CPU', unit: 'hash iterations' },
+      MemoryMegabytesPerVote: { label: 'Memory', unit: 'MB' },
+      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB' },
+      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms' },
+      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes' }
+    };
+
+    const loadConfigRowsEl = document.getElementById('loadconfig-rows');
+    const loadConfigSaveBtn = document.getElementById('loadconfig-save-btn');
+    const loadConfigStatusEl = document.getElementById('loadconfig-status');
+
+    function renderLoadConfig(settings) {
+      loadConfigRowsEl.innerHTML = '';
+
+      for (const setting of settings) {
+        const info = LOAD_CONFIG_LABELS[setting.settingName] || { label: setting.settingName, unit: '' };
+
+        const row = document.createElement('div');
+        row.className = 'loadconfig-row';
+        row.dataset.settingName = setting.settingName;
+
+        const labelCell = document.createElement('div');
+        labelCell.className = 'loadconfig-label';
+        labelCell.textContent = info.label;
+        if (info.unit) {
+          const unitEl = document.createElement('span');
+          unitEl.className = 'loadconfig-unit';
+          unitEl.textContent = info.unit;
+          labelCell.appendChild(unitEl);
+        }
+
+        const minInput = document.createElement('input');
+        minInput.type = 'number';
+        minInput.min = '0';
+        minInput.className = 'loadconfig-input';
+        minInput.dataset.field = 'min';
+        minInput.value = setting.min;
+
+        const maxInput = document.createElement('input');
+        maxInput.type = 'number';
+        maxInput.min = '0';
+        maxInput.className = 'loadconfig-input';
+        maxInput.dataset.field = 'max';
+        maxInput.value = setting.max;
+
+        row.appendChild(labelCell);
+        row.appendChild(minInput);
+        row.appendChild(maxInput);
+        loadConfigRowsEl.appendChild(row);
+      }
+    }
+
+    async function loadLoadConfig() {
+      try {
+        const response = await fetch('/api/loadconfig', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+        renderLoadConfig(await response.json());
+      } catch (err) {
+        loadConfigStatusEl.textContent = 'Could not load configuration (' + err.message + ').';
+      }
+    }
+
+    loadConfigSaveBtn.addEventListener('click', async () => {
+      const settings = [...loadConfigRowsEl.querySelectorAll('.loadconfig-row')].map(row => ({
+        settingName: row.dataset.settingName,
+        min: Number(row.querySelector('[data-field="min"]').value),
+        max: Number(row.querySelector('[data-field="max"]').value)
+      }));
+
+      const invalid = settings.find(s => !Number.isInteger(s.min) || !Number.isInteger(s.max) || s.min < 0 || s.min > s.max);
+      if (invalid) {
+        loadConfigStatusEl.textContent = 'Fix "' + invalid.settingName + '": Min must be >= 0 and <= Max.';
+        return;
+      }
+
+      const username = prompt('Admin username:');
+      if (username === null) {
+        return;
+      }
+      const password = prompt('Admin password:');
+      if (password === null) {
+        return;
+      }
+
+      try {
+        loadConfigStatusEl.textContent = 'Logging in…';
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (!loginResponse.ok) {
+          throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+        }
+        const { token } = await loginResponse.json();
+
+        loadConfigStatusEl.textContent = 'Saving…';
+        const saveResponse = await fetch('/api/loadconfig', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify(settings)
+        });
+        if (!saveResponse.ok) {
+          throw new Error('save failed (HTTP ' + saveResponse.status + ')');
+        }
+
+        loadConfigStatusEl.textContent = 'Saved. Takes effect within one ConfigRefresh interval.';
+      } catch (err) {
+        loadConfigStatusEl.textContent = 'Save failed (' + err.message + ').';
+      }
+    });
+
+    loadLoadConfig();
   </script>
 </body>
 </html>

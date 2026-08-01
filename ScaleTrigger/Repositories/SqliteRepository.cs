@@ -185,5 +185,84 @@ namespace ScaleTrigger.Repositories
                 // the cleanup itself to be considered successful.
             }
         }
+
+        public async Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults)
+        {
+            using var connection = await CreateConnectionAsync();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'LoadConfig'";
+                if (await checkCmd.ExecuteScalarAsync() == null)
+                {
+                    foreach (var batch in SchemaScripts.SqliteLoadConfig)
+                    {
+                        using var createCmd = connection.CreateCommand();
+                        createCmd.CommandText = batch;
+                        await createCmd.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            using (var countCmd = connection.CreateCommand())
+            {
+                countCmd.CommandText = "SELECT COUNT(*) FROM LoadConfig";
+                long count = (long)(await countCmd.ExecuteScalarAsync())!;
+                if (count > 0)
+                {
+                    return;
+                }
+            }
+
+            foreach (var setting in defaults)
+            {
+                using var insertCmd = connection.CreateCommand();
+                insertCmd.CommandText = "INSERT INTO LoadConfig (SettingName, MinValue, MaxValue) VALUES ($name, $min, $max)";
+                insertCmd.Parameters.AddWithValue("$name", setting.SettingName);
+                insertCmd.Parameters.AddWithValue("$min", setting.Min);
+                insertCmd.Parameters.AddWithValue("$max", setting.Max);
+                await insertCmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
+        {
+            using var connection = await CreateConnectionAsync();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT SettingName, MinValue, MaxValue FROM LoadConfig ORDER BY SettingName";
+
+            var settings = new List<LoadConfigSetting>();
+            using var dr = await cmd.ExecuteReaderAsync();
+            while (await dr.ReadAsync())
+            {
+                settings.Add(new LoadConfigSetting
+                {
+                    SettingName = (string)dr["SettingName"],
+                    Min = Convert.ToInt32(dr["MinValue"]),
+                    Max = Convert.ToInt32(dr["MaxValue"])
+                });
+            }
+
+            return settings;
+        }
+
+        public async Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings)
+        {
+            using var connection = await CreateConnectionAsync();
+            using var transaction = connection.BeginTransaction();
+
+            foreach (var setting in settings)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = "UPDATE LoadConfig SET MinValue = $min, MaxValue = $max, DateUpdated = CURRENT_TIMESTAMP WHERE SettingName = $name";
+                cmd.Parameters.AddWithValue("$name", setting.SettingName);
+                cmd.Parameters.AddWithValue("$min", setting.Min);
+                cmd.Parameters.AddWithValue("$max", setting.Max);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            transaction.Commit();
+        }
     }
 }

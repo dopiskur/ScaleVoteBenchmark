@@ -133,5 +133,87 @@ namespace ScaleTrigger.Repositories
                 // the cleanup itself to be considered successful.
             }
         }
+
+        public async Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults)
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT to_regclass('public.load_config')";
+                if (await checkCmd.ExecuteScalarAsync() is DBNull or null)
+                {
+                    foreach (var batch in SchemaScripts.PostgreSqlLoadConfig)
+                    {
+                        using var createCmd = connection.CreateCommand();
+                        createCmd.CommandText = batch;
+                        await createCmd.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            using (var countCmd = connection.CreateCommand())
+            {
+                countCmd.CommandText = "SELECT COUNT(*) FROM load_config";
+                long count = (long)(await countCmd.ExecuteScalarAsync())!;
+                if (count > 0)
+                {
+                    return;
+                }
+            }
+
+            foreach (var setting in defaults)
+            {
+                using var insertCmd = connection.CreateCommand();
+                insertCmd.CommandText = "INSERT INTO load_config (setting_name, min_value, max_value) VALUES (@name, @min, @max)";
+                insertCmd.Parameters.AddWithValue("name", setting.SettingName);
+                insertCmd.Parameters.AddWithValue("min", setting.Min);
+                insertCmd.Parameters.AddWithValue("max", setting.Max);
+                await insertCmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT setting_name, min_value, max_value FROM load_config_get()";
+
+            var settings = new List<LoadConfigSetting>();
+            using var dr = await cmd.ExecuteReaderAsync();
+            while (await dr.ReadAsync())
+            {
+                settings.Add(new LoadConfigSetting
+                {
+                    SettingName = (string)dr["setting_name"],
+                    Min = Convert.ToInt32(dr["min_value"]),
+                    Max = Convert.ToInt32(dr["max_value"])
+                });
+            }
+
+            return settings;
+        }
+
+        public async Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings)
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            using var transaction = await connection.BeginTransactionAsync();
+
+            foreach (var setting in settings)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = "CALL load_config_set(@name, @min, @max)";
+                cmd.Parameters.AddWithValue("name", setting.SettingName);
+                cmd.Parameters.AddWithValue("min", setting.Min);
+                cmd.Parameters.AddWithValue("max", setting.Max);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
+        }
     }
 }

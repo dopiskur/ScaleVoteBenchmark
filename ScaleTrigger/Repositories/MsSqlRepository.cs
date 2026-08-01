@@ -152,5 +152,86 @@ namespace ScaleTrigger.Repositories
                 // the cleanup itself to be considered successful.
             }
         }
+
+        public async Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults)
+        {
+            using var connection = await CreateConnectionAsync();
+
+            using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT OBJECT_ID('dbo.LoadConfig', 'U')";
+                if (await checkCmd.ExecuteScalarAsync() is DBNull or null)
+                {
+                    foreach (var batch in SchemaScripts.MsSqlLoadConfig)
+                    {
+                        using var createCmd = connection.CreateCommand();
+                        createCmd.CommandText = batch;
+                        await createCmd.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            using (var countCmd = connection.CreateCommand())
+            {
+                countCmd.CommandText = "SELECT COUNT(*) FROM dbo.LoadConfig";
+                int count = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+                if (count > 0)
+                {
+                    return;
+                }
+            }
+
+            foreach (var setting in defaults)
+            {
+                using var insertCmd = connection.CreateCommand();
+                insertCmd.CommandText = "INSERT INTO dbo.LoadConfig (SettingName, MinValue, MaxValue) VALUES (@Name, @Min, @Max)";
+                insertCmd.Parameters.AddWithValue("@Name", setting.SettingName);
+                insertCmd.Parameters.AddWithValue("@Min", setting.Min);
+                insertCmd.Parameters.AddWithValue("@Max", setting.Max);
+                await insertCmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
+        {
+            using var connection = await CreateConnectionAsync();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "LoadConfigGet";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+            var settings = new List<LoadConfigSetting>();
+            using var dr = await cmd.ExecuteReaderAsync();
+            while (await dr.ReadAsync())
+            {
+                settings.Add(new LoadConfigSetting
+                {
+                    SettingName = (string)dr["SettingName"],
+                    Min = Convert.ToInt32(dr["MinValue"]),
+                    Max = Convert.ToInt32(dr["MaxValue"])
+                });
+            }
+
+            return settings;
+        }
+
+        public async Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings)
+        {
+            using var connection = await CreateConnectionAsync();
+            using var transaction = connection.BeginTransaction();
+
+            foreach (var setting in settings)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = "LoadConfigSet";
+                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@SettingName", setting.SettingName);
+                cmd.Parameters.AddWithValue("@MinValue", setting.Min);
+                cmd.Parameters.AddWithValue("@MaxValue", setting.Max);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            transaction.Commit();
+        }
     }
 }

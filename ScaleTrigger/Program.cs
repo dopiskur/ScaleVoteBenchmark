@@ -6,6 +6,7 @@ using ScaleTrigger;
 using ScaleTrigger.Auth;
 using ScaleTrigger.Cache;
 using ScaleTrigger.Interfaces;
+using ScaleTrigger.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,9 @@ else
 }
 
 builder.Services.AddScoped<RepoFactory>();
+
+builder.Services.AddSingleton<LoadConfigCache>();
+builder.Services.AddHostedService<LoadConfigRefreshService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -111,6 +115,26 @@ var app = builder.Build();
         await repo.EnsureSchemaAsync();
         logger.LogInformation("Database schema check completed (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
+
+        // Seeds LoadConfig from appsettings.json's "Load" section, but
+        // only the very first time the table is created - after that,
+        // the table is the source of truth and this section of
+        // appsettings.json is no longer read. See
+        // LoadConfigApiController for how the dashboard edits it and
+        // LoadConfigRefreshService for how those edits reach votes.
+        var loadDefaults = new List<LoadConfigSetting>
+        {
+            ReadLoadDefault("CpuIterationsPerVote"),
+            ReadLoadDefault("MemoryMegabytesPerVote"),
+            ReadLoadDefault("DiskWriteKilobytesPerVote"),
+            ReadLoadDefault("NetworkLatencyMillisecondsPerVote"),
+            ReadLoadDefault("PayloadBytesPerVote"),
+        };
+        await repo.LoadConfigEnsureSeededAsync(loadDefaults);
+
+        var loadConfigCache = app.Services.GetRequiredService<LoadConfigCache>();
+        loadConfigCache.Set(await repo.LoadConfigGetAsync());
+        logger.LogInformation("LoadConfig ready ({Count} settings).", loadDefaults.Count);
     }
     catch (Exception ex)
     {
@@ -125,6 +149,13 @@ var app = builder.Build();
         {
             throw;
         }
+    }
+
+    LoadConfigSetting ReadLoadDefault(string settingName)
+    {
+        int min = int.Parse(app.Configuration[$"Load:{settingName}:Min"] ?? "0");
+        int max = int.Parse(app.Configuration[$"Load:{settingName}:Max"] ?? "0");
+        return new LoadConfigSetting { SettingName = settingName, Min = min, Max = max };
     }
 }
 

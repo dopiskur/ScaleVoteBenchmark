@@ -53,5 +53,29 @@ namespace ScaleTrigger.Interfaces
         /// wipes all benchmark data irreversibly.
         /// </summary>
         Task CleanupAsync();
+
+        /// <summary>
+        /// Creates the LoadConfig table (and, for MSSQL/MySQL/PostgreSQL,
+        /// its stored procedures/function) if it does not already exist,
+        /// then - only if the table is still empty - inserts one row per
+        /// setting in <paramref name="defaults"/>. Does nothing beyond
+        /// that on subsequent calls, so values already edited via the
+        /// dashboard are never overwritten by appsettings.json again.
+        /// </summary>
+        Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults);
+
+        /// <summary>
+        /// Returns all rows currently in LoadConfig.
+        /// </summary>
+        Task<List<LoadConfigSetting>> LoadConfigGetAsync();
+
+        /// <summary>
+        /// Updates the Min/Max of each given setting by SettingName.
+        /// Settings not already present in the table (i.e. not one of
+        /// the names LoadConfigEnsureSeededAsync originally inserted)
+        /// are silently ignored, since the update statement/procedure
+        /// matches by SettingName.
+        /// </summary>
+        Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings);
     }
 }
