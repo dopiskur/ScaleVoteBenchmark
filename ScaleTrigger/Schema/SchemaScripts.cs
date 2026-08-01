@@ -5,10 +5,8 @@ namespace ScaleTrigger.Schema
     /// (see RepoFactory-created repositories' EnsureSchema()). Each
     /// repository only executes these when the Vote table does not yet
     /// exist, so an already-provisioned database (and its data) is never
-    /// touched. Mirrors the sql/*.sql scripts in the repository root,
-    /// which remain available for manual provisioning or an explicit
-    /// drop-and-recreate reset - update both places together if the
-    /// schema changes.
+    /// touched. This is the only definition of the schema - there is no
+    /// separate copy to keep in sync.
     /// </summary>
     public static class SchemaScripts
     {
