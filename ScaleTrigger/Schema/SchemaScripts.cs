@@ -74,17 +74,20 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- COUNT_BIG/BIGINT sums (rather than COUNT/plain int SUM, which cap at
+    -- ~2.1 billion) since this is a load-testing tool expected to accumulate
+    -- a very large number of rows.
     SELECT
-        SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) AS [Yes],
-        SUM(CASE WHEN [Option] = 'no'  THEN 1 ELSE 0 END) AS [No],
-        COUNT(*) AS [Total],
-        CASE WHEN COUNT(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)
+        SUM(CASE WHEN [Option] = 'yes' THEN CAST(1 AS BIGINT) ELSE 0 END) AS [Yes],
+        SUM(CASE WHEN [Option] = 'no'  THEN CAST(1 AS BIGINT) ELSE 0 END) AS [No],
+        COUNT_BIG(*) AS [Total],
+        CASE WHEN COUNT_BIG(*) = 0 THEN 0
+             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'yes' THEN CAST(1 AS BIGINT) ELSE 0 END) / COUNT_BIG(*), 2)
         END AS [YesPercent],
-        CASE WHEN COUNT(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)
+        CASE WHEN COUNT_BIG(*) = 0 THEN 0
+             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'no' THEN CAST(1 AS BIGINT) ELSE 0 END) / COUNT_BIG(*), 2)
         END AS [NoPercent],
-        (SELECT COUNT(*) FROM dbo.Payload) AS [PayloadCount],
+        (SELECT COUNT_BIG(*) FROM dbo.Payload) AS [PayloadCount],
         (SELECT ISNULL(SUM(DATALENGTH(Data)), 0) FROM dbo.Payload) AS [PayloadTotalBytes]
     FROM dbo.Vote;
 END",
@@ -244,22 +247,25 @@ END;
 $$;",
 
             @"CREATE FUNCTION vote_report_get()
-RETURNS TABLE(yes_count INT, no_count INT, total INT, yes_percent NUMERIC, no_percent NUMERIC, payload_count INT, payload_total_bytes BIGINT)
+RETURNS TABLE(yes_count BIGINT, no_count BIGINT, total BIGINT, yes_percent NUMERIC, no_percent NUMERIC, payload_count BIGINT, payload_total_bytes BIGINT)
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- BIGINT (rather than INT, which caps at ~2.1 billion) since this is a
+    -- load-testing tool expected to accumulate a very large number of rows;
+    -- COUNT(*) is BIGINT natively in Postgres, so only the SUMs need casting.
     RETURN QUERY
     SELECT
-        SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END)::INT AS yes_count,
-        SUM(CASE WHEN option = 'no'  THEN 1 ELSE 0 END)::INT AS no_count,
-        COUNT(*)::INT AS total,
+        SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END)::BIGINT AS yes_count,
+        SUM(CASE WHEN option = 'no'  THEN 1 ELSE 0 END)::BIGINT AS no_count,
+        COUNT(*) AS total,
         CASE WHEN COUNT(*) = 0 THEN 0
              ELSE ROUND(100.0 * SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)
         END AS yes_percent,
         CASE WHEN COUNT(*) = 0 THEN 0
              ELSE ROUND(100.0 * SUM(CASE WHEN option = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)
         END AS no_percent,
-        (SELECT COUNT(*) FROM payload)::INT AS payload_count,
+        (SELECT COUNT(*) FROM payload) AS payload_count,
         (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM payload)::BIGINT AS payload_total_bytes
     FROM vote;
 END;

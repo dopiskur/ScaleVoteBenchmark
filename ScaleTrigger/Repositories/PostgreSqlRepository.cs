@@ -48,12 +48,12 @@ namespace ScaleTrigger.Repositories
 
             if (await dr.ReadAsync())
             {
-                report.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt32(dr["yes_count"]) : 0;
-                report.No = dr["no_count"] != DBNull.Value ? Convert.ToInt32(dr["no_count"]) : 0;
-                report.Total = dr["total"] != DBNull.Value ? Convert.ToInt32(dr["total"]) : 0;
+                report.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt64(dr["yes_count"]) : 0;
+                report.No = dr["no_count"] != DBNull.Value ? Convert.ToInt64(dr["no_count"]) : 0;
+                report.Total = dr["total"] != DBNull.Value ? Convert.ToInt64(dr["total"]) : 0;
                 report.YesPercent = dr["yes_percent"] != DBNull.Value ? Convert.ToDecimal(dr["yes_percent"]) : 0;
                 report.NoPercent = dr["no_percent"] != DBNull.Value ? Convert.ToDecimal(dr["no_percent"]) : 0;
-                report.PayloadCount = dr["payload_count"] != DBNull.Value ? Convert.ToInt32(dr["payload_count"]) : 0;
+                report.PayloadCount = dr["payload_count"] != DBNull.Value ? Convert.ToInt64(dr["payload_count"]) : 0;
                 report.PayloadTotalBytes = dr["payload_total_bytes"] != DBNull.Value ? Convert.ToInt64(dr["payload_total_bytes"]) : 0;
             }
 

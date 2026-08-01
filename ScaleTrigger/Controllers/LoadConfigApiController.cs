@@ -71,8 +71,9 @@ namespace ScaleTrigger.Controllers
                 }
             }
 
-            await repoFactory.GetRepo().LoadConfigUpdateAsync(settings);
-            loadConfigCache.Set(await repoFactory.GetRepo().LoadConfigGetAsync());
+            var repo = repoFactory.GetRepo();
+            await repo.LoadConfigUpdateAsync(settings);
+            loadConfigCache.Set(await repo.LoadConfigGetAsync());
 
             return Ok();
         }

@@ -14,6 +14,11 @@ namespace ScaleTrigger.Controllers
 
         private const string ReportCacheKey = "VoteReportCache";
 
+        // Guards against a cache stampede: without it, every concurrent request
+        // that misses the cache at the same time (e.g. right after it expires)
+        // would hit the database independently instead of piggy-backing on one fetch.
+        private static readonly SemaphoreSlim ReportFetchLock = new(1, 1);
+
         public VoteApiController(RepoFactory repoFactory, IConfiguration configuration, LoadConfigCache loadConfigCache)
         {
             this.repoFactory = repoFactory;
@@ -43,9 +48,15 @@ namespace ScaleTrigger.Controllers
             int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
             int dbMaxPrime = RandomizedLoadValue("DbCpuIterationsPerVote");
 
-            LoadSimulator.SimulateCpuLoad(cpuIterations);
-            LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
-            LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
+            // Offloaded to a background thread so this CPU/disk-bound work doesn't
+            // run directly on the async continuation and starve the thread pool
+            // under concurrent load - same reasoning as NodeBenchmarkApiController.Run.
+            await Task.Run(() =>
+            {
+                LoadSimulator.SimulateCpuLoad(cpuIterations);
+                LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
+                LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
+            });
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
             byte[]? payload = null;
@@ -71,21 +82,36 @@ namespace ScaleTrigger.Controllers
                 return Ok(cached);
             }
 
-            int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
-
-            VoteReport report;
+            await ReportFetchLock.WaitAsync();
             try
             {
-                report = await repoFactory.GetRepo().VoteReportGetAsync();
+                // Re-check: another request may have already refilled the cache while this one was waiting.
+                cached = repoFactory.GetCache().GetItem<VoteReport>(ReportCacheKey);
+                if (cached != null)
+                {
+                    return Ok(cached);
+                }
+
+                int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
+
+                VoteReport report;
+                try
+                {
+                    report = await repoFactory.GetRepo().VoteReportGetAsync();
+                }
+                catch (Exception)
+                {
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, "Database unavailable.");
+                }
+
+                repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
+
+                return Ok(report);
             }
-            catch (Exception)
+            finally
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Database unavailable.");
+                ReportFetchLock.Release();
             }
-
-            repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
-
-            return Ok(report);
         }
 
         /// <summary>Drops and recreates the schema, so the database ends up looking brand new.</summary>

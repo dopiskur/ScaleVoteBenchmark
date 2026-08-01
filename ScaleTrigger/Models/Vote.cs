@@ -10,12 +10,12 @@ namespace ScaleTrigger.Models
     /// <summary>Fully computed by the database - no percentage math happens in application code.</summary>
     public class VoteReport
     {
-        public int Yes { get; set; }
-        public int No { get; set; }
-        public int Total { get; set; }
+        public long Yes { get; set; }
+        public long No { get; set; }
+        public long Total { get; set; }
         public decimal YesPercent { get; set; }
         public decimal NoPercent { get; set; }
-        public int PayloadCount { get; set; }
+        public long PayloadCount { get; set; }
         public long PayloadTotalBytes { get; set; }
     }
 
