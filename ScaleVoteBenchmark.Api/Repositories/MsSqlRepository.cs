@@ -23,7 +23,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
             this.useManagedIdentity = useManagedIdentity;
         }
 
-        private SqlConnection CreateConnection()
+        private async Task<SqlConnection> CreateConnectionAsync()
         {
             var connection = new SqlConnection(connectionString);
 
@@ -43,35 +43,34 @@ namespace ScaleVoteBenchmark.Api.Repositories
             // recommended.
             if (useManagedIdentity)
             {
-                connection.AccessToken = AzureSqlAuthProvider.GetAccessToken();
+                connection.AccessToken = await AzureSqlAuthProvider.GetAccessTokenAsync();
             }
 
+            await connection.OpenAsync();
             return connection;
         }
 
-        public void VoteAdd(string option)
+        public async Task VoteAddAsync(string option)
         {
-            using var connection = CreateConnection();
-            connection.Open();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteAdd";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("@Option", option);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
         }
 
-        public VoteReport VoteReportGet()
+        public async Task<VoteReport> VoteReportGetAsync()
         {
-            using var connection = CreateConnection();
-            connection.Open();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteReportGet";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
-            using var dr = cmd.ExecuteReader();
+            using var dr = await cmd.ExecuteReaderAsync();
             var report = new VoteReport();
 
-            if (dr.Read())
+            if (await dr.ReadAsync())
             {
                 report.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
                 report.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
@@ -90,21 +89,19 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// the application's startup logic can print a clear error
         /// message.
         /// </summary>
-        public void TestConnection()
+        public async Task TestConnectionAsync()
         {
-            using var connection = CreateConnection();
-            connection.Open();
+            using var connection = await CreateConnectionAsync();
         }
 
-        public void EnsureSchema()
+        public async Task EnsureSchemaAsync()
         {
-            using var connection = CreateConnection();
-            connection.Open();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
                 checkCmd.CommandText = "SELECT OBJECT_ID('dbo.Vote', 'U')";
-                if (checkCmd.ExecuteScalar() is not DBNull and not null)
+                if (await checkCmd.ExecuteScalarAsync() is not DBNull and not null)
                 {
                     return;
                 }
@@ -114,7 +111,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
             {
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = batch;
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
     }

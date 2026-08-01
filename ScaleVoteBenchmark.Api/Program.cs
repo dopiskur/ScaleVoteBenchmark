@@ -98,11 +98,11 @@ var app = builder.Build();
     try
     {
         var repo = repoFactory.GetRepo();
-        repo.TestConnection();
+        await repo.TestConnectionAsync();
         logger.LogInformation("Database connection check succeeded (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
 
-        repo.EnsureSchema();
+        await repo.EnsureSchemaAsync();
         logger.LogInformation("Database schema check completed (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
     }

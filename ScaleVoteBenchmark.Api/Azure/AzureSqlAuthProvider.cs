@@ -20,11 +20,11 @@ namespace ScaleVoteBenchmark.Api.Azure
         /// (in order: Managed Identity, Azure CLI, Visual Studio, etc.),
         /// which is then set as the AccessToken on the SqlConnection object.
         /// </summary>
-        public static string GetAccessToken()
+        public static async Task<string> GetAccessTokenAsync()
         {
             var credential = new DefaultAzureCredential();
             var tokenRequestContext = new TokenRequestContext(new[] { SqlResourceScope });
-            AccessToken token = credential.GetToken(tokenRequestContext);
+            AccessToken token = await credential.GetTokenAsync(tokenRequestContext);
             return token.Token;
         }
     }

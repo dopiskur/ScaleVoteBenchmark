@@ -20,27 +20,27 @@ namespace ScaleVoteBenchmark.Api.Repositories
             this.connectionString = connectionString;
         }
 
-        public void VoteAdd(string option)
+        public async Task VoteAddAsync(string option)
         {
             using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL vote_add(@option)";
             cmd.Parameters.AddWithValue("option", option);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
         }
 
-        public VoteReport VoteReportGet()
+        public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT yes_count, no_count, total, yes_percent, no_percent FROM vote_report_get()";
 
-            using var dr = cmd.ExecuteReader();
+            using var dr = await cmd.ExecuteReaderAsync();
             var report = new VoteReport();
 
-            if (dr.Read())
+            if (await dr.ReadAsync())
             {
                 report.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt32(dr["yes_count"]) : 0;
                 report.No = dr["no_count"] != DBNull.Value ? Convert.ToInt32(dr["no_count"]) : 0;
@@ -59,21 +59,21 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// the application's startup logic can print a clear error
         /// message.
         /// </summary>
-        public void TestConnection()
+        public async Task TestConnectionAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
         }
 
-        public void EnsureSchema()
+        public async Task EnsureSchemaAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
                 checkCmd.CommandText = "SELECT to_regclass('public.vote')";
-                if (checkCmd.ExecuteScalar() is not DBNull and not null)
+                if (await checkCmd.ExecuteScalarAsync() is not DBNull and not null)
                 {
                     return;
                 }
@@ -83,7 +83,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
             {
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = batch;
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
     }

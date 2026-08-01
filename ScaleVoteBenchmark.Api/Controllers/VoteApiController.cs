@@ -48,7 +48,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
             LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
-            repoFactory.GetRepo().VoteAdd(option);
+            await repoFactory.GetRepo().VoteAddAsync(option);
 
             // Invalidate the cached report after a new vote
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
@@ -64,7 +64,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
         /// </summary>
         [HttpGet("report")]
         [AllowAnonymous]
-        public ActionResult<VoteReport> VoteReportGet()
+        public async Task<ActionResult<VoteReport>> VoteReportGet()
         {
             var cached = repoFactory.GetCache().GetItem<VoteReport>(ReportCacheKey);
             if (cached != null)
@@ -74,7 +74,7 @@ namespace ScaleVoteBenchmark.Api.Controllers
 
             int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
 
-            var report = repoFactory.GetRepo().VoteReportGet();
+            var report = await repoFactory.GetRepo().VoteReportGetAsync();
             repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
 
             return Ok(report);

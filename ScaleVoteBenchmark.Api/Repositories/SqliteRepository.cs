@@ -34,38 +34,38 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// once already enabled, and covers databases created before
         /// this was added.
         /// </summary>
-        private SqliteConnection CreateConnection()
+        private async Task<SqliteConnection> CreateConnectionAsync()
         {
             var connection = new SqliteConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
 
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = "PRAGMA busy_timeout = 5000;";
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
 
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = "PRAGMA journal_mode = WAL;";
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
 
             return connection;
         }
 
-        public void VoteAdd(string option)
+        public async Task VoteAddAsync(string option)
         {
-            using var connection = CreateConnection();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "INSERT INTO Vote (\"Option\") VALUES ($option)";
             cmd.Parameters.AddWithValue("$option", option);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
         }
 
-        public VoteReport VoteReportGet()
+        public async Task<VoteReport> VoteReportGetAsync()
         {
-            using var connection = CreateConnection();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT " +
@@ -80,10 +80,10 @@ namespace ScaleVoteBenchmark.Api.Repositories
                 "END AS NoPercent " +
                 "FROM Vote";
 
-            using var dr = cmd.ExecuteReader();
+            using var dr = await cmd.ExecuteReaderAsync();
             var report = new VoteReport();
 
-            if (dr.Read())
+            if (await dr.ReadAsync())
             {
                 report.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
                 report.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
@@ -101,19 +101,19 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// connection if it does not yet exist, so this effectively
         /// always succeeds as long as the configured path is writable.
         /// </summary>
-        public void TestConnection()
+        public async Task TestConnectionAsync()
         {
-            using var connection = CreateConnection();
+            using var connection = await CreateConnectionAsync();
         }
 
-        public void EnsureSchema()
+        public async Task EnsureSchemaAsync()
         {
-            using var connection = CreateConnection();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
                 checkCmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'Vote'";
-                if (checkCmd.ExecuteScalar() != null)
+                if (await checkCmd.ExecuteScalarAsync() != null)
                 {
                     return;
                 }
@@ -123,7 +123,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
             {
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = batch;
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
     }

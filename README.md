@@ -42,11 +42,11 @@ Both modes use the same connection string for the server address and database na
 
 ## Automatic schema provisioning at startup
 
-Right after the database connection check succeeds, `ScaleVoteBenchmark.Api` calls `EnsureSchema()` on the configured repository, which creates the `Vote` table (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) using the same connection details from `appsettings.json` — but **only if they don't already exist**. If the table is already there, `EnsureSchema()` does nothing, so an already-provisioned database and its data are never touched on subsequent restarts. This means a fresh database needs no manual setup at all: point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app.
+Right after the database connection check succeeds, `ScaleVoteBenchmark.Api` calls `EnsureSchemaAsync()` on the configured repository, which creates the `Vote` table (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) using the same connection details from `appsettings.json` — but **only if they don't already exist**. If the table is already there, `EnsureSchemaAsync()` does nothing, so an already-provisioned database and its data are never touched on subsequent restarts. This means a fresh database needs no manual setup at all: point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app.
 
 The `sql/*.sql` scripts remain available for manual provisioning or an explicit drop-and-recreate reset (see "Database setup" below); they are not used by the app itself.
 
-Creating tables/procedures requires DDL permissions on the configured database user — if that user only has DML rights (as might be the case against a shared/managed production database), `EnsureSchema()` will fail. That failure is treated the same as a failed connection check and follows `Startup:FailFastOnDbCheck` (see below): either the app refuses to start, or it logs a critical error and continues, in which case run the appropriate `sql/*.sql` script manually instead.
+Creating tables/procedures requires DDL permissions on the configured database user — if that user only has DML rights (as might be the case against a shared/managed production database), `EnsureSchemaAsync()` will fail. That failure is treated the same as a failed connection check and follows `Startup:FailFastOnDbCheck` (see below): either the app refuses to start, or it logs a critical error and continues, in which case run the appropriate `sql/*.sql` script manually instead.
 
 ## Database availability check at startup
 
@@ -102,7 +102,7 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 
 ## Database setup
 
-Not required for a fresh database - `EnsureSchema()` creates the schema automatically at startup (see above). The `sql/` scripts are there for manual provisioning or an explicit drop-and-recreate reset:
+Not required for a fresh database - `EnsureSchemaAsync()` creates the schema automatically at startup (see above). The `sql/` scripts are there for manual provisioning or an explicit drop-and-recreate reset:
 
 - `sql/mssql_schema.sql` for Azure SQL
 - `sql/mysql_schema.sql` for Azure Database for MySQL

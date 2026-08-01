@@ -20,29 +20,29 @@ namespace ScaleVoteBenchmark.Api.Repositories
             this.connectionString = connectionString;
         }
 
-        public void VoteAdd(string option)
+        public async Task VoteAddAsync(string option)
         {
             using var connection = new MySqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteAdd";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("pOption", option);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
         }
 
-        public VoteReport VoteReportGet()
+        public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = new MySqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteReportGet";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
-            using var dr = cmd.ExecuteReader();
+            using var dr = await cmd.ExecuteReaderAsync();
             var report = new VoteReport();
 
-            if (dr.Read())
+            if (await dr.ReadAsync())
             {
                 report.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt32(dr["Yes"]) : 0;
                 report.No = dr["No"] != DBNull.Value ? Convert.ToInt32(dr["No"]) : 0;
@@ -61,23 +61,23 @@ namespace ScaleVoteBenchmark.Api.Repositories
         /// the application's startup logic can print a clear error
         /// message.
         /// </summary>
-        public void TestConnection()
+        public async Task TestConnectionAsync()
         {
             using var connection = new MySqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
         }
 
-        public void EnsureSchema()
+        public async Task EnsureSchemaAsync()
         {
             using var connection = new MySqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
                 checkCmd.CommandText =
                     "SELECT COUNT(*) FROM information_schema.tables " +
                     "WHERE table_schema = DATABASE() AND table_name = 'Vote'";
-                var count = Convert.ToInt32(checkCmd.ExecuteScalar());
+                var count = Convert.ToInt32(await checkCmd.ExecuteScalarAsync());
                 if (count > 0)
                 {
                     return;
@@ -88,7 +88,7 @@ namespace ScaleVoteBenchmark.Api.Repositories
             {
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = batch;
-                cmd.ExecuteNonQuery();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
     }

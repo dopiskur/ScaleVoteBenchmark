@@ -10,14 +10,14 @@ namespace ScaleVoteBenchmark.Api.Interfaces
     /// </summary>
     public interface IRepository
     {
-        void VoteAdd(string option);
+        Task VoteAddAsync(string option);
 
         /// <summary>
         /// Returns the vote report (counts and percentages per option),
         /// fully summed and computed by a stored procedure/function in
         /// the database.
         /// </summary>
-        VoteReport VoteReportGet();
+        Task<VoteReport> VoteReportGetAsync();
 
         /// <summary>
         /// Checks whether a connection to the database can be established
@@ -28,7 +28,7 @@ namespace ScaleVoteBenchmark.Api.Interfaces
         /// unreachable server, closed firewall on Azure) is reported
         /// immediately, rather than only on the first real user request.
         /// </summary>
-        void TestConnection();
+        Task TestConnectionAsync();
 
         /// <summary>
         /// Creates the Vote table and its stored procedures/functions if
@@ -36,6 +36,6 @@ namespace ScaleVoteBenchmark.Api.Interfaces
         /// configured in appsettings.json. Does nothing if the schema is
         /// already present, so existing data is never touched.
         /// </summary>
-        void EnsureSchema();
+        Task EnsureSchemaAsync();
     }
 }
