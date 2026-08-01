@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using ScaleTrigger.Interfaces;
 using ScaleTrigger.Models;
@@ -48,34 +47,50 @@ namespace ScaleTrigger.Repositories
         }
 
         /// <summary>
-        /// SQLite has neither stored procedures nor a built-in hash
-        /// function, so this registers a SHA-256 scalar function and
-        /// chains it via a recursive CTE - the closest equivalent to a
-        /// hashing loop inside a stored procedure, matching the other
-        /// three providers' VoteAdd.
+        /// SQLite has no stored procedures, so this registers sysbench's
+        /// CPU algorithm (counts primes up to maxPrime by trial division)
+        /// as a scalar function and calls it from SQL - dispatched by
+        /// the SQL engine, matching the other three providers' VoteAdd.
         /// </summary>
-        private static async Task RunHashLoopAsync(SqliteConnection connection, int iterations)
+        private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int maxPrime)
         {
-            connection.CreateFunction("sha2_256", (byte[] data) => SHA256.HashData(data));
+            connection.CreateFunction("sysbench_cpu", (long max) =>
+            {
+                long primeCount = 0;
+                for (long n = 2; n <= max; n++)
+                {
+                    bool isPrime = true;
+                    for (long t = 2; t * t <= n; t++)
+                    {
+                        if (n % t == 0)
+                        {
+                            isPrime = false;
+                            break;
+                        }
+                    }
+
+                    if (isPrime)
+                    {
+                        primeCount++;
+                    }
+                }
+
+                return primeCount;
+            });
 
             using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "WITH RECURSIVE hash_chain(i, h) AS (" +
-                "  SELECT 1, sha2_256(randomblob(32)) " +
-                "  UNION ALL " +
-                "  SELECT i + 1, sha2_256(h) FROM hash_chain WHERE i < $iterations" +
-                ") SELECT h FROM hash_chain ORDER BY i DESC LIMIT 1;";
-            cmd.Parameters.AddWithValue("$iterations", iterations);
+            cmd.CommandText = "SELECT sysbench_cpu($maxPrime);";
+            cmd.Parameters.AddWithValue("$maxPrime", maxPrime);
             await cmd.ExecuteScalarAsync();
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
             using var connection = await CreateConnectionAsync();
 
-            if (hashIterations > 0)
+            if (maxPrime > 0)
             {
-                await RunHashLoopAsync(connection, hashIterations);
+                await RunSysbenchCpuAsync(connection, maxPrime);
             }
 
             long newIdVote;

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-
 namespace ScaleTrigger
 {
     public static class LoadSimulator
@@ -13,20 +11,38 @@ namespace ScaleTrigger
             return path;
         }
 
-        public static void SimulateCpuLoad(int iterations)
+        /// <summary>
+        /// Sysbench's CPU benchmark algorithm: counts primes up to
+        /// maxPrime by trial division of each candidate by every integer
+        /// from 2 up to its square root.
+        /// </summary>
+        public static void SimulateCpuLoad(int maxPrime)
         {
-            if (iterations <= 0)
+            if (maxPrime <= 0)
             {
                 return;
             }
 
-            using var sha256 = SHA256.Create();
-            byte[] data = Guid.NewGuid().ToByteArray();
-
-            for (int i = 0; i < iterations; i++)
+            long primeCount = 0;
+            for (long n = 2; n <= maxPrime; n++)
             {
-                data = sha256.ComputeHash(data);
+                bool isPrime = true;
+                for (long t = 2; t * t <= n; t++)
+                {
+                    if (n % t == 0)
+                    {
+                        isPrime = false;
+                        break;
+                    }
+                }
+
+                if (isPrime)
+                {
+                    primeCount++;
+                }
             }
+
+            GC.KeepAlive(primeCount);
         }
 
         public static void SimulateMemoryLoad(int megabytes)

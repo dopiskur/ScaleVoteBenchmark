@@ -23,7 +23,7 @@ namespace ScaleTrigger.Controllers
 
         /// <summary>
         /// CPU/memory/disk/network load runs here, in the application.
-        /// PayloadBytesPerVote and DbHashIterationsPerVote instead
+        /// PayloadBytesPerVote and DbCpuIterationsPerVote instead
         /// simulate load inside the database itself - see
         /// IRepository.VoteAddAsync.
         /// </summary>
@@ -41,7 +41,7 @@ namespace ScaleTrigger.Controllers
             int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
             int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
-            int dbHashIterations = RandomizedLoadValue("DbHashIterationsPerVote");
+            int dbMaxPrime = RandomizedLoadValue("DbCpuIterationsPerVote");
 
             LoadSimulator.SimulateCpuLoad(cpuIterations);
             LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
@@ -55,7 +55,7 @@ namespace ScaleTrigger.Controllers
                 Random.Shared.NextBytes(payload);
             }
 
-            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbHashIterations);
+            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbMaxPrime);
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();

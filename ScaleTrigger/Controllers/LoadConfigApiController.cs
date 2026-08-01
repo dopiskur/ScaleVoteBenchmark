@@ -15,7 +15,7 @@ namespace ScaleTrigger.Controllers
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
-            "DbHashIterationsPerVote",
+            "DbCpuIterationsPerVote",
             "ConfigRefresh"
         };
 

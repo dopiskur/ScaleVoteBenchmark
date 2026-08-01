@@ -34,7 +34,7 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
@@ -48,7 +48,7 @@ namespace ScaleTrigger.Repositories
                 Value = (object?)payload ?? DBNull.Value
             });
 
-            cmd.Parameters.AddWithValue("@HashIterations", hashIterations);
+            cmd.Parameters.AddWithValue("@MaxPrime", maxPrime);
 
             await cmd.ExecuteNonQueryAsync();
         }

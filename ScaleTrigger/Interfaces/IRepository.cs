@@ -6,11 +6,13 @@ namespace ScaleTrigger.Interfaces
     {
         /// <summary>
         /// Pass null, not an empty array, to skip the payload insert.
-        /// hashIterations &gt; 0 runs that many chained hashes inside the
-        /// database engine itself before the insert (0 skips it) -
-        /// unlike LoadSimulator.SimulateCpuLoad, which runs in the app.
+        /// maxPrime &gt; 0 runs sysbench's CPU algorithm (counts primes up
+        /// to maxPrime by trial division) inside the database engine
+        /// itself before the insert (0 skips it) - unlike
+        /// LoadSimulator.SimulateCpuLoad, which runs the same algorithm
+        /// in the app.
         /// </summary>
-        Task VoteAddAsync(string option, byte[]? payload, int hashIterations);
+        Task VoteAddAsync(string option, byte[]? payload, int maxPrime);
 
         Task<VoteReport> VoteReportGetAsync();
 

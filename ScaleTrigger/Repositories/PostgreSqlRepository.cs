@@ -15,12 +15,12 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "CALL vote_add(@option, @payload, @hashIterations)";
+            cmd.CommandText = "CALL vote_add(@option, @payload, @maxPrime)";
             cmd.Parameters.AddWithValue("option", option);
 
             // AddWithValue can't infer a type from a bare DBNull.Value.
@@ -29,7 +29,7 @@ namespace ScaleTrigger.Repositories
                 Value = (object?)payload ?? DBNull.Value
             });
 
-            cmd.Parameters.AddWithValue("hashIterations", hashIterations);
+            cmd.Parameters.AddWithValue("maxPrime", maxPrime);
 
             await cmd.ExecuteNonQueryAsync();
         }

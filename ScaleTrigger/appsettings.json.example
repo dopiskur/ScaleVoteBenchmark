@@ -40,14 +40,15 @@
     "// Note": "Used only to seed the LoadConfig database table the very first time it's created. After that, this section is no longer read; edit the running values from the dashboard instead. Each value is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
     "// ConfigRefresh": "Seconds between polls of the LoadConfig table for values changed via the dashboard. Not a vote-time setting like the others below - it controls how fast an edit to ANY of these takes effect.",
     "ConfigRefresh": { "Min": 1, "Max": 1 },
-    "CpuIterationsPerVote": { "Min": 150000, "Max": 250000 },
+    "// CpuIterationsPerVote": "Sysbench's CPU algorithm: counts primes up to this value by trial division. Cost grows roughly as N^1.5, not linearly - keep this much lower than you would a plain iteration count.",
+    "CpuIterationsPerVote": { "Min": 5000, "Max": 20000 },
     "MemoryMegabytesPerVote": { "Min": 3, "Max": 8 },
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
     "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",
     "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
-    "// DbHashIterationsPerVote": "0 = VoteAdd just inserts, no hash loop. Runs inside the database engine itself (unlike CpuIterationsPerVote, which runs in the app) - simulates database-side CPU load.",
-    "DbHashIterationsPerVote": { "Min": 0, "Max": 0 }
+    "// DbCpuIterationsPerVote": "0 = VoteAdd just inserts, no prime-counting loop. Same sysbench algorithm as CpuIterationsPerVote, but runs inside the database engine itself - simulates database-side CPU load.",
+    "DbCpuIterationsPerVote": { "Min": 0, "Max": 0 }
   },
 
   "Jwt": {

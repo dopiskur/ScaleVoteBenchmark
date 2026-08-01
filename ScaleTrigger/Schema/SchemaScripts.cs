@@ -25,22 +25,37 @@ namespace ScaleTrigger.Schema
 );",
 
             @"CREATE PROCEDURE dbo.VoteAdd
-    @Option         VARCHAR(10),
-    @Payload        VARBINARY(MAX) = NULL,
-    @HashIterations INT            = 0
+    @Option    VARCHAR(10),
+    @Payload   VARBINARY(MAX) = NULL,
+    @MaxPrime  INT            = 0
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
-    IF @HashIterations > 0
+    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
+    -- CpuIterationsPerVote), counting primes up to @MaxPrime by trial
+    -- division. 0 = skip.
+    IF @MaxPrime > 0
     BEGIN
-        DECLARE @HashState VARBINARY(32) = HASHBYTES('SHA2_256', CAST(NEWID() AS VARBINARY(16)));
-        DECLARE @i INT = 0;
-        WHILE @i < @HashIterations
+        DECLARE @N BIGINT = 2;
+        DECLARE @T BIGINT;
+        DECLARE @IsPrime BIT;
+        DECLARE @PrimeCount BIGINT = 0;
+        WHILE @N <= @MaxPrime
         BEGIN
-            SET @HashState = HASHBYTES('SHA2_256', @HashState);
-            SET @i += 1;
+            SET @IsPrime = 1;
+            SET @T = 2;
+            WHILE @T * @T <= @N
+            BEGIN
+                IF @N % @T = 0
+                BEGIN
+                    SET @IsPrime = 0;
+                    BREAK;
+                END
+                SET @T += 1;
+            END
+            IF @IsPrime = 1 SET @PrimeCount += 1;
+            SET @N += 1;
         END
     END
 
@@ -108,18 +123,32 @@ END",
             @"CREATE PROCEDURE `VoteAdd`(
     IN pOption VARCHAR(10),
     IN pPayload LONGBLOB,
-    IN pHashIterations INT
+    IN pMaxPrime INT
 )
 BEGIN
-    DECLARE hashState CHAR(64);
-    DECLARE i INT DEFAULT 0;
+    DECLARE n BIGINT DEFAULT 2;
+    DECLARE t BIGINT;
+    DECLARE isPrime BOOLEAN;
+    DECLARE primeCount BIGINT DEFAULT 0;
 
-    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
-    IF pHashIterations > 0 THEN
-        SET hashState = SHA2(UUID(), 256);
-        WHILE i < pHashIterations DO
-            SET hashState = SHA2(hashState, 256);
-            SET i = i + 1;
+    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
+    -- CpuIterationsPerVote), counting primes up to pMaxPrime by trial
+    -- division. 0 = skip.
+    IF pMaxPrime > 0 THEN
+        WHILE n <= pMaxPrime DO
+            SET isPrime = TRUE;
+            SET t = 2;
+            inner_loop: WHILE t * t <= n DO
+                IF n MOD t = 0 THEN
+                    SET isPrime = FALSE;
+                    LEAVE inner_loop;
+                END IF;
+                SET t = t + 1;
+            END WHILE inner_loop;
+            IF isPrime THEN
+                SET primeCount = primeCount + 1;
+            END IF;
+            SET n = n + 1;
         END WHILE;
     END IF;
 
@@ -171,19 +200,35 @@ END",
     date_created TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );",
 
-            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_hash_iterations INT DEFAULT 0)
+            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_max_prime INT DEFAULT 0)
 LANGUAGE plpgsql
 AS $$
 DECLARE
     new_id_vote BIGINT;
-    hash_state  BYTEA;
-    i           INT;
+    n           BIGINT;
+    t           BIGINT;
+    is_prime    BOOLEAN;
+    prime_count BIGINT := 0;
 BEGIN
-    -- Database-side CPU load (vs. app-side CpuIterationsPerVote). 0 = skip.
-    IF p_hash_iterations > 0 THEN
-        hash_state := sha256(convert_to(p_option || clock_timestamp()::TEXT, 'UTF8'));
-        FOR i IN 1..p_hash_iterations LOOP
-            hash_state := sha256(hash_state);
+    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
+    -- CpuIterationsPerVote), counting primes up to p_max_prime by trial
+    -- division. 0 = skip.
+    IF p_max_prime > 0 THEN
+        n := 2;
+        WHILE n <= p_max_prime LOOP
+            is_prime := TRUE;
+            t := 2;
+            WHILE t * t <= n LOOP
+                IF n % t = 0 THEN
+                    is_prime := FALSE;
+                    EXIT;
+                END IF;
+                t := t + 1;
+            END LOOP;
+            IF is_prime THEN
+                prime_count := prime_count + 1;
+            END IF;
+            n := n + 1;
         END LOOP;
     END IF;
 

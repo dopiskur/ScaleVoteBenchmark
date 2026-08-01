@@ -16,7 +16,7 @@ namespace ScaleTrigger
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
-            "DbHashIterationsPerVote",
+            "DbCpuIterationsPerVote",
             "ConfigRefresh"
         };
 

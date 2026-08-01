@@ -407,12 +407,12 @@
 
     const LOAD_CONFIG_LABELS = {
       ConfigRefresh: { label: 'Poll interval', group: 'refresh', single: true },
-      CpuIterationsPerVote: { label: 'CPU', unit: 'hash iterations', group: 'application' },
+      CpuIterationsPerVote: { label: 'CPU', unit: 'primes ≤ N', group: 'application' },
       MemoryMegabytesPerVote: { label: 'Memory', unit: 'MB', group: 'application' },
       DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
       NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application' },
       PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database' },
-      DbHashIterationsPerVote: { label: 'CPU', unit: 'hash iterations', group: 'database' }
+      DbCpuIterationsPerVote: { label: 'CPU', unit: 'primes ≤ N', group: 'database' }
     };
 
     const loadConfigRowsEls = {
