@@ -33,7 +33,14 @@ namespace ScaleTrigger.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<List<LoadConfigSetting>>> Get()
         {
-            return Ok(await repoFactory.GetRepo().LoadConfigGetAsync());
+            try
+            {
+                return Ok(await repoFactory.GetRepo().LoadConfigGetAsync());
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Database unavailable.");
+            }
         }
 
         /// <summary>Refreshes LoadConfigCache immediately so the update applies to the very next vote.</summary>

@@ -83,7 +83,7 @@ var app = builder.Build();
 // Fails fast (or just warns) here instead of on the first real request - see "Startup:FailFastOnDbCheck".
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupDbCheck");
-    bool failFast = !bool.TryParse(app.Configuration["Startup:FailFastOnDbCheck"], out bool ff) || ff;
+    bool failFast = bool.TryParse(app.Configuration["Startup:FailFastOnDbCheck"], out bool ff) && ff;
 
     using var scope = app.Services.CreateScope();
     var repoFactory = scope.ServiceProvider.GetRequiredService<RepoFactory>();
