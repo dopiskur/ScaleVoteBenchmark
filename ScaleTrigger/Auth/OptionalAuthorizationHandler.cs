@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 
-namespace ScaleTrigger.Api.Auth
+namespace ScaleTrigger.Auth
 {
     /// <summary>
     /// Marks an authorization requirement as one that can be bypassed

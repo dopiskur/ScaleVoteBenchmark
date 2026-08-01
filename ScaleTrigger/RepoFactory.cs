@@ -1,7 +1,7 @@
-using ScaleTrigger.Api.Interfaces;
-using ScaleTrigger.Api.Repositories;
+using ScaleTrigger.Interfaces;
+using ScaleTrigger.Repositories;
 
-namespace ScaleTrigger.Api
+namespace ScaleTrigger
 {
     /// <summary>
     /// Factory class that, based on the "DatabaseProvider" setting in

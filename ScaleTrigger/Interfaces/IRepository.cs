@@ -1,6 +1,6 @@
-using ScaleTrigger.Api.Models;
+using ScaleTrigger.Models;
 
-namespace ScaleTrigger.Api.Interfaces
+namespace ScaleTrigger.Interfaces
 {
     /// <summary>
     /// Common interface for accessing the data layer, regardless of

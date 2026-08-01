@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "ScaleTrigger.Api": {
+    "ScaleTrigger": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,

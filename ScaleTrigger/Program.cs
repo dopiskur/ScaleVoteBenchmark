@@ -2,10 +2,10 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
-using ScaleTrigger.Api;
-using ScaleTrigger.Api.Auth;
-using ScaleTrigger.Api.Cache;
-using ScaleTrigger.Api.Interfaces;
+using ScaleTrigger;
+using ScaleTrigger.Auth;
+using ScaleTrigger.Cache;
+using ScaleTrigger.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using ScaleTrigger.Api.Auth;
+using ScaleTrigger.Auth;
 
-namespace ScaleTrigger.Api.Controllers
+namespace ScaleTrigger.Controllers
 {
     [ApiController]
     [Route("api/auth")]

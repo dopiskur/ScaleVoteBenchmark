@@ -48,7 +48,7 @@
 
   "Jwt": {
     "Key": "abcdefghijklmnopqrstuvwxyz012345",
-    "Issuer": "ScaleTrigger.Api",
+    "Issuer": "ScaleTrigger",
     "Audience": "ScaleTrigger.Clients",
     "ExpirationMinutes": 60
   },

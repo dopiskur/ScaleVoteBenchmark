@@ -1,4 +1,4 @@
-namespace ScaleTrigger.Api.Models
+namespace ScaleTrigger.Models
 {
     /// <summary>
     /// Model of a single vote.

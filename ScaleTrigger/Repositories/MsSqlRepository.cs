@@ -1,11 +1,11 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
-using ScaleTrigger.Api.Azure;
-using ScaleTrigger.Api.Interfaces;
-using ScaleTrigger.Api.Models;
-using ScaleTrigger.Api.Schema;
+using ScaleTrigger.Azure;
+using ScaleTrigger.Interfaces;
+using ScaleTrigger.Models;
+using ScaleTrigger.Schema;
 
-namespace ScaleTrigger.Api.Repositories
+namespace ScaleTrigger.Repositories
 {
     /// <summary>
     /// Repository implementation for working with a Microsoft SQL Server

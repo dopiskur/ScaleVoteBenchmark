@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
-using ScaleTrigger.Api.Interfaces;
+using ScaleTrigger.Interfaces;
 
-namespace ScaleTrigger.Api.Cache
+namespace ScaleTrigger.Cache
 {
     /// <summary>
     /// Cache implementation using the native .NET "MemoryCache" class.

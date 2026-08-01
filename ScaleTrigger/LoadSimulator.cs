@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ScaleTrigger.Api
+namespace ScaleTrigger
 {
     /// <summary>
     /// Helper class that simulates CPU, memory, disk write and network

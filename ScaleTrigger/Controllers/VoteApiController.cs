@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ScaleTrigger.Api.Models;
+using ScaleTrigger.Models;
 
-namespace ScaleTrigger.Api.Controllers
+namespace ScaleTrigger.Controllers
 {
     [ApiController]
     [Route("api/vote")]

@@ -5,14 +5,14 @@ on:
     branches:
       - master
     paths:
-      - 'ScaleTrigger.Api/**'
+      - 'ScaleTrigger/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
 env:
   AZURE_WEBAPP_NAME: YOUR-API-APP-SERVICE-NAME
   DOTNET_VERSION: '10.0.x'
-  PROJECT_PATH: ScaleTrigger.Api/ScaleTrigger.Api.csproj
+  PROJECT_PATH: ScaleTrigger/ScaleTrigger.csproj
   PUBLISH_DIR: ${{ github.workspace }}/publish/api
 
 permissions:

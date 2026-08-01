@@ -4,7 +4,7 @@
 --
 -- SQLite has no stored procedure/function support, so unlike the
 -- MSSQL/MySQL/PostgreSQL schemas there are no stored routines here -
--- ScaleTrigger.Api's SqliteRepository runs plain parameterized
+-- ScaleTrigger's SqliteRepository runs plain parameterized
 -- SQL directly against this table instead.
 -- ============================================================
 

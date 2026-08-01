@@ -1,4 +1,4 @@
-namespace ScaleTrigger.Api.Schema
+namespace ScaleTrigger.Schema
 {
     /// <summary>
     /// SQL batches used to bootstrap the database schema on first run

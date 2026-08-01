@@ -1,10 +1,10 @@
 using Npgsql;
 using NpgsqlTypes;
-using ScaleTrigger.Api.Interfaces;
-using ScaleTrigger.Api.Models;
-using ScaleTrigger.Api.Schema;
+using ScaleTrigger.Interfaces;
+using ScaleTrigger.Models;
+using ScaleTrigger.Schema;
 
-namespace ScaleTrigger.Api.Repositories
+namespace ScaleTrigger.Repositories
 {
     /// <summary>
     /// Repository implementation for working with an Azure Database for

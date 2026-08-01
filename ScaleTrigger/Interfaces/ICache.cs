@@ -1,4 +1,4 @@
-namespace ScaleTrigger.Api.Interfaces
+namespace ScaleTrigger.Interfaces
 {
     /// <summary>
     /// Interface for accessing the caching mechanism.

@@ -1,6 +1,6 @@
-using ScaleTrigger.Api.Interfaces;
+using ScaleTrigger.Interfaces;
 
-namespace ScaleTrigger.Api.Cache
+namespace ScaleTrigger.Cache
 {
     /// <summary>
     /// Cache implementation that stores nothing - used when

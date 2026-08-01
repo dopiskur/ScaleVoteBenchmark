@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
-namespace ScaleTrigger.Api.Auth
+namespace ScaleTrigger.Auth
 {
     /// <summary>
     /// Creates digitally signed JWT tokens for administrative users,

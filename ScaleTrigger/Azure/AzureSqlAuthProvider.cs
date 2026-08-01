@@ -1,7 +1,7 @@
 using Azure.Core;
 using Azure.Identity;
 
-namespace ScaleTrigger.Api.Azure
+namespace ScaleTrigger.Azure
 {
     /// <summary>
     /// Enables authentication against Azure SQL via the Managed Identity
