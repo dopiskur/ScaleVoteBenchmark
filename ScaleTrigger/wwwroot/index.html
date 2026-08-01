@@ -54,7 +54,7 @@
   }
 
   .viz-root {
-    max-width: 640px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 32px 20px 40px;
   }
@@ -69,6 +69,23 @@
     font-size: 13px;
     color: var(--text-secondary);
     margin: 0 0 28px;
+  }
+
+  .dashboard-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  @media (max-width: 760px) {
+    .dashboard-columns {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .section-title--first {
+    margin-top: 0;
   }
 
   .card {
@@ -189,6 +206,25 @@
     grid-template-columns: 1fr 90px;
   }
 
+  .bench-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .bench-row:first-of-type {
+    border-top: none;
+  }
+
+  .bench-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
   .loadconfig-label {
     font-size: 13px;
     color: var(--text-primary);
@@ -251,76 +287,87 @@
     <h1>ScaleTrigger</h1>
     <p class="subtitle">Live voting results</p>
 
-    <div class="card">
-      <div class="tiles">
-        <div>
-          <div class="tile-label">Yes</div>
-          <div class="tile-value" id="yes-percent">—</div>
+    <div class="dashboard-columns">
+      <div>
+        <p class="section-title section-title--first">Configuration</p>
+        <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one poll interval).</p>
+
+        <div class="card">
+          <p class="group-title">Refresh</p>
+          <p class="group-subtitle">How often the app polls this table for changes.</p>
+          <div class="loadconfig-row loadconfig-row--single">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Seconds</span>
+          </div>
+          <div id="loadconfig-rows-refresh"></div>
+
+          <p class="group-title">Application</p>
+          <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
+          <div class="loadconfig-row">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Min</span>
+            <span class="loadconfig-col-heading">Max</span>
+          </div>
+          <div id="loadconfig-rows-application"></div>
+
+          <p class="group-title">Database</p>
+          <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
+          <div class="loadconfig-row">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Min</span>
+            <span class="loadconfig-col-heading">Max</span>
+          </div>
+          <div id="loadconfig-rows-database"></div>
+
+          <div class="config-actions">
+            <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+            <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+          </div>
+          <p class="status" id="loadconfig-status"></p>
         </div>
-        <div>
-          <div class="tile-label">No</div>
-          <div class="tile-value" id="no-percent">—</div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="tiles">
+            <div>
+              <div class="tile-label">Yes</div>
+              <div class="tile-value" id="yes-percent">—</div>
+            </div>
+            <div>
+              <div class="tile-label">No</div>
+              <div class="tile-value" id="no-percent">—</div>
+            </div>
+          </div>
+
+          <div class="meta">
+            <span id="total">Total votes: —</span>
+            <span id="updated">—</span>
+          </div>
+          <div class="payload" id="payload">Payload rows: —</div>
+        </div>
+
+        <p class="status" id="status">Loading…</p>
+
+        <p class="section-title">Node Benchmark</p>
+        <p class="section-subtitle">One-off hardware check: CPU, then memory, then disk (median of repeated measurements).</p>
+
+        <div class="card">
+          <p class="group-title">Hardware</p>
+          <p class="group-subtitle" id="hw-info">Loading hardware info…</p>
+
+          <p class="group-title">Results</p>
+          <p class="group-subtitle">Median of repeated measurements.</p>
+          <div class="bench-row"><span class="loadconfig-label">CPU</span><span class="bench-value" id="bench-cpu">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Memory</span><span class="bench-value" id="bench-memory">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Disk</span><span class="bench-value" id="bench-disk">—</span></div>
+
+          <div class="config-actions">
+            <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
+          </div>
+          <p class="status" id="benchmark-status"></p>
         </div>
       </div>
-
-      <div class="meta">
-        <span id="total">Total votes: —</span>
-        <span id="updated">—</span>
-      </div>
-      <div class="payload" id="payload">Payload rows: —</div>
-    </div>
-
-    <p class="status" id="status">Loading…</p>
-
-    <p class="section-title">Configuration</p>
-    <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one poll interval).</p>
-
-    <div class="card">
-      <p class="group-title">Refresh</p>
-      <p class="group-subtitle">How often the app polls this table for changes.</p>
-      <div class="loadconfig-row loadconfig-row--single">
-        <span class="loadconfig-col-heading">Setting</span>
-        <span class="loadconfig-col-heading">Seconds</span>
-      </div>
-      <div id="loadconfig-rows-refresh"></div>
-
-      <p class="group-title">Application</p>
-      <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
-      <div class="loadconfig-row">
-        <span class="loadconfig-col-heading">Setting</span>
-        <span class="loadconfig-col-heading">Min</span>
-        <span class="loadconfig-col-heading">Max</span>
-      </div>
-      <div id="loadconfig-rows-application"></div>
-
-      <p class="group-title">Database</p>
-      <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
-      <div class="loadconfig-row">
-        <span class="loadconfig-col-heading">Setting</span>
-        <span class="loadconfig-col-heading">Min</span>
-        <span class="loadconfig-col-heading">Max</span>
-      </div>
-      <div id="loadconfig-rows-database"></div>
-
-      <div class="config-actions">
-        <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
-        <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
-      </div>
-      <p class="status" id="loadconfig-status"></p>
-    </div>
-
-    <p class="section-title">Node Benchmark</p>
-    <p class="section-subtitle">One-off hardware check: CPU, then memory, then disk (median of repeated measurements).</p>
-
-    <div class="card">
-      <div class="payload" id="hw-info">Loading hardware info…</div>
-
-      <div class="payload" id="bench-cpu">CPU: —</div>
-      <div class="payload" id="bench-memory">Memory: —</div>
-      <div class="payload" id="bench-disk">Disk: —</div>
-
-      <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
-      <p class="status" id="benchmark-status"></p>
     </div>
   </div>
 
@@ -347,13 +394,36 @@
 
     let loadConfigNeedsRetry = false;
 
-    async function refresh() {
+    // fetch() has no built-in timeout and setInterval doesn't wait for the
+    // previous call to finish, so without this a slow/hung request (the
+    // database taking many seconds to time out) can resolve *after* a
+    // later, faster call already succeeded - overwriting a fresh "back
+    // online" state with a stale "unavailable" one. AbortController caps
+    // how long any single attempt can hang; the call-id guard makes sure
+    // only the most recently *started* call is allowed to touch the DOM.
+    async function fetchWithTimeout(url, options, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const response = await fetch('/api/vote/report', { cache: 'no-store' });
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    let refreshCallId = 0;
+
+    async function refresh() {
+      const callId = ++refreshCallId;
+      try {
+        const response = await fetchWithTimeout('/api/vote/report', { cache: 'no-store' }, 5000);
         if (!response.ok) {
           throw new Error('unavailable');
         }
         const report = await response.json();
+        if (callId !== refreshCallId) {
+          return; // a newer refresh already completed - don't apply a stale result
+        }
 
         const yesPercent = report.yesPercent ?? 0;
         const noPercent = report.noPercent ?? 0;
@@ -375,6 +445,9 @@
           loadLoadConfig();
         }
       } catch (err) {
+        if (callId !== refreshCallId) {
+          return;
+        }
         statusEl.textContent = 'Database unavailable';
         statusEl.classList.add('status--error');
       }
@@ -509,16 +582,26 @@
       }
     }
 
+    let loadConfigCallId = 0;
+
     async function loadLoadConfig() {
+      const callId = ++loadConfigCallId;
       try {
-        const response = await fetch('/api/loadconfig', { cache: 'no-store' });
+        const response = await fetchWithTimeout('/api/loadconfig', { cache: 'no-store' }, 5000);
         if (!response.ok) {
           throw new Error('unavailable');
         }
-        renderLoadConfig(await response.json());
+        const settings = await response.json();
+        if (callId !== loadConfigCallId) {
+          return;
+        }
+        renderLoadConfig(settings);
         loadConfigStatusEl.classList.remove('status--error');
         loadConfigNeedsRetry = false;
       } catch (err) {
+        if (callId !== loadConfigCallId) {
+          return;
+        }
         loadConfigStatusEl.textContent = 'Database unavailable';
         loadConfigStatusEl.classList.add('status--error');
         loadConfigNeedsRetry = true;
@@ -578,7 +661,7 @@
 
     async function loadHardwareInfo() {
       try {
-        const response = await fetch('/api/nodebenchmark/hardware', { cache: 'no-store' });
+        const response = await fetchWithTimeout('/api/nodebenchmark/hardware', { cache: 'no-store' }, 5000);
         if (!response.ok) {
           throw new Error('unavailable');
         }
@@ -593,9 +676,9 @@
     benchmarkBtn.addEventListener('click', async () => {
       benchmarkBtn.disabled = true;
       benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
-      benchCpuEl.textContent = 'CPU: —';
-      benchMemoryEl.textContent = 'Memory: —';
-      benchDiskEl.textContent = 'Disk: —';
+      benchCpuEl.textContent = '—';
+      benchMemoryEl.textContent = '—';
+      benchDiskEl.textContent = '—';
 
       try {
         // Only prompts for login if the API comes back 401.
@@ -635,9 +718,9 @@
         }
 
         const result = await response.json();
-        benchCpuEl.textContent = 'CPU: ' + Math.round(result.cpuNumbersPerSecond).toLocaleString() + ' numbers/s';
-        benchMemoryEl.textContent = 'Memory: ' + result.memoryMbPerSecond.toFixed(1) + ' MB/s';
-        benchDiskEl.textContent = 'Disk: ' + result.diskMbPerSecond.toFixed(1) + ' MB/s';
+        benchCpuEl.textContent = Math.round(result.cpuNumbersPerSecond).toLocaleString() + ' numbers/s';
+        benchMemoryEl.textContent = result.memoryMbPerSecond.toFixed(1) + ' MB/s';
+        benchDiskEl.textContent = result.diskMbPerSecond.toFixed(1) + ' MB/s';
         benchmarkStatusEl.textContent = 'Done.';
       } catch (err) {
         benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
