@@ -54,12 +54,22 @@ Six load intensities (`CpuIterationsPerVote`, `MemoryMegabytesPerVote`, `DiskWri
 - **Editing:** the dashboard (application root URL) has a "Configuration" section, split into "Refresh" (the poll interval itself - a single seconds field, since Min/Max don't apply to it), "Application" (settings simulated inside ScaleTrigger: CPU, memory, disk, network latency) and "Database" (settings simulated by the database while processing the vote: payload write, `DbCpuIterationsPerVote`) - the Application/Database rows show editable Min/Max fields, all saved together via one "Save changes" button (next to the "Reset database" button) that calls `POST /api/loadconfig`. That endpoint validates (`0 <= Min <= Max`, known setting names only) and updates the table; it only asks for a login when `Auth:Enabled` is `true` (see "JWT authentication" above), same `OptionalJwt` policy as `POST /api/vote/add`.
 - **Reaching running votes:** `LoadConfigCache` is an in-memory snapshot that `VoteApiController` reads on every vote (no per-vote database round-trip). `LoadConfigRefreshService` re-reads the whole table into that cache every `ConfigRefresh` seconds - itself just another LoadConfig row, default `1` - and a successful `POST /api/loadconfig` also refreshes the cache immediately, so a save takes effect on the very next vote rather than waiting for the next poll.
 
+## Node hardware benchmark
+
+Separate from the per-vote `Load:*` simulation, the dashboard's "Node Benchmark" section reports the host machine's hardware and can run a one-off CPU/memory/disk benchmark on demand:
+
+- **Hardware detection** (`GET /api/nodebenchmark/hardware`, anonymous, cached after the first call): `NodeBenchmark.GetHardwareInfoAsync()` reports a CPU descriptor that depends on where the process is running - the `WEBSITE_SKU` environment variable on Azure App Service, the EC2 instance type on AWS (queried from the IMDSv2 metadata service at `169.254.169.254`, which only responds inside AWS - a 500ms timeout keeps this from stalling elsewhere), or just `Environment.ProcessorCount` otherwise (generic VM/Hyper-V/ESXi/KVM/bare metal). RAM comes from `GC.GetGCMemoryInfo().TotalAvailableMemoryBytes`; disk size from `DriveInfo` on the drive containing the app's content root.
+- **Benchmark** (`POST /api/nodebenchmark/run`, requires a JWT if `Auth:Enabled` is `true`, same `OptionalJwt` policy as the other admin actions): runs CPU, then memory, then disk, in that order, on a background thread, and blocks until all three finish (~`NodeBenchmark:CpuDurationSeconds` alone, 20s by default). Each score is the **median** across repeated samples, to smooth out one-off scheduling/GC/IO noise:
+  - **CPU** — sysbench's algorithm (same prime-counting-by-trial-division as `CpuIterationsPerVote`/`DbCpuIterationsPerVote`, see above), run continuously in 1-second ticks for `NodeBenchmark:CpuDurationSeconds` (default 20); the score is the median numbers-checked-per-tick.
+  - **Memory** — a single `NodeBenchmark:MemoryBlockMegabytes` buffer (default 64 MB) is overwritten with fresh random data `NodeBenchmark:MemoryRepetitions` times (default 5); the score is block size / median fill time (MB/s).
+  - **Disk** — a fresh `NodeBenchmark:DiskSizeMegabytes` file (default 20 MB) is written (`FileOptions.WriteThrough` + `Flush(true)`, so it's real disk I/O, not page cache) and deleted, `NodeBenchmark:DiskRepetitions` times (default 5); the score is file size / median write time (MB/s).
+
 ## Database availability check at startup
 
 `ScaleTrigger` immediately tries to open a connection to the configured database (without executing a query) on every startup, before it starts accepting HTTP requests. Behavior on failure is selected via the `Startup:FailFastOnDbCheck` setting:
 
-- **`true` (default)** — the application stops immediately with a clear error in the console/log if the database is unavailable (wrong password, wrong server, closed firewall on Azure) or the schema check/bootstrap fails
-- **`false`** — the error is only written as a critical log entry, and the application keeps running; useful if you want the API to remain available (e.g. for a health-check endpoint) while the database is temporarily down
+- **`true`** — the application stops immediately with a clear error in the console/log if the database is unavailable (wrong password, wrong server, closed firewall on Azure) or the schema check/bootstrap fails
+- **`false` (default)** — the error is only written as a critical log entry, and the application keeps running; `GET /api/vote/report` and `GET /api/loadconfig` respond `503` until the database comes back, and the dashboard shows "Database unavailable" in red and keeps polling in the meantime
 
 Without this check, an incorrect database configuration would otherwise go unnoticed until the first real vote or result retrieval (`MsSqlRepository`/`MySqlRepository`/`PostgreSqlRepository`/`SqliteRepository` only open a connection "lazily", on an actual call, not at application startup).
 
@@ -71,6 +81,8 @@ Without this check, an incorrect database configuration would otherwise go unnot
 - `GET /api/loadconfig` — anonymous; returns the current `[{ settingName, min, max }, ...]` rows from `LoadConfig` (see "Live-tunable load intensity" above)
 - `POST /api/loadconfig` — requires a JWT if `Auth:Enabled` is `true` (same as `POST /api/vote/add`); body is the same array shape, updates by `settingName`
 - `POST /api/vote/reset` — requires a JWT if `Auth:Enabled` is `true` (same `OptionalJwt` policy as `POST /api/vote/add`); drops Vote, Payload and LoadConfig entirely (and their stored procedures/functions), shrinks the freed space, then recreates and reseeds everything from scratch - the "Reset database" button on the dashboard
+- `GET /api/nodebenchmark/hardware` — anonymous; returns `{ environment, cpu, processorCount, totalMemoryMb, diskTotalGb }` (see "Node hardware benchmark" above)
+- `POST /api/nodebenchmark/run` — requires a JWT if `Auth:Enabled` is `true`; runs the CPU/memory/disk benchmark (blocks for ~20s+) and returns `{ hardware, cpuNumbersPerSecond, memoryMbPerSecond, diskMbPerSecond }`
 
 ## Deploying via GitHub Actions
 
@@ -111,6 +123,11 @@ Since `appsettings.json` is intentionally in `.gitignore` (it contains secrets),
 | `Startup:FailFastOnDbCheck` | `Startup__FailFastOnDbCheck` |
 | `Cache:Enabled` | `Cache__Enabled` |
 | `Cache:SlidingExpirationMinutes` | `Cache__SlidingExpirationMinutes` |
+| `NodeBenchmark:CpuDurationSeconds` | `NodeBenchmark__CpuDurationSeconds` |
+| `NodeBenchmark:MemoryBlockMegabytes` | `NodeBenchmark__MemoryBlockMegabytes` |
+| `NodeBenchmark:MemoryRepetitions` | `NodeBenchmark__MemoryRepetitions` |
+| `NodeBenchmark:DiskSizeMegabytes` | `NodeBenchmark__DiskSizeMegabytes` |
+| `NodeBenchmark:DiskRepetitions` | `NodeBenchmark__DiskRepetitions` |
 
 ## Database setup
 
@@ -132,6 +149,7 @@ In `ScaleTrigger/appsettings.json` you need to set:
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
 - `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote`, `Load:PayloadBytesPerVote` and `Load:DbCpuIterationsPerVote` — each is a `{ "Min": ..., "Max": ... }` object, used only to seed the `LoadConfig` database table the very first time it's created (see "Live-tunable load intensity" above); edit the running values from the dashboard afterwards, not here. A fresh random value in the inclusive range is picked for every vote (`Min == Max` gives a fixed value). `CpuIterationsPerVote` and `DbCpuIterationsPerVote` both run sysbench's CPU benchmark algorithm - counting primes up to that value by trial division of each candidate by every integer up to its square root (`LoadSimulator.SimulateCpuLoad` in the app; `VoteAdd`'s `@MaxPrime`/`pMaxPrime`/`p_max_prime` parameter in the database) - cost grows roughly as N^1.5, not linearly, so keep these values much lower than you would a plain iteration count. The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleTrigger/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take. `DbCpuIterationsPerVote` runs inside the database engine itself, not in the application
 - `Load:ConfigRefresh` — also a `{ "Min": ..., "Max": ... }` object, seeds the poll interval (seconds) between checks of the `LoadConfig` table for dashboard edits (default `{ "Min": 1, "Max": 1 }`); only affects how fast an edit takes effect, not the values themselves
+- `NodeBenchmark:CpuDurationSeconds`, `NodeBenchmark:MemoryBlockMegabytes`/`MemoryRepetitions`, `NodeBenchmark:DiskSizeMegabytes`/`DiskRepetitions` (defaults `20`, `64`/`5`, `20`/`5`) — parameters for the dashboard's one-off "Run benchmark" action (see "Node hardware benchmark" above); unlike the `Load` section, these are read directly from `appsettings.json` on every run, not seeded into a database table
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true

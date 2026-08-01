@@ -18,8 +18,8 @@
   },
 
   "Startup": {
-    "// FailFastOnDbCheck": "true = the application stops immediately if the database is unavailable at startup; false = only a warning is written to the log",
-    "FailFastOnDbCheck": true
+    "// FailFastOnDbCheck": "true = the application stops immediately if the database is unavailable at startup; false = only a warning is written to the log, and the app keeps running (the dashboard shows 'Database unavailable' and keeps retrying until the database comes back)",
+    "FailFastOnDbCheck": false
   },
 
   "ConnectionStrings": {
@@ -49,6 +49,15 @@
     "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
     "// DbCpuIterationsPerVote": "0 = VoteAdd just inserts, no prime-counting loop. Same sysbench algorithm as CpuIterationsPerVote, but runs inside the database engine itself - simulates database-side CPU load.",
     "DbCpuIterationsPerVote": { "Min": 0, "Max": 0 }
+  },
+
+  "NodeBenchmark": {
+    "// Note": "One-off hardware benchmark triggered from the dashboard (not per-vote, unlike the Load section above). CPU runs continuously for CpuDurationSeconds; Memory/Disk repeat their block write MemoryRepetitions/DiskRepetitions times. Each score is the median across its samples.",
+    "CpuDurationSeconds": 20,
+    "MemoryBlockMegabytes": 64,
+    "MemoryRepetitions": 5,
+    "DiskSizeMegabytes": 20,
+    "DiskRepetitions": 5
   },
 
   "Jwt": {

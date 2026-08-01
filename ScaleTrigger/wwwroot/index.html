@@ -120,6 +120,11 @@
     min-height: 16px;
   }
 
+  .status--error {
+    color: var(--critical);
+    font-weight: 600;
+  }
+
   .reset-btn {
     padding: 8px 14px;
     font-family: inherit;
@@ -303,6 +308,20 @@
       </div>
       <p class="status" id="loadconfig-status"></p>
     </div>
+
+    <p class="section-title">Node Benchmark</p>
+    <p class="section-subtitle">One-off hardware check: CPU, then memory, then disk (median of repeated measurements).</p>
+
+    <div class="card">
+      <div class="payload" id="hw-info">Loading hardware info…</div>
+
+      <div class="payload" id="bench-cpu">CPU: —</div>
+      <div class="payload" id="bench-memory">Memory: —</div>
+      <div class="payload" id="bench-disk">Disk: —</div>
+
+      <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
+      <p class="status" id="benchmark-status"></p>
+    </div>
   </div>
 
   <script>
@@ -326,11 +345,13 @@
       return (mb / 1024).toFixed(2) + ' GB';
     }
 
+    let loadConfigNeedsRetry = false;
+
     async function refresh() {
       try {
         const response = await fetch('/api/vote/report', { cache: 'no-store' });
         if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
+          throw new Error('unavailable');
         }
         const report = await response.json();
 
@@ -345,8 +366,17 @@
         updatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
         payloadEl.textContent = 'Payload rows: ' + payloadCount + ' (' + formatPayloadSize(payloadBytes) + ')';
         statusEl.textContent = (report.total ?? 0) === 0 ? 'No records found.' : '';
+        statusEl.classList.remove('status--error');
+
+        // Configuration only loads once (so it doesn't clobber in-progress
+        // edits every refresh) - but if it failed, retry opportunistically
+        // now that the database is confirmed reachable again.
+        if (loadConfigNeedsRetry) {
+          loadLoadConfig();
+        }
       } catch (err) {
-        statusEl.textContent = 'Could not load results (' + err.message + ').';
+        statusEl.textContent = 'Database unavailable';
+        statusEl.classList.add('status--error');
       }
     }
 
@@ -483,11 +513,15 @@
       try {
         const response = await fetch('/api/loadconfig', { cache: 'no-store' });
         if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
+          throw new Error('unavailable');
         }
         renderLoadConfig(await response.json());
+        loadConfigStatusEl.classList.remove('status--error');
+        loadConfigNeedsRetry = false;
       } catch (err) {
-        loadConfigStatusEl.textContent = 'Could not load configuration (' + err.message + ').';
+        loadConfigStatusEl.textContent = 'Database unavailable';
+        loadConfigStatusEl.classList.add('status--error');
+        loadConfigNeedsRetry = true;
       }
     }
 
@@ -534,6 +568,85 @@
     });
 
     loadLoadConfig();
+
+    const hwInfoEl = document.getElementById('hw-info');
+    const benchmarkBtn = document.getElementById('benchmark-btn');
+    const benchmarkStatusEl = document.getElementById('benchmark-status');
+    const benchCpuEl = document.getElementById('bench-cpu');
+    const benchMemoryEl = document.getElementById('bench-memory');
+    const benchDiskEl = document.getElementById('bench-disk');
+
+    async function loadHardwareInfo() {
+      try {
+        const response = await fetch('/api/nodebenchmark/hardware', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('unavailable');
+        }
+        const hw = await response.json();
+        hwInfoEl.textContent = hw.environment + ' — CPU: ' + hw.cpu + ' (' + hw.processorCount + ' vCPUs), RAM: ' +
+          hw.totalMemoryMb.toLocaleString() + ' MB, Disk: ' + hw.diskTotalGb + ' GB';
+      } catch (err) {
+        hwInfoEl.textContent = 'Could not load hardware info.';
+      }
+    }
+
+    benchmarkBtn.addEventListener('click', async () => {
+      benchmarkBtn.disabled = true;
+      benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
+      benchCpuEl.textContent = 'CPU: —';
+      benchMemoryEl.textContent = 'Memory: —';
+      benchDiskEl.textContent = 'Disk: —';
+
+      try {
+        // Only prompts for login if the API comes back 401.
+        let response = await fetch('/api/nodebenchmark/run', { method: 'POST' });
+
+        if (response.status === 401) {
+          const username = prompt('Admin username:');
+          if (username === null) {
+            benchmarkStatusEl.textContent = '';
+            return;
+          }
+          const password = prompt('Admin password:');
+          if (password === null) {
+            benchmarkStatusEl.textContent = '';
+            return;
+          }
+
+          const loginResponse = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (!loginResponse.ok) {
+            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+          }
+          const { token } = await loginResponse.json();
+
+          benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
+          response = await fetch('/api/nodebenchmark/run', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+        }
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const result = await response.json();
+        benchCpuEl.textContent = 'CPU: ' + Math.round(result.cpuNumbersPerSecond).toLocaleString() + ' numbers/s';
+        benchMemoryEl.textContent = 'Memory: ' + result.memoryMbPerSecond.toFixed(1) + ' MB/s';
+        benchDiskEl.textContent = 'Disk: ' + result.diskMbPerSecond.toFixed(1) + ' MB/s';
+        benchmarkStatusEl.textContent = 'Done.';
+      } catch (err) {
+        benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
+      } finally {
+        benchmarkBtn.disabled = false;
+      }
+    });
+
+    loadHardwareInfo();
   </script>
 </body>
 </html>
