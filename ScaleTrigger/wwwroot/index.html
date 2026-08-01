@@ -121,7 +121,6 @@
   }
 
   .reset-btn {
-    margin-top: 20px;
     padding: 8px 14px;
     font-family: inherit;
     font-size: 13px;
@@ -216,7 +215,6 @@
   }
 
   .save-btn {
-    margin-top: 16px;
     padding: 8px 14px;
     font-family: inherit;
     font-size: 13px;
@@ -230,6 +228,12 @@
 
   .save-btn:hover {
     opacity: 0.9;
+  }
+
+  .config-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
   }
 </style>
 </head>
@@ -258,8 +262,6 @@
     </div>
 
     <p class="status" id="status">Loading…</p>
-
-    <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
 
     <p class="section-title">Configuration</p>
     <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one poll interval).</p>
@@ -292,7 +294,10 @@
       </div>
       <div id="loadconfig-rows-database"></div>
 
-      <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+      <div class="config-actions">
+        <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+        <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+      </div>
       <p class="status" id="loadconfig-status"></p>
     </div>
   </div>
@@ -306,6 +311,18 @@
     const statusEl = document.getElementById('status');
     const resetBtn = document.getElementById('reset-btn');
 
+    function formatPayloadSize(bytes) {
+      const kb = bytes / 1024;
+      if (kb < 1024) {
+        return kb.toFixed(2) + ' KB';
+      }
+      const mb = kb / 1024;
+      if (mb < 1024) {
+        return mb.toFixed(2) + ' MB';
+      }
+      return (mb / 1024).toFixed(2) + ' GB';
+    }
+
     async function refresh() {
       try {
         const response = await fetch('/api/vote/report', { cache: 'no-store' });
@@ -317,14 +334,14 @@
         const yesPercent = report.yesPercent ?? 0;
         const noPercent = report.noPercent ?? 0;
         const payloadCount = report.payloadCount ?? 0;
-        const payloadMb = (report.payloadTotalBytes ?? 0) / (1024 * 1024);
+        const payloadBytes = report.payloadTotalBytes ?? 0;
 
         yesPercentEl.textContent = yesPercent + '%';
         noPercentEl.textContent = noPercent + '%';
         totalEl.textContent = 'Total votes: ' + (report.total ?? 0);
         updatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
-        payloadEl.textContent = 'Payload rows: ' + payloadCount + ' (' + payloadMb.toFixed(2) + ' MB)';
-        statusEl.textContent = '';
+        payloadEl.textContent = 'Payload rows: ' + payloadCount + ' (' + formatPayloadSize(payloadBytes) + ')';
+        statusEl.textContent = (report.total ?? 0) === 0 ? 'No records found.' : '';
       } catch (err) {
         statusEl.textContent = 'Could not load results (' + err.message + ').';
       }
@@ -338,22 +355,22 @@
       try {
         // Tries without a token first - only prompts for login if the API
         // comes back 401 (i.e. Auth:Enabled is true server-side).
-        statusEl.textContent = 'Resetting database…';
+        loadConfigStatusEl.textContent = 'Resetting database…';
         let resetResponse = await fetch('/api/vote/reset', { method: 'POST' });
 
         if (resetResponse.status === 401) {
           const username = prompt('Admin username:');
           if (username === null) {
-            statusEl.textContent = '';
+            loadConfigStatusEl.textContent = '';
             return;
           }
           const password = prompt('Admin password:');
           if (password === null) {
-            statusEl.textContent = '';
+            loadConfigStatusEl.textContent = '';
             return;
           }
 
-          statusEl.textContent = 'Logging in…';
+          loadConfigStatusEl.textContent = 'Logging in…';
           const loginResponse = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -364,7 +381,7 @@
           }
           const { token } = await loginResponse.json();
 
-          statusEl.textContent = 'Resetting database…';
+          loadConfigStatusEl.textContent = 'Resetting database…';
           resetResponse = await fetch('/api/vote/reset', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
@@ -375,11 +392,11 @@
           throw new Error('reset failed (HTTP ' + resetResponse.status + ')');
         }
 
-        statusEl.textContent = 'Database reset.';
+        loadConfigStatusEl.textContent = 'Database reset.';
         await refresh();
         await loadLoadConfig();
       } catch (err) {
-        statusEl.textContent = 'Reset failed (' + err.message + ').';
+        loadConfigStatusEl.textContent = 'Reset failed (' + err.message + ').';
       }
     });
 
