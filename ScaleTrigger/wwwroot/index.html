@@ -153,7 +153,7 @@
     min-height: 16px;
   }
 
-  .cleanup-btn {
+  .reset-btn {
     margin-top: 20px;
     padding: 8px 14px;
     font-family: inherit;
@@ -166,7 +166,7 @@
     cursor: pointer;
   }
 
-  .cleanup-btn:hover {
+  .reset-btn:hover {
     background: var(--critical-wash);
   }
 
@@ -298,7 +298,7 @@
 
     <p class="status" id="status">Loading…</p>
 
-    <button class="cleanup-btn" id="cleanup-btn" type="button">Database cleanup</button>
+    <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
 
     <p class="section-title">Configuration</p>
     <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one poll interval).</p>
@@ -345,7 +345,7 @@
     const updatedEl = document.getElementById('updated');
     const payloadEl = document.getElementById('payload');
     const statusEl = document.getElementById('status');
-    const cleanupBtn = document.getElementById('cleanup-btn');
+    const resetBtn = document.getElementById('reset-btn');
 
     function formatBytes(bytes) {
       if (bytes < 1024) {
@@ -384,8 +384,8 @@
       }
     }
 
-    cleanupBtn.addEventListener('click', async () => {
-      if (!confirm('This permanently deletes all vote and payload data. Continue?')) {
+    resetBtn.addEventListener('click', async () => {
+      if (!confirm('This drops the entire database schema (all vote, payload and configuration data), shrinks the database and log files, then reinitializes everything from scratch. Continue?')) {
         return;
       }
 
@@ -410,19 +410,20 @@
         }
         const { token } = await loginResponse.json();
 
-        statusEl.textContent = 'Cleaning up…';
-        const cleanupResponse = await fetch('/api/vote/cleanup', {
+        statusEl.textContent = 'Resetting database…';
+        const resetResponse = await fetch('/api/vote/reset', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + token }
         });
-        if (!cleanupResponse.ok) {
-          throw new Error('cleanup failed (HTTP ' + cleanupResponse.status + ')');
+        if (!resetResponse.ok) {
+          throw new Error('reset failed (HTTP ' + resetResponse.status + ')');
         }
 
-        statusEl.textContent = 'Database cleaned up.';
+        statusEl.textContent = 'Database reset.';
         await refresh();
+        await loadLoadConfig();
       } catch (err) {
-        statusEl.textContent = 'Cleanup failed (' + err.message + ').';
+        statusEl.textContent = 'Reset failed (' + err.message + ').';
       }
     });
 

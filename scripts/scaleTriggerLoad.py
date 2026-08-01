@@ -1,0 +1,571 @@
+#!/usr/bin/env python3
+"""
+scaleTriggerLoad.py
+
+External load generator for the ScaleTrigger API.
+
+Sends POST /api/vote/add?option=yes|no to a real, external URL of the
+application (not locally, not in-process), randomly choosing yes/no per
+request. Supports running several parallel processes so the target
+requests-per-second rate can still be reached even if a single process
+(due to the GIL and network/TLS overhead) becomes the bottleneck of the
+generator itself.
+
+Authentication: the script first sends a single probe vote request with no
+Authorization header. If the API responds with 401 Unauthorized (i.e.
+Auth:Enabled=true on the API side), it automatically logs in with the
+hardcoded credentials admin:admin (matching the API's default
+AdminUser:Username / AdminUser:Password) and uses the resulting JWT as a
+Bearer token on every subsequent vote request. If the probe does not
+come back 401, the load test runs with no Authorization header at all.
+No flag needed either way.
+
+Ramp-up mode: when --ramp is set to true, --votes is treated as the
+starting rate. Every --ramp-interval seconds, the rate is increased by
+--ramp-step percent, for the rest of the test duration. Useful for
+finding the breaking point of an instance before autoscale kicks in,
+rather than hammering it at a single fixed rate for the whole run.
+
+Examples:
+
+    # 20 votes/s - authentication is detected automatically
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \
+        --votes 20 --duration 60
+
+    # 200 votes/s, spread across 4 parallel processes
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \
+        --votes 200 --duration 120 --process 4
+
+    # Ramp-up: start at 10 votes/s, +10% every 5s, for 5 minutes
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \
+        --votes 10 --duration 300 \
+        --ramp true --ramp-step 10 --ramp-interval 5
+
+Requires: aiohttp (the script will offer to install it automatically
+if missing).
+
+Parameters:
+
+    --url                                   (required)
+        Base URL of the API, e.g. https://xyz.azurewebsites.net
+
+    --votes (per second)                    (required)
+        Total target number of votes per second (yes/no chosen randomly,
+        50/50), spread evenly across all processes.
+
+    --duration (seconds)                     (optional, default: 60)
+        Test duration in seconds.
+
+    --process (count)                        (optional, default: 1)
+        Number of parallel processes jointly generating traffic.
+
+    --concurrency (per process)               (optional, default: 200)
+        Max number of concurrent in-flight (not-yet-answered) requests
+        per process. Caps memory/socket growth if the API responds
+        slower than the target rate; raise it for very high
+        votes (per second) values.
+
+    --report (interval in seconds)           (optional, default: 5)
+        Interval for printing statistics, in seconds.
+
+    --ramp (connection increase)             (optional, default: false)
+        true/false. If true, --votes becomes the starting rate instead
+        of a fixed rate for the whole run; the rate increases by
+        --ramp-step percent every --ramp-interval seconds until the
+        test ends. Useful for finding the breaking point of an
+        instance before autoscale triggers.
+
+    --ramp-step (percent)                    (optional, default: 10)
+        Percentage the rate increases by at each ramp step. Only used
+        when --ramp is true.
+
+    --ramp-interval (seconds)                (optional, default: 5)
+        How often the rate increases when --ramp is true.
+
+    --ramp-max (votes per second)            (optional, default: none)
+        Caps the rate so it stops increasing once this value is
+        reached, holding steady there for the rest of the run instead
+        of continuing to grow. Only used when --ramp is true; leave
+        unset for unlimited (exponential) growth.
+
+    --timeout (seconds per request)          (optional, default: 10)
+        Max time to wait for a single vote request (connect + response)
+        before treating it as failed. Without this, a request to a
+        server that accepts the connection but never responds would
+        hang for aiohttp's default of 300s, holding its concurrency
+        slot the whole time instead of freeing it up quickly.
+"""
+
+import subprocess
+import sys
+
+try:
+    import aiohttp
+except ImportError:
+    answer = input(
+        "The 'aiohttp' package is not installed, but it is required to run this script.\n"
+        "Install it now with pip? (y/n): "
+    ).strip().lower()
+    if answer == "y":
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "aiohttp"])
+        import aiohttp  # noqa: F401 (re-import after install)
+    else:
+        raise SystemExit(
+            "Aborted - 'aiohttp' is required. Install it manually with:\n\n"
+            "    pip install aiohttp\n"
+        )
+
+import argparse
+import asyncio
+import multiprocessing
+import random
+import time
+from dataclasses import dataclass, field
+
+# Hardcoded credentials used to obtain a JWT token automatically when
+# the API responds 401 to the initial probe request. These match the
+# API's default AdminUser:Username / AdminUser:Password (see
+# appsettings.json.example).
+JWT_USERNAME = "admin"
+JWT_PASSWORD = "admin"
+
+
+@dataclass
+class Stats:
+    sent: int = 0
+    ok: int = 0
+    failed: int = 0
+    latencies_ms: list = field(default_factory=list)
+
+    def record(self, success: bool, latency_ms: float):
+        self.sent += 1
+        if success:
+            self.ok += 1
+            self.latencies_ms.append(latency_ms)
+        else:
+            self.failed += 1
+
+    def snapshot_and_reset(self):
+        lat = self.latencies_ms
+        summary = {
+            "sent": self.sent,
+            "ok": self.ok,
+            "failed": self.failed,
+            "avg_ms": sum(lat) / len(lat) if lat else 0.0,
+            "max_ms": max(lat) if lat else 0.0,
+        }
+        self.sent = self.ok = self.failed = 0
+        self.latencies_ms = []
+        return summary
+
+
+class SharedStats:
+    """
+    Same interface as Stats (record / snapshot_and_reset), but backed by
+    multiprocessing shared memory + a lock, so counts and latencies from
+    every process accumulate into one combined total instead of being
+    tracked separately per process. Created once in main() and passed
+    down to every worker process.
+    """
+
+    def __init__(self):
+        self._lock = multiprocessing.Lock()
+        self._sent = multiprocessing.Value("l", 0)
+        self._ok = multiprocessing.Value("l", 0)
+        self._failed = multiprocessing.Value("l", 0)
+        self._latency_sum_ms = multiprocessing.Value("d", 0.0)
+        self._latency_max_ms = multiprocessing.Value("d", 0.0)
+
+    def record(self, success: bool, latency_ms: float):
+        with self._lock:
+            self._sent.value += 1
+            if success:
+                self._ok.value += 1
+                self._latency_sum_ms.value += latency_ms
+                if latency_ms > self._latency_max_ms.value:
+                    self._latency_max_ms.value = latency_ms
+            else:
+                self._failed.value += 1
+
+    def snapshot_and_reset(self):
+        with self._lock:
+            sent, ok, failed = self._sent.value, self._ok.value, self._failed.value
+            latency_sum_ms, latency_max_ms = self._latency_sum_ms.value, self._latency_max_ms.value
+            self._sent.value = 0
+            self._ok.value = 0
+            self._failed.value = 0
+            self._latency_sum_ms.value = 0.0
+            self._latency_max_ms.value = 0.0
+        return {
+            "sent": sent,
+            "ok": ok,
+            "failed": failed,
+            "avg_ms": latency_sum_ms / ok if ok else 0.0,
+            "max_ms": latency_max_ms,
+        }
+
+
+async def fetch_jwt_token(api_url: str, username: str, password: str, timeout_seconds: float) -> str:
+    """Fetches a JWT token via POST /api/auth/login."""
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(
+            f"{api_url}/api/auth/login",
+            json={"Username": username, "Password": password},
+        ) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return data["token"]
+
+
+async def probe_requires_auth(api_url: str, timeout_seconds: float) -> bool:
+    """
+    Sends a single vote request with no Authorization header to detect
+    whether the API requires a JWT (i.e. Auth:Enabled=true on the API
+    side, which makes POST /api/vote/add respond 401 Unauthorized).
+    If the probe request fails outright (network error, or no response
+    within timeout_seconds), assumes no auth is needed and lets the
+    real load test surface the problem.
+    """
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        try:
+            async with session.post(f"{api_url}/api/vote/add", params={"option": "yes"}) as resp:
+                await resp.read()
+                return resp.status == 401
+        except Exception:
+            return False
+
+
+async def send_vote_request(session: aiohttp.ClientSession, api_url: str, option: str,
+                             headers: dict, stats):
+    start = time.perf_counter()
+    try:
+        async with session.post(
+            f"{api_url}/api/vote/add",
+            params={"option": option},
+            headers=headers,
+        ) as resp:
+            success = resp.status == 200
+            await resp.read()
+    except Exception:
+        success = False
+    latency_ms = (time.perf_counter() - start) * 1000
+    stats.record(success, latency_ms)
+
+
+def pick_random_option() -> str:
+    return "yes" if random.random() < 0.5 else "no"
+
+
+def build_ramp_schedule(starting_rate: float, ramp_step_percent: float,
+                         ramp_interval_seconds: float, duration_seconds: float,
+                         ramp_max: float = None):
+    """
+    Builds a list of (segment_start_seconds, votes_per_second) pairs,
+    starting at starting_rate and increasing by ramp_step_percent every
+    ramp_interval_seconds, covering the full test duration. If ramp_max
+    is set, the rate stops increasing once it reaches that value and
+    holds steady there for the remaining segments.
+    """
+    schedule = []
+    t = 0.0
+    rate = starting_rate
+    while t < duration_seconds:
+        schedule.append((t, rate))
+        t += ramp_interval_seconds
+        rate = rate * (1 + ramp_step_percent / 100)
+        if ramp_max is not None:
+            rate = min(rate, ramp_max)
+    return schedule
+
+
+async def generate_votes(api_url: str, votes_per_second: float, duration_seconds: float,
+                          headers: dict, stats, max_in_flight_requests: int,
+                          ramp_enabled: bool, ramp_step_percent: float, ramp_interval_seconds: float,
+                          ramp_max: float, process_label: str, total_process_count: int,
+                          timeout_seconds: float):
+    """
+    Starts one new request at a time, fire-and-forget, bounded by a
+    semaphore that caps the maximum number of requests in flight at
+    once (so a slow API response doesn't cause unbounded task growth).
+
+    When ramp_enabled is False, requests are started on a fixed
+    interval (1 / votes_per_second seconds) for the whole duration.
+
+    When ramp_enabled is True, votes_per_second is the starting rate;
+    the rate increases by ramp_step_percent every ramp_interval_seconds
+    for the rest of the run, based on a precomputed schedule, optionally
+    capped at ramp_max. All processes share an identical schedule shape
+    (only proportionally divided), so the ramp step is only printed once,
+    from process-1, to avoid duplicate identical lines from every process.
+    """
+    semaphore = asyncio.Semaphore(max_in_flight_requests)
+    start_time = time.perf_counter()
+    end_time = start_time + duration_seconds
+
+    schedule = (
+        build_ramp_schedule(votes_per_second, ramp_step_percent, ramp_interval_seconds,
+                             duration_seconds, ramp_max)
+        if ramp_enabled else [(0.0, votes_per_second)]
+    )
+    schedule_index = 0
+    current_rate = schedule[0][1]
+
+    connector = aiohttp.TCPConnector(limit=max_in_flight_requests + 10)
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+
+        async def bounded_send(option: str):
+            async with semaphore:
+                await send_vote_request(session, api_url, option, headers, stats)
+
+        next_tick = time.perf_counter()
+        while time.perf_counter() < end_time:
+            elapsed = time.perf_counter() - start_time
+
+            # Advance to the next ramp step once its start time is reached.
+            while schedule_index + 1 < len(schedule) and elapsed >= schedule[schedule_index + 1][0]:
+                schedule_index += 1
+                current_rate = schedule[schedule_index][1]
+                if process_label == "process-1":
+                    total_rate = current_rate * total_process_count
+                    print(
+                        f"Ramp step: rate now {current_rate:.1f} votes/s average per process "
+                        f"({total_rate:.1f} total across {total_process_count} process"
+                        f"{'es' if total_process_count != 1 else ''})"
+                    )
+
+            interval_seconds = 1.0 / current_rate if current_rate > 0 else 0.1
+            option = pick_random_option()
+            asyncio.create_task(bounded_send(option))
+
+            next_tick += interval_seconds
+            sleep_for = next_tick - time.perf_counter()
+            if sleep_for > 0:
+                await asyncio.sleep(sleep_for)
+            else:
+                # Rate increased faster than we can keep up scheduling ticks;
+                # resync so we don't fire a burst of catch-up requests.
+                next_tick = time.perf_counter()
+
+        # wait for remaining in-flight requests to drain
+        await asyncio.sleep(0.5)
+        while semaphore._value < max_in_flight_requests:  # noqa: SLF001
+            await asyncio.sleep(0.1)
+
+
+async def print_periodic_report(stats, report_interval_seconds: float, stop_event: asyncio.Event):
+    t0 = time.perf_counter()
+    while not stop_event.is_set():
+        await asyncio.sleep(report_interval_seconds)
+        elapsed = time.perf_counter() - t0
+        s = stats.snapshot_and_reset()
+        actual_votes_per_second = s["sent"] / report_interval_seconds
+        print(
+            f"t={elapsed:6.1f}s  sent={s['sent']:5d}  ok={s['ok']:5d}  "
+            f"failed={s['failed']:4d}  actual_votes_per_second={actual_votes_per_second:6.1f}  "
+            f"avg_latency_ms={s['avg_ms']:6.1f}  max_latency_ms={s['max_ms']:6.1f}"
+        )
+
+
+async def run_single_process_worker(api_url: str, votes_per_second: float, duration_seconds: float,
+                                     jwt_token: str, max_in_flight_requests: int,
+                                     report_interval_seconds: float,
+                                     ramp_enabled: bool, ramp_step_percent: float, ramp_interval_seconds: float,
+                                     ramp_max: float, process_label: str, total_process_count: int,
+                                     shared_stats: SharedStats, timeout_seconds: float):
+    headers = {"Authorization": f"Bearer {jwt_token}"} if jwt_token else {}
+
+    stop_event = asyncio.Event()
+
+    # Only process-1 prints the periodic report; shared_stats already
+    # aggregates counts/latencies from every process, so a single reporter
+    # is enough - having every process print it would just duplicate the
+    # same combined totals N times.
+    report_task = None
+    if process_label == "process-1":
+        report_task = asyncio.create_task(
+            print_periodic_report(shared_stats, report_interval_seconds, stop_event)
+        )
+
+    await generate_votes(
+        api_url=api_url,
+        votes_per_second=votes_per_second,
+        duration_seconds=duration_seconds,
+        headers=headers,
+        stats=shared_stats,
+        max_in_flight_requests=max_in_flight_requests,
+        ramp_enabled=ramp_enabled,
+        ramp_step_percent=ramp_step_percent,
+        ramp_interval_seconds=ramp_interval_seconds,
+        ramp_max=ramp_max,
+        process_label=process_label,
+        total_process_count=total_process_count,
+        timeout_seconds=timeout_seconds,
+    )
+
+    stop_event.set()
+    if report_task:
+        report_task.cancel()
+
+
+def process_entry_point(api_url: str, votes_per_second: float, duration_seconds: float,
+                         jwt_token: str, max_in_flight_requests: int,
+                         report_interval_seconds: float,
+                         ramp_enabled: bool, ramp_step_percent: float, ramp_interval_seconds: float,
+                         ramp_max: float, process_label: str, total_process_count: int,
+                         shared_stats: SharedStats, timeout_seconds: float):
+    asyncio.run(run_single_process_worker(
+        api_url, votes_per_second, duration_seconds, jwt_token,
+        max_in_flight_requests, report_interval_seconds,
+        ramp_enabled, ramp_step_percent, ramp_interval_seconds, ramp_max, process_label, total_process_count,
+        shared_stats, timeout_seconds,
+    ))
+
+
+PARAMETER_REFERENCE = [
+    # (flag, example_value, required, default_value_or_None)
+    ("--url", "https://xyz.azurewebsites.net", "yes", None),
+    ("--votes (per second)", "50", "yes", None),
+    ("--duration (seconds)", "60", "no", "60"),
+    ("--process (count)", "1", "no", "1"),
+    ("--concurrency (per process)", "200", "no", "200"),
+    ("--report (interval in seconds)", "5", "no", "5"),
+    ("--ramp (connection increase)", "false", "no", "false"),
+    ("--ramp-step (percent)", "10", "no", "10"),
+    ("--ramp-interval (seconds)", "5", "no", "5"),
+    ("--ramp-max (votes per second)", "500", "no", None),
+    ("--timeout (seconds per request)", "10", "no", "10"),
+]
+
+
+def print_parameter_help():
+    print("No arguments provided. Available parameters:\n")
+    flag_width = max(len(flag) for flag, _, _, _ in PARAMETER_REFERENCE) + 2
+    example_width = max(len(example) for _, example, _, default in PARAMETER_REFERENCE if default is not None) + 1
+    for flag, example, required, default in PARAMETER_REFERENCE:
+        if default is not None:
+            print(f"  {flag:<{flag_width}} required: {required:<5} example: {example:<{example_width}} (default)")
+        else:
+            print(f"  {flag:<{flag_width}} required: {required:<5} example: {example}")
+    print("\nRun with -h or --help for full descriptions and usage examples.")
+
+
+def str2bool(value: str) -> bool:
+    if value.lower() in ("true", "1", "yes"):
+        return True
+    if value.lower() in ("false", "0", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"Expected true/false, got: {value}")
+
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Load generator for the ScaleTrigger API",
+        epilog="""
+Examples:
+
+  20 votes/s - authentication is detected automatically:
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \\
+        --votes 20 --duration 60
+
+  200 votes/s, spread across 4 parallel processes:
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \\
+        --votes 200 --duration 120 --process 4
+
+  Ramp-up: start at 10 votes/s, +10% every 5s, capped at 500 votes/s, for 5 minutes:
+    python scripts/scaleTriggerLoad.py --url https://scaletrigger-api.azurewebsites.net \\
+        --votes 10 --duration 300 \\
+        --ramp true --ramp-step 10 --ramp-interval 5 --ramp-max 500
+
+Note: requires 'aiohttp' (the script offers to install it automatically if missing).
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--url", dest="api_url", metavar="URL", required=True,
+                   help="Base URL of the API, e.g. https://xyz.azurewebsites.net")
+    p.add_argument("--votes", dest="votes_per_second", metavar="COUNT", type=float, required=True,
+                   help="Total target number of votes (per second) (yes/no chosen randomly, 50/50), "
+                        "spread evenly across all processes")
+    p.add_argument("--duration", dest="duration_seconds", metavar="SECONDS", type=float, default=60,
+                   help="Test duration in seconds (default: 60)")
+    p.add_argument("--process", dest="process_count", metavar="COUNT", type=int, default=1,
+                   help="Number of parallel processes (count) jointly generating traffic (default: 1)")
+    p.add_argument("--concurrency", dest="max_in_flight_requests_per_process", metavar="COUNT",
+                   type=int, default=200,
+                   help="Max number of concurrent in-flight requests per process (default: 200)")
+    p.add_argument("--report", dest="report_interval_seconds", metavar="SECONDS", type=float, default=5,
+                   help="Interval for printing statistics, in seconds (default: 5)")
+    p.add_argument("--ramp", type=str2bool, default=False, metavar="true|false",
+                   help="(connection increase) If true, --votes is the starting rate and it "
+                        "increases by --ramp-step percent every --ramp-interval seconds for the "
+                        "rest of the run (default: false)")
+    p.add_argument("--ramp-step", dest="ramp_step_percent", metavar="PERCENT", type=float, default=10,
+                   help="Percentage the rate increases by at each ramp step; only used when "
+                        "--ramp is true (default: 10)")
+    p.add_argument("--ramp-interval", dest="ramp_interval_seconds", metavar="SECONDS", type=float, default=5,
+                   help="How often the rate increases when --ramp is true (default: 5)")
+    p.add_argument("--ramp-max", metavar="VOTES", type=float, default=None,
+                   help="Caps the rate so it stops increasing once this value is reached, "
+                        "holding steady for the rest of the run; only used when --ramp is true "
+                        "(default: no cap, unlimited exponential growth)")
+    p.add_argument("--timeout", dest="timeout_seconds", metavar="SECONDS", type=float, default=10,
+                   help="Max time to wait for a single request (connect + response) before "
+                        "treating it as failed, so a server that never responds doesn't hold "
+                        "a concurrency slot for aiohttp's 300s default (default: 10)")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    print("Probing whether the API requires authentication...")
+    requires_auth = asyncio.run(probe_requires_auth(args.api_url, args.timeout_seconds))
+
+    jwt_token = ""
+    if requires_auth:
+        jwt_token = asyncio.run(fetch_jwt_token(args.api_url, JWT_USERNAME, JWT_PASSWORD, args.timeout_seconds))
+        print(f"API returned 401 - JWT token acquired automatically (logged in as '{JWT_USERNAME}').")
+    else:
+        print("API did not require authentication - proceeding without a token.")
+
+    votes_per_second_per_process = args.votes_per_second / args.process_count
+    ramp_max_per_process = args.ramp_max / args.process_count if args.ramp_max is not None else None
+    shared_stats = SharedStats()
+
+    if args.process_count == 1:
+        process_entry_point(
+            args.api_url, votes_per_second_per_process, args.duration_seconds, jwt_token,
+            args.max_in_flight_requests_per_process, args.report_interval_seconds,
+            args.ramp, args.ramp_step_percent, args.ramp_interval_seconds, ramp_max_per_process,
+            "process-1", args.process_count, shared_stats, args.timeout_seconds,
+        )
+        print("All processes finished.")
+        return
+
+    processes = []
+    for i in range(args.process_count):
+        proc = multiprocessing.Process(
+            target=process_entry_point,
+            args=(
+                args.api_url, votes_per_second_per_process, args.duration_seconds, jwt_token,
+                args.max_in_flight_requests_per_process, args.report_interval_seconds,
+                args.ramp, args.ramp_step_percent, args.ramp_interval_seconds, ramp_max_per_process,
+                f"process-{i + 1}", args.process_count, shared_stats, args.timeout_seconds,
+            ),
+        )
+        processes.append(proc)
+        proc.start()
+
+    for proc in processes:
+        proc.join()
+
+    print("All processes finished.")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        print_parameter_help()
+        raise SystemExit(0)
+    main()

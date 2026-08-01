@@ -51,13 +51,20 @@ namespace ScaleTrigger.Interfaces
         Task EnsureSchemaAsync();
 
         /// <summary>
-        /// Deletes all rows from Vote and Payload, resets their
-        /// auto-increment counters, and reclaims the freed disk space at
-        /// the storage engine level (TRUNCATE followed by a
-        /// provider-specific shrink/VACUUM/OPTIMIZE). Destructive -
-        /// wipes all benchmark data irreversibly.
+        /// Drops Vote, Payload and LoadConfig (and, for MSSQL/MySQL/
+        /// PostgreSQL, their stored procedures/functions) entirely, then
+        /// shrinks the freed space at the storage engine level
+        /// (provider-specific: MSSQL shrinks the database and its log
+        /// file with DBCC SHRINKDATABASE; SQLite truncates the WAL file
+        /// and VACUUMs the main file; MySQL/PostgreSQL reclaim space
+        /// automatically as part of DROP TABLE, since both use
+        /// file-per-table storage by default). Destructive and
+        /// irreversible - wipes all benchmark data and every LoadConfig
+        /// edit. Callers are expected to follow this with
+        /// EnsureSchemaAsync() and LoadConfigEnsureSeededAsync() to
+        /// recreate a fresh schema (see VoteApiController.Reset()).
         /// </summary>
-        Task CleanupAsync();
+        Task DropSchemaAsync();
 
         /// <summary>
         /// Creates the LoadConfig table (and, for MSSQL/MySQL/PostgreSQL,

@@ -386,5 +386,58 @@ $$;",
     DateUpdated TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );",
         };
+
+        // ------------------------------------------------------------
+        // Drops every object the two batches above create (Vote, Payload,
+        // LoadConfig and their stored procedures/functions), used by
+        // IRepository.DropSchemaAsync() to fully reset the database:
+        // drop everything, shrink the freed space, then EnsureSchemaAsync()
+        // + LoadConfigEnsureSeededAsync() recreate and reseed it exactly
+        // as if the database were brand new. IF EXISTS-style checks make
+        // each statement safe to run even if a prior reset already
+        // removed some of these objects.
+        // ------------------------------------------------------------
+        public static readonly string[] MsSqlDrop =
+        {
+            @"IF OBJECT_ID('dbo.LoadConfigSet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigSet;",
+            @"IF OBJECT_ID('dbo.LoadConfigGet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigGet;",
+            @"IF OBJECT_ID('dbo.LoadConfig', 'U') IS NOT NULL DROP TABLE dbo.LoadConfig;",
+            @"IF OBJECT_ID('dbo.DatabaseCleanup', 'P') IS NOT NULL DROP PROCEDURE dbo.DatabaseCleanup;",
+            @"IF OBJECT_ID('dbo.VoteReportGet', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteReportGet;",
+            @"IF OBJECT_ID('dbo.VoteAdd', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteAdd;",
+            @"IF OBJECT_ID('dbo.Payload', 'U') IS NOT NULL DROP TABLE dbo.Payload;",
+            @"IF OBJECT_ID('dbo.Vote', 'U') IS NOT NULL DROP TABLE dbo.Vote;",
+        };
+
+        public static readonly string[] MySqlDrop =
+        {
+            @"DROP PROCEDURE IF EXISTS `LoadConfigSet`;",
+            @"DROP PROCEDURE IF EXISTS `LoadConfigGet`;",
+            @"DROP TABLE IF EXISTS `LoadConfig`;",
+            @"DROP PROCEDURE IF EXISTS `DatabaseCleanup`;",
+            @"DROP PROCEDURE IF EXISTS `VoteReportGet`;",
+            @"DROP PROCEDURE IF EXISTS `VoteAdd`;",
+            @"DROP TABLE IF EXISTS `Payload`;",
+            @"DROP TABLE IF EXISTS `Vote`;",
+        };
+
+        public static readonly string[] PostgreSqlDrop =
+        {
+            @"DROP PROCEDURE IF EXISTS load_config_set(VARCHAR, INT, INT);",
+            @"DROP FUNCTION IF EXISTS load_config_get();",
+            @"DROP TABLE IF EXISTS load_config;",
+            @"DROP PROCEDURE IF EXISTS database_cleanup();",
+            @"DROP FUNCTION IF EXISTS vote_report_get();",
+            @"DROP PROCEDURE IF EXISTS vote_add(VARCHAR, BYTEA, INT);",
+            @"DROP TABLE IF EXISTS payload;",
+            @"DROP TABLE IF EXISTS vote;",
+        };
+
+        public static readonly string[] SqliteDrop =
+        {
+            @"DROP TABLE IF EXISTS LoadConfig;",
+            @"DROP TABLE IF EXISTS Payload;",
+            @"DROP TABLE IF EXISTS Vote;",
+        };
     }
 }

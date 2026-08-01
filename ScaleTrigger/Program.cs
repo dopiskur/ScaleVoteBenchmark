@@ -6,7 +6,6 @@ using ScaleTrigger;
 using ScaleTrigger.Auth;
 using ScaleTrigger.Cache;
 using ScaleTrigger.Interfaces;
-using ScaleTrigger.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,7 +48,7 @@ builder.Services.AddAuthorization(options =>
 {
     // Used by POST /api/vote/add: requires a JWT only when "Auth:Enabled"
     // is true in appsettings.json. Endpoints using plain [Authorize]
-    // (e.g. the destructive database cleanup action) always require a
+    // (e.g. the destructive database reset action) always require a
     // valid JWT, regardless of "Auth:Enabled" - see
     // OptionalAuthorizationHandler for the distinction.
     options.AddPolicy("OptionalJwt", policy => policy.Requirements.Add(new OptionalJwtRequirement()));
@@ -120,18 +119,11 @@ var app = builder.Build();
         // only the very first time the table is created - after that,
         // the table is the source of truth and this section of
         // appsettings.json is no longer read. See
-        // LoadConfigApiController for how the dashboard edits it and
-        // LoadConfigRefreshService for how those edits reach votes.
-        var loadDefaults = new List<LoadConfigSetting>
-        {
-            ReadLoadDefault("CpuIterationsPerVote"),
-            ReadLoadDefault("MemoryMegabytesPerVote"),
-            ReadLoadDefault("DiskWriteKilobytesPerVote"),
-            ReadLoadDefault("NetworkLatencyMillisecondsPerVote"),
-            ReadLoadDefault("PayloadBytesPerVote"),
-            ReadLoadDefault("DbHashIterationsPerVote"),
-            ReadLoadDefault("ConfigRefresh"),
-        };
+        // LoadConfigApiController for how the dashboard edits it,
+        // LoadConfigRefreshService for how those edits reach votes, and
+        // VoteApiController.Reset() for the other caller of this same
+        // seeding logic.
+        var loadDefaults = LoadConfigDefaults.ReadFrom(app.Configuration);
         await repo.LoadConfigEnsureSeededAsync(loadDefaults);
 
         var loadConfigCache = app.Services.GetRequiredService<LoadConfigCache>();
@@ -151,13 +143,6 @@ var app = builder.Build();
         {
             throw;
         }
-    }
-
-    LoadConfigSetting ReadLoadDefault(string settingName)
-    {
-        int min = int.Parse(app.Configuration[$"Load:{settingName}:Min"] ?? "0");
-        int max = int.Parse(app.Configuration[$"Load:{settingName}:Max"] ?? "0");
-        return new LoadConfigSetting { SettingName = settingName, Min = min, Max = max };
     }
 }
 

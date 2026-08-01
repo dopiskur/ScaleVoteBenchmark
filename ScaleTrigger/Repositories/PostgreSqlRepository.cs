@@ -102,37 +102,21 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        public async Task CleanupAsync()
+        public async Task DropSchemaAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
 
-            using (var cmd = connection.CreateCommand())
+            // No separate shrink step needed here (unlike MSSQL/SQLite):
+            // DROP TABLE deletes the underlying file(s) for that table
+            // immediately, reclaiming its disk space as part of the drop
+            // itself - there is nothing left afterwards for VACUUM FULL
+            // to reclaim.
+            foreach (var batch in SchemaScripts.PostgreSqlDrop)
             {
-                cmd.CommandText = "CALL database_cleanup()";
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
                 await cmd.ExecuteNonQueryAsync();
-            }
-
-            // Best-effort: VACUUM FULL reclaims the space TRUNCATE freed.
-            // Not fatal if this fails (e.g. insufficient permission on a
-            // shared/managed instance) - the destructive part already
-            // succeeded above. VACUUM cannot run inside a transaction
-            // block, so each table is vacuumed as its own standalone
-            // command rather than from within a stored procedure.
-            try
-            {
-                using var vacuumVoteCmd = connection.CreateCommand();
-                vacuumVoteCmd.CommandText = "VACUUM FULL vote;";
-                await vacuumVoteCmd.ExecuteNonQueryAsync();
-
-                using var vacuumPayloadCmd = connection.CreateCommand();
-                vacuumPayloadCmd.CommandText = "VACUUM FULL payload;";
-                await vacuumPayloadCmd.ExecuteNonQueryAsync();
-            }
-            catch
-            {
-                // Ignored - vacuuming is a nice-to-have, not required for
-                // the cleanup itself to be considered successful.
             }
         }
 

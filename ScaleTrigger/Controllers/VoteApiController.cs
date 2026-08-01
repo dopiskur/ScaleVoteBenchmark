@@ -100,19 +100,34 @@ namespace ScaleTrigger.Controllers
         }
 
         /// <summary>
-        /// Wipes all vote and payload data and reclaims the freed disk
-        /// space (TRUNCATE followed by a provider-specific
-        /// shrink/VACUUM/OPTIMIZE). Always requires a valid JWT via plain
+        /// Fully resets the database: drops Vote, Payload and LoadConfig
+        /// (and their stored procedures/functions) via
+        /// IRepository.DropSchemaAsync(), which also shrinks the freed
+        /// disk space, then recreates the schema from scratch
+        /// (EnsureSchemaAsync()) and reseeds LoadConfig from
+        /// appsettings.json's "Load" section (LoadConfigEnsureSeededAsync,
+        /// via the same LoadConfigDefaults helper Program.cs uses at
+        /// startup) - so afterwards the database looks exactly like a
+        /// brand new one. Always requires a valid JWT via plain
         /// [Authorize] (the default policy), regardless of "Auth:Enabled"
         /// - this is a destructive admin action, not part of the
         /// load-testing surface that setting controls.
         /// </summary>
-        [HttpPost("cleanup")]
+        [HttpPost("reset")]
         [Authorize]
-        public async Task<ActionResult> Cleanup()
+        public async Task<ActionResult> Reset()
         {
-            await repoFactory.GetRepo().CleanupAsync();
+            var repo = repoFactory.GetRepo();
+
+            await repo.DropSchemaAsync();
+            await repo.EnsureSchemaAsync();
+
+            var defaults = LoadConfigDefaults.ReadFrom(configuration);
+            await repo.LoadConfigEnsureSeededAsync(defaults);
+            loadConfigCache.Set(await repo.LoadConfigGetAsync());
+
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
+
             return Ok();
         }
 

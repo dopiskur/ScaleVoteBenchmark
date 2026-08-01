@@ -104,32 +104,21 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        public async Task CleanupAsync()
+        public async Task DropSchemaAsync()
         {
             using var connection = new MySqlConnection(connectionString);
             await connection.OpenAsync();
 
-            using (var cmd = connection.CreateCommand())
+            // No separate shrink step needed here (unlike MSSQL/SQLite):
+            // with InnoDB's default file-per-table storage (used by Azure
+            // Database for MySQL), DROP TABLE deletes that table's .ibd
+            // file immediately, reclaiming its disk space as part of the
+            // drop itself.
+            foreach (var batch in SchemaScripts.MySqlDrop)
             {
-                cmd.CommandText = "DatabaseCleanup";
-                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
                 await cmd.ExecuteNonQueryAsync();
-            }
-
-            // Best-effort: OPTIMIZE TABLE rebuilds the table to reclaim
-            // the space TRUNCATE freed. Not fatal if this fails (e.g.
-            // insufficient permission on a shared/managed instance) - the
-            // destructive part already succeeded above.
-            try
-            {
-                using var optimizeCmd = connection.CreateCommand();
-                optimizeCmd.CommandText = "OPTIMIZE TABLE `Payload`, `Vote`;";
-                await optimizeCmd.ExecuteNonQueryAsync();
-            }
-            catch
-            {
-                // Ignored - optimizing is a nice-to-have, not required for
-                // the cleanup itself to be considered successful.
             }
         }
 

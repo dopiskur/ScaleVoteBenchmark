@@ -128,20 +128,21 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        public async Task CleanupAsync()
+        public async Task DropSchemaAsync()
         {
             using var connection = await CreateConnectionAsync();
 
-            using (var cmd = connection.CreateCommand())
+            foreach (var batch in SchemaScripts.MsSqlDrop)
             {
-                cmd.CommandText = "DatabaseCleanup";
-                cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = batch;
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Best-effort: reclaim the space TRUNCATE freed. Not fatal if
-            // this fails (e.g. insufficient permission on a shared/managed
-            // instance) - the destructive part already succeeded above.
+            // Best-effort: reclaims the space the dropped objects freed,
+            // for both the data and log files. Not fatal if this fails
+            // (e.g. insufficient permission on a shared/managed instance)
+            // - the destructive part already succeeded above.
             try
             {
                 using var shrinkCmd = connection.CreateCommand();
@@ -151,7 +152,7 @@ namespace ScaleTrigger.Repositories
             catch
             {
                 // Ignored - shrinking is a nice-to-have, not required for
-                // the cleanup itself to be considered successful.
+                // the reset itself to be considered successful.
             }
         }
 

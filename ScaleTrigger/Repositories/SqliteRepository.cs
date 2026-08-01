@@ -177,45 +177,35 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        public async Task CleanupAsync()
+        public async Task DropSchemaAsync()
         {
             using var connection = await CreateConnectionAsync();
 
-            async Task ExecAsync(string sql)
+            foreach (var batch in SchemaScripts.SqliteDrop)
             {
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = sql;
+                cmd.CommandText = batch;
                 await cmd.ExecuteNonQueryAsync();
-            }
-
-            await ExecAsync("DELETE FROM Payload;");
-            await ExecAsync("DELETE FROM Vote;");
-
-            // sqlite_sequence (backing AUTOINCREMENT) is only created
-            // lazily on the first insert, so it may not exist yet on a
-            // database nobody has voted on.
-            using (var checkCmd = connection.CreateCommand())
-            {
-                checkCmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'";
-                if (await checkCmd.ExecuteScalarAsync() != null)
-                {
-                    await ExecAsync("DELETE FROM sqlite_sequence WHERE name IN ('Vote', 'Payload');");
-                }
             }
 
             // Truncate the WAL file back to empty, then VACUUM to shrink
             // the main database file - both are best-effort in the sense
-            // that the destructive DELETEs above already succeeded
+            // that the destructive DROPs above already succeeded
             // regardless of whether reclaiming disk space also works.
             try
             {
-                await ExecAsync("PRAGMA wal_checkpoint(TRUNCATE);");
-                await ExecAsync("VACUUM;");
+                using var checkpointCmd = connection.CreateCommand();
+                checkpointCmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+                await checkpointCmd.ExecuteNonQueryAsync();
+
+                using var vacuumCmd = connection.CreateCommand();
+                vacuumCmd.CommandText = "VACUUM;";
+                await vacuumCmd.ExecuteNonQueryAsync();
             }
             catch
             {
                 // Ignored - shrinking is a nice-to-have, not required for
-                // the cleanup itself to be considered successful.
+                // the reset itself to be considered successful.
             }
         }
 
