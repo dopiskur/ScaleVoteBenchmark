@@ -130,6 +130,7 @@ var app = builder.Build();
             ReadLoadDefault("NetworkLatencyMillisecondsPerVote"),
             ReadLoadDefault("PayloadBytesPerVote"),
             ReadLoadDefault("DbHashIterationsPerVote"),
+            ReadLoadDefault("ConfigRefresh"),
         };
         await repo.LoadConfigEnsureSeededAsync(loadDefaults);
 

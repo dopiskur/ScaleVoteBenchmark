@@ -36,11 +36,10 @@
     "SlidingExpirationMinutes": 5
   },
 
-  "// ConfigRefresh": "Seconds between polls of the LoadConfig database table for values changed via the dashboard. Only affects how fast an edit takes effect - it does not change the values themselves.",
-  "ConfigRefresh": 10,
-
   "Load": {
-    "// Note": "Used only to seed the LoadConfig database table the very first time it's created - see 'ConfigRefresh' above. After that, this section is no longer read; edit the running values from the dashboard instead. Each value is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
+    "// Note": "Used only to seed the LoadConfig database table the very first time it's created. After that, this section is no longer read; edit the running values from the dashboard instead. Each value is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
+    "// ConfigRefresh": "Seconds between polls of the LoadConfig table for values changed via the dashboard. Not a vote-time setting like the others below - it controls how fast an edit to ANY of these takes effect.",
+    "ConfigRefresh": { "Min": 1, "Max": 1 },
     "CpuIterationsPerVote": { "Min": 150000, "Max": 250000 },
     "MemoryMegabytesPerVote": { "Min": 3, "Max": 8 },
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },

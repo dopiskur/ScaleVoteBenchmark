@@ -19,7 +19,8 @@ namespace ScaleTrigger.Controllers
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
-            "DbHashIterationsPerVote"
+            "DbHashIterationsPerVote",
+            "ConfigRefresh"
         };
 
         private readonly RepoFactory repoFactory;
@@ -47,17 +48,18 @@ namespace ScaleTrigger.Controllers
         }
 
         /// <summary>
-        /// Updates one or more LoadConfig rows by SettingName. Always
-        /// requires a valid JWT via plain [Authorize], regardless of
-        /// "Auth:Enabled" - same reasoning as POST /api/vote/cleanup:
-        /// this changes the benchmark's behavior for everyone, not part
-        /// of the load-testing surface that setting controls. Refreshes
-        /// LoadConfigCache immediately after a successful update, so the
-        /// new values take effect on the very next vote rather than
-        /// waiting for LoadConfigRefreshService's next tick.
+        /// Updates one or more LoadConfig rows by SettingName. Requires a
+        /// JWT only when "Auth:Enabled" is true (same "OptionalJwt" policy
+        /// as POST /api/vote/add), so the dashboard's "Save changes"
+        /// button needs no login while auth is off - unlike
+        /// POST /api/vote/cleanup, this only tunes benchmark intensity,
+        /// it doesn't destroy data. Refreshes LoadConfigCache immediately
+        /// after a successful update, so the new values take effect on
+        /// the very next vote rather than waiting for
+        /// LoadConfigRefreshService's next tick.
         /// </summary>
         [HttpPost]
-        [Authorize]
+        [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult> Update([FromBody] List<LoadConfigSetting> settings)
         {
             if (settings == null || settings.Count == 0)
