@@ -62,13 +62,7 @@
   h1 {
     font-size: 18px;
     font-weight: 600;
-    margin: 0 0 4px;
-  }
-
-  .subtitle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0 0 28px;
+    margin: 0 0 24px;
   }
 
   .dashboard-columns {
@@ -161,13 +155,7 @@
   .section-title {
     font-size: 15px;
     font-weight: 600;
-    margin: 32px 0 4px;
-  }
-
-  .section-subtitle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0 0 16px;
+    margin: 32px 0 12px;
   }
 
   .group-title {
@@ -285,12 +273,10 @@
 <body>
   <div class="viz-root">
     <h1>ScaleTrigger</h1>
-    <p class="subtitle">Live voting results</p>
 
     <div class="dashboard-columns">
       <div>
         <p class="section-title section-title--first">Configuration</p>
-        <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one poll interval).</p>
 
         <div class="card">
           <p class="group-title">Refresh</p>
@@ -328,6 +314,8 @@
       </div>
 
       <div>
+        <p class="section-title section-title--first">Votes</p>
+
         <div class="card">
           <div class="tiles">
             <div>
@@ -350,7 +338,6 @@
         <p class="status" id="status">Loading…</p>
 
         <p class="section-title">Node Benchmark</p>
-        <p class="section-subtitle">One-off hardware check: CPU, then memory, then disk (median of repeated measurements).</p>
 
         <div class="card">
           <p class="group-title">Hardware</p>
