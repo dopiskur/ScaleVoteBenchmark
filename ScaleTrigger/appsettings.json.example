@@ -23,7 +23,7 @@
   },
 
   "ConnectionStrings": {
-    "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleTriggerDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=False;",
+    "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleTriggerDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=True;",
     "MySql": "Server=YOUR-SERVER.mysql.database.azure.com;Port=3306;Database=ScaleTriggerDb;Uid=YOUR-USER;Pwd=YOUR-PASSWORD;SslMode=Required;",
     "PostgreSql": "Server=YOUR-SERVER.postgres.database.azure.com;Port=5432;Database=ScaleTriggerDb;User Id=YOUR-USER;Password=YOUR-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;",
     "// Sqlite": "Local file, no server needed - handy for running/testing the app without an Azure database.",
