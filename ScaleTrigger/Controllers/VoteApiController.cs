@@ -108,13 +108,13 @@ namespace ScaleTrigger.Controllers
         /// appsettings.json's "Load" section (LoadConfigEnsureSeededAsync,
         /// via the same LoadConfigDefaults helper Program.cs uses at
         /// startup) - so afterwards the database looks exactly like a
-        /// brand new one. Always requires a valid JWT via plain
-        /// [Authorize] (the default policy), regardless of "Auth:Enabled"
-        /// - this is a destructive admin action, not part of the
-        /// load-testing surface that setting controls.
+        /// brand new one. Requires a JWT only when "Auth:Enabled" is true
+        /// (same "OptionalJwt" policy as POST /api/vote/add and
+        /// POST /api/loadconfig), so the dashboard's "Reset database"
+        /// button needs no login while auth is off.
         /// </summary>
         [HttpPost("reset")]
-        [Authorize]
+        [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult> Reset()
         {
             var repo = repoFactory.GetRepo();

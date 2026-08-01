@@ -70,7 +70,7 @@ Without this check, an incorrect database configuration would otherwise go unnot
 - `POST /api/auth/login` — anonymous; body `{ "username": "...", "password": "..." }`, returns `{ "token": "..." }` on success
 - `GET /api/loadconfig` — anonymous; returns the current `[{ settingName, min, max }, ...]` rows from `LoadConfig` (see "Live-tunable load intensity" above)
 - `POST /api/loadconfig` — requires a JWT if `Auth:Enabled` is `true` (same as `POST /api/vote/add`); body is the same array shape, updates by `settingName`
-- `POST /api/vote/reset` — always requires a JWT (plain `[Authorize]`, regardless of `Auth:Enabled`); drops Vote, Payload and LoadConfig entirely (and their stored procedures/functions), shrinks the freed space, then recreates and reseeds everything from scratch - the "Reset database" button on the dashboard
+- `POST /api/vote/reset` — requires a JWT if `Auth:Enabled` is `true` (same `OptionalJwt` policy as `POST /api/vote/add`); drops Vote, Payload and LoadConfig entirely (and their stored procedures/functions), shrinks the freed space, then recreates and reseeds everything from scratch - the "Reset database" button on the dashboard
 
 ## Deploying via GitHub Actions
 

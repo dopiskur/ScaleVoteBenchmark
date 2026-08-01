@@ -46,11 +46,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    // Used by POST /api/vote/add: requires a JWT only when "Auth:Enabled"
-    // is true in appsettings.json. Endpoints using plain [Authorize]
-    // (e.g. the destructive database reset action) always require a
-    // valid JWT, regardless of "Auth:Enabled" - see
-    // OptionalAuthorizationHandler for the distinction.
+    // Used by POST /api/vote/add, POST /api/loadconfig and
+    // POST /api/vote/reset: requires a JWT only when "Auth:Enabled" is
+    // true in appsettings.json - see OptionalAuthorizationHandler.
     options.AddPolicy("OptionalJwt", policy => policy.Requirements.Add(new OptionalJwtRequirement()));
 });
 

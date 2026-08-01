@@ -13,8 +13,7 @@
     --text-secondary: #52514e;
     --text-muted:     #898781;
     --border:         rgba(11,11,11,0.10);
-    --series-yes:     #2a78d6;
-    --series-no:      #eb6834;
+    --accent:         #2a78d6;
     --critical:       #d03b3b;
     --critical-wash:  rgba(208,59,59,0.08);
   }
@@ -27,8 +26,7 @@
       --text-secondary: #c3c2b7;
       --text-muted:     #898781;
       --border:         rgba(255,255,255,0.10);
-      --series-yes:     #3987e5;
-      --series-no:      #d95926;
+      --accent:         #3987e5;
       --critical:       #e66767;
       --critical-wash:  rgba(230,103,103,0.12);
     }
@@ -41,8 +39,7 @@
     --text-secondary: #c3c2b7;
     --text-muted:     #898781;
     --border:         rgba(255,255,255,0.10);
-    --series-yes:     #3987e5;
-    --series-no:      #d95926;
+    --accent:         #3987e5;
     --critical:       #e66767;
     --critical-wash:  rgba(230,103,103,0.12);
   }
@@ -89,48 +86,18 @@
   }
 
   .tile-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     font-size: 13px;
     color: var(--text-secondary);
     margin-bottom: 6px;
   }
-
-  .swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    flex: none;
-  }
-
-  .swatch--yes { background: var(--series-yes); }
-  .swatch--no  { background: var(--series-no); }
 
   .tile-value {
     font-size: 40px;
     font-weight: 600;
     line-height: 1;
     font-variant-numeric: proportional-nums;
-    color: #ffffff;
+    color: var(--text-primary);
   }
-
-  .bar {
-    display: flex;
-    height: 24px;
-    border-radius: 4px;
-    overflow: hidden;
-    background: var(--border);
-  }
-
-  .bar-segment {
-    height: 100%;
-    transition: width 0.4s ease;
-  }
-
-  .bar-segment--yes { background: var(--series-yes); }
-  .bar-segment--no  { background: var(--series-no); }
-  .bar-gap { width: 2px; background: var(--surface-1); flex: none; }
 
   .meta {
     display: flex;
@@ -255,8 +222,8 @@
     font-size: 13px;
     font-weight: 600;
     color: var(--surface-1);
-    background: var(--series-yes);
-    border: 1px solid var(--series-yes);
+    background: var(--accent);
+    border: 1px solid var(--accent);
     border-radius: 6px;
     cursor: pointer;
   }
@@ -274,26 +241,20 @@
     <div class="card">
       <div class="tiles">
         <div>
-          <div class="tile-label"><span class="swatch swatch--yes"></span>Yes</div>
+          <div class="tile-label">Yes</div>
           <div class="tile-value" id="yes-percent">—</div>
         </div>
         <div>
-          <div class="tile-label"><span class="swatch swatch--no"></span>No</div>
+          <div class="tile-label">No</div>
           <div class="tile-value" id="no-percent">—</div>
         </div>
-      </div>
-
-      <div class="bar">
-        <div class="bar-segment bar-segment--yes" id="bar-yes"></div>
-        <div class="bar-gap"></div>
-        <div class="bar-segment bar-segment--no" id="bar-no"></div>
       </div>
 
       <div class="meta">
         <span id="total">Total votes: —</span>
         <span id="updated">—</span>
       </div>
-      <div class="payload" id="payload">Payload table: —</div>
+      <div class="payload" id="payload">Payload rows: —</div>
     </div>
 
     <p class="status" id="status">Loading…</p>
@@ -339,23 +300,11 @@
   <script>
     const yesPercentEl = document.getElementById('yes-percent');
     const noPercentEl = document.getElementById('no-percent');
-    const barYesEl = document.getElementById('bar-yes');
-    const barNoEl = document.getElementById('bar-no');
     const totalEl = document.getElementById('total');
     const updatedEl = document.getElementById('updated');
     const payloadEl = document.getElementById('payload');
     const statusEl = document.getElementById('status');
     const resetBtn = document.getElementById('reset-btn');
-
-    function formatBytes(bytes) {
-      if (bytes < 1024) {
-        return bytes + ' B';
-      }
-      if (bytes < 1024 * 1024) {
-        return (bytes / 1024).toFixed(1) + ' KB';
-      }
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
 
     async function refresh() {
       try {
@@ -368,16 +317,13 @@
         const yesPercent = report.yesPercent ?? 0;
         const noPercent = report.noPercent ?? 0;
         const payloadCount = report.payloadCount ?? 0;
-        const payloadBytes = report.payloadTotalBytes ?? 0;
+        const payloadMb = (report.payloadTotalBytes ?? 0) / (1024 * 1024);
 
         yesPercentEl.textContent = yesPercent + '%';
         noPercentEl.textContent = noPercent + '%';
-        barYesEl.style.width = yesPercent + '%';
-        barNoEl.style.width = noPercent + '%';
         totalEl.textContent = 'Total votes: ' + (report.total ?? 0);
         updatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
-        payloadEl.textContent = 'Payload table: ' + payloadCount +
-          (payloadCount === 1 ? ' row, ' : ' rows, ') + formatBytes(payloadBytes);
+        payloadEl.textContent = 'Payload rows: ' + payloadCount + ' (' + payloadMb.toFixed(2) + ' MB)';
         statusEl.textContent = '';
       } catch (err) {
         statusEl.textContent = 'Could not load results (' + err.message + ').';
@@ -389,32 +335,42 @@
         return;
       }
 
-      const username = prompt('Admin username:');
-      if (username === null) {
-        return;
-      }
-      const password = prompt('Admin password:');
-      if (password === null) {
-        return;
-      }
-
       try {
-        statusEl.textContent = 'Logging in…';
-        const loginResponse = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        if (!loginResponse.ok) {
-          throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-        }
-        const { token } = await loginResponse.json();
-
+        // Tries without a token first - only prompts for login if the API
+        // comes back 401 (i.e. Auth:Enabled is true server-side).
         statusEl.textContent = 'Resetting database…';
-        const resetResponse = await fetch('/api/vote/reset', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
+        let resetResponse = await fetch('/api/vote/reset', { method: 'POST' });
+
+        if (resetResponse.status === 401) {
+          const username = prompt('Admin username:');
+          if (username === null) {
+            statusEl.textContent = '';
+            return;
+          }
+          const password = prompt('Admin password:');
+          if (password === null) {
+            statusEl.textContent = '';
+            return;
+          }
+
+          statusEl.textContent = 'Logging in…';
+          const loginResponse = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (!loginResponse.ok) {
+            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+          }
+          const { token } = await loginResponse.json();
+
+          statusEl.textContent = 'Resetting database…';
+          resetResponse = await fetch('/api/vote/reset', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+        }
+
         if (!resetResponse.ok) {
           throw new Error('reset failed (HTTP ' + resetResponse.status + ')');
         }

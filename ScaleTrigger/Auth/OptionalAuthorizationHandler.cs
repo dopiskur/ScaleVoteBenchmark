@@ -5,10 +5,9 @@ namespace ScaleTrigger.Auth
     /// <summary>
     /// Marks an authorization requirement as one that can be bypassed
     /// when "Auth:Enabled" is false. Only endpoints using the
-    /// "OptionalJwt" policy (see Program.cs) get this requirement -
-    /// endpoints using plain [Authorize] (e.g. the destructive database
-    /// cleanup action) always require a valid JWT, unaffected by
-    /// "Auth:Enabled".
+    /// "OptionalJwt" policy (see Program.cs) get this requirement - an
+    /// endpoint using plain [Authorize] instead would always require a
+    /// valid JWT, unaffected by "Auth:Enabled".
     /// </summary>
     public class OptionalJwtRequirement : IAuthorizationRequirement
     {
