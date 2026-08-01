@@ -1,12 +1,12 @@
-# ScaleVoteBenchmark
+# ScaleTrigger
 
 The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
-The solution contains a single project, **ScaleVoteBenchmark.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
+The solution contains a single project, **ScaleTrigger.Api** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
 The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load — that's the purpose of the benchmark. Each load type's intensity is defined in `appsettings.json` as a `Min`/`Max` range (`Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote`, `Load:NetworkLatencyMillisecondsPerVote`), and a fresh random value within that range is picked for every vote; use `Min == Max` for a fixed value. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
-The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleVoteBenchmark.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
+The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleTrigger.Api/wwwroot/index.html`), showing the live Yes/No percentage split. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
 ## Package versions
 
@@ -25,7 +25,7 @@ Note: the version of the `Microsoft.AspNetCore.Authentication.JwtBearer` package
 
 ## Connecting to Azure SQL — two supported modes
 
-`ScaleVoteBenchmark.Api` supports two ways of connecting to Azure SQL, selected via the `UseManagedIdentity` setting in `appsettings.json`:
+`ScaleTrigger.Api` supports two ways of connecting to Azure SQL, selected via the `UseManagedIdentity` setting in `appsettings.json`:
 
 - **`false` (default) — connection string authentication.** Uses a classic `SqlConnection` with the username and password from `ConnectionStrings:MsSql`. Simple for local development and scenarios outside Azure, but **less secure** because the database password remains stored in the configuration file in plain text.
 - **`true` — Managed Identity authentication.** Using the `Azure.Identity` package, `MsSqlRepository` obtains a temporary access token via the application's assigned Azure identity, without the password needing to exist in the configuration at all. Only works when the application is running inside an Azure environment (App Service, VM) with an assigned identity that has access to the Azure SQL database.
@@ -34,15 +34,15 @@ Both modes use the same connection string for the server address and database na
 
 ## JWT authentication on voting
 
-`POST /api/vote/add` is decorated with `[Authorize]`. Setting `Auth:Enabled` to `true` in `appsettings.json` makes it require a JWT obtained via `POST /api/auth/login`, so a load-generation script exercises token validation as part of the benchmark, not just the vote write itself. This is implemented via `OptionalAuthorizationHandler` (`ScaleVoteBenchmark.Api/Auth/OptionalAuthorizationHandler.cs`), registered as an `IAuthorizationHandler` that succeeds every pending authorization requirement while the setting is off, so no controller code changes based on it. `GET /api/vote/report` is always anonymous regardless of this setting (it backs the public dashboard); `POST /api/auth/login` keeps working either way. Defaults to `false` (frictionless anonymous load, no login needed).
+`POST /api/vote/add` is decorated with `[Authorize]`. Setting `Auth:Enabled` to `true` in `appsettings.json` makes it require a JWT obtained via `POST /api/auth/login`, so a load-generation script exercises token validation as part of the benchmark, not just the vote write itself. This is implemented via `OptionalAuthorizationHandler` (`ScaleTrigger.Api/Auth/OptionalAuthorizationHandler.cs`), registered as an `IAuthorizationHandler` that succeeds every pending authorization requirement while the setting is off, so no controller code changes based on it. `GET /api/vote/report` is always anonymous regardless of this setting (it backs the public dashboard); `POST /api/auth/login` keeps working either way. Defaults to `false` (frictionless anonymous load, no login needed).
 
 ## SQLite — for local development and testing, no server required
 
-`DatabaseProvider: "Sqlite"` uses a local database file (`ConnectionStrings:Sqlite`, e.g. `Data Source=scalevotebenchmark.db`) instead of a real Azure database — nothing to provision, nothing to reach over the network, so it's the fastest way to actually run and exercise the app. SQLite has no stored procedure/function support, so `SqliteRepository` is the one repository that runs plain parameterized SQL directly rather than calling stored routines. Everything else (the `Load:*` CPU/memory simulation, JWT auth, caching, the dashboard) behaves identically regardless of provider.
+`DatabaseProvider: "Sqlite"` uses a local database file (`ConnectionStrings:Sqlite`, e.g. `Data Source=scaletrigger.db`) instead of a real Azure database — nothing to provision, nothing to reach over the network, so it's the fastest way to actually run and exercise the app. SQLite has no stored procedure/function support, so `SqliteRepository` is the one repository that runs plain parameterized SQL directly rather than calling stored routines. Everything else (the `Load:*` CPU/memory simulation, JWT auth, caching, the dashboard) behaves identically regardless of provider.
 
 ## Automatic schema provisioning at startup
 
-Right after the database connection check succeeds, `ScaleVoteBenchmark.Api` calls `EnsureSchemaAsync()` on the configured repository, which creates the `Vote` table (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) using the same connection details from `appsettings.json` — but **only if they don't already exist**. If the table is already there, `EnsureSchemaAsync()` does nothing, so an already-provisioned database and its data are never touched on subsequent restarts. This means a fresh database needs no manual setup at all: point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app.
+Right after the database connection check succeeds, `ScaleTrigger.Api` calls `EnsureSchemaAsync()` on the configured repository, which creates the `Vote` table (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) using the same connection details from `appsettings.json` — but **only if they don't already exist**. If the table is already there, `EnsureSchemaAsync()` does nothing, so an already-provisioned database and its data are never touched on subsequent restarts. This means a fresh database needs no manual setup at all: point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app.
 
 The `sql/*.sql` scripts remain available for manual provisioning or an explicit drop-and-recreate reset (see "Database setup" below); they are not used by the app itself.
 
@@ -50,7 +50,7 @@ Creating tables/procedures requires DDL permissions on the configured database u
 
 ## Database availability check at startup
 
-`ScaleVoteBenchmark.Api` immediately tries to open a connection to the configured database (without executing a query) on every startup, before it starts accepting HTTP requests. Behavior on failure is selected via the `Startup:FailFastOnDbCheck` setting:
+`ScaleTrigger.Api` immediately tries to open a connection to the configured database (without executing a query) on every startup, before it starts accepting HTTP requests. Behavior on failure is selected via the `Startup:FailFastOnDbCheck` setting:
 
 - **`true` (default)** — the application stops immediately with a clear error in the console/log if the database is unavailable (wrong password, wrong server, closed firewall on Azure) or the schema check/bootstrap fails
 - **`false`** — the error is only written as a critical log entry, and the application keeps running; useful if you want the API to remain available (e.g. for a health-check endpoint) while the database is temporarily down
@@ -65,11 +65,11 @@ Without this check, an incorrect database configuration would otherwise go unnot
 
 ## Deploying via GitHub Actions
 
-The `.github/workflows/` folder contains the `deploy-api.yml` workflow, which builds and deploys `ScaleVoteBenchmark.Api` to Azure App Service, triggered on changes within `ScaleVoteBenchmark.Api/` or the workflow file itself.
+The `.github/workflows/` folder contains the `deploy-api.yml` workflow, which builds and deploys `ScaleTrigger.Api` to Azure App Service, triggered on changes within `ScaleTrigger.Api/` or the workflow file itself.
 
 ### Setup before running the workflow for the first time
 
-1. Create an Azure App Service resource (e.g. `scalevotebenchmark-api`), with the .NET 10 runtime
+1. Create an Azure App Service resource (e.g. `scaletrigger-api`), with the .NET 10 runtime
 2. In `deploy-api.yml`, replace `YOUR-API-APP-SERVICE-NAME` with the actual App Service resource name
 3. Download the *Publish Profile* (Azure Portal → App Service → "Get publish profile") and store it in the GitHub repository under **Settings → Secrets and variables → Actions** as `AZURE_WEBAPP_PUBLISH_PROFILE_API`
 
@@ -114,16 +114,16 @@ Not required for a fresh database - `EnsureSchemaAsync()` creates the schema aut
 Before the first run, make a copy of the template:
 
 ```bash
-cp ScaleVoteBenchmark.Api/appsettings.json.example ScaleVoteBenchmark.Api/appsettings.json
+cp ScaleTrigger.Api/appsettings.json.example ScaleTrigger.Api/appsettings.json
 ```
 
 The real `appsettings.json` file is intentionally in `.gitignore` (it contains connection strings and secrets), while `appsettings.json.example` stays under version control as a template.
 
-In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
+In `ScaleTrigger.Api/appsettings.json` you need to set:
 
 - `DatabaseProvider` — `"MsSql"`, `"MySql"`, `"PostgreSql"` or `"Sqlite"`, selects which repository implementation is used
 - `ConnectionStrings:MsSql`, `ConnectionStrings:MySql`, `ConnectionStrings:PostgreSql` and `ConnectionStrings:Sqlite` — connection strings/paths for all four (none of the others need to be valid, only the one matching the selected provider is used)
-- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote` and `Load:NetworkLatencyMillisecondsPerVote` — each is a `{ "Min": ..., "Max": ... }` object; a fresh random value in that inclusive range is picked for every vote (`Min == Max` gives a fixed value, same as before this became a range). The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleVoteBenchmark/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
+- `Load:CpuIterationsPerVote`, `Load:MemoryMegabytesPerVote`, `Load:DiskWriteKilobytesPerVote` and `Load:NetworkLatencyMillisecondsPerVote` — each is a `{ "Min": ..., "Max": ... }` object; a fresh random value in that inclusive range is picked for every vote (`Min == Max` gives a fixed value, same as before this became a range). The disk write goes to a uniquely-named temp file per call (`%TEMP%/ScaleTrigger/diskload` on Windows, the OS temp dir elsewhere), forced to disk with `FileOptions.WriteThrough` + `Flush(true)`, then deleted immediately - so concurrent votes don't contend on a shared file and nothing accumulates on disk over a long run. The network latency delay uses `Task.Delay` (non-blocking `await`), not a thread-blocking sleep, so it doesn't tie up a request thread while "waiting" - the same way a real async call to a downstream service would behave, and without artificially capping how much concurrent load the app can take
 - `Cache:Enabled` — `true` (default) enables the MemoryCache for the voting report; `false` disables caching so every `GET /api/vote/report` goes straight to the database (useful when benchmarking database load alone, without cache influence)
 - `Auth:Enabled` — `false` (default) leaves `POST /api/vote/add` reachable without a token; `true` requires a JWT there
 - `Jwt:Key` — signing key, at least 32 characters; defaults to a plain sequential placeholder (`abcdefghijklmnopqrstuvwxyz012345`) since this is a stress-test tool with no real secrets to protect - replace it if that ever stops being true
@@ -132,7 +132,7 @@ In `ScaleVoteBenchmark.Api/appsettings.json` you need to set:
 ## Running
 
 ```bash
-cd ScaleVoteBenchmark.Api
+cd ScaleTrigger.Api
 dotnet run
 ```
 
