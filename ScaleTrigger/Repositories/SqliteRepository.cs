@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using ScaleTrigger.Interfaces;
 using ScaleTrigger.Models;
@@ -54,9 +55,41 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload)
+        /// <summary>
+        /// Simulates CPU load inside the database engine itself (as
+        /// opposed to CpuIterationsPerVote, which runs in the application
+        /// before VoteAddAsync is even called). SQLite has neither stored
+        /// procedures nor a built-in hash function, so this registers a
+        /// SHA-256 scalar function on the connection and chains it
+        /// "iterations" times via a recursive CTE - the closest
+        /// equivalent available to a hashing loop inside a stored
+        /// procedure. The actual hashing still runs as .NET code, but
+        /// dispatched from and driven by the SQL engine, matching how the
+        /// other three providers do it inside VoteAdd.
+        /// </summary>
+        private static async Task RunHashLoopAsync(SqliteConnection connection, int iterations)
+        {
+            connection.CreateFunction("sha2_256", (byte[] data) => SHA256.HashData(data));
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "WITH RECURSIVE hash_chain(i, h) AS (" +
+                "  SELECT 1, sha2_256(randomblob(32)) " +
+                "  UNION ALL " +
+                "  SELECT i + 1, sha2_256(h) FROM hash_chain WHERE i < $iterations" +
+                ") SELECT h FROM hash_chain ORDER BY i DESC LIMIT 1;";
+            cmd.Parameters.AddWithValue("$iterations", iterations);
+            await cmd.ExecuteScalarAsync();
+        }
+
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
+
+            if (hashIterations > 0)
+            {
+                await RunHashLoopAsync(connection, hashIterations);
+            }
 
             long newIdVote;
             using (var cmd = connection.CreateCommand())

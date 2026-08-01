@@ -21,12 +21,12 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "CALL vote_add(@option, @payload)";
+            cmd.CommandText = "CALL vote_add(@option, @payload, @hashIterations)";
             cmd.Parameters.AddWithValue("option", option);
 
             // AddWithValue can't infer a Postgres type from a bare
@@ -35,6 +35,8 @@ namespace ScaleTrigger.Repositories
             {
                 Value = (object?)payload ?? DBNull.Value
             });
+
+            cmd.Parameters.AddWithValue("hashIterations", hashIterations);
 
             await cmd.ExecuteNonQueryAsync();
         }

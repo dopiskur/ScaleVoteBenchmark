@@ -18,7 +18,8 @@ namespace ScaleTrigger.Controllers
             "MemoryMegabytesPerVote",
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
-            "PayloadBytesPerVote"
+            "PayloadBytesPerVote",
+            "DbHashIterationsPerVote"
         };
 
         private readonly RepoFactory repoFactory;

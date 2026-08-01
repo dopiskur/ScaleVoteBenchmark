@@ -15,9 +15,14 @@ namespace ScaleTrigger.Interfaces
         /// into the Payload table (a BLOB column) linked to the new vote,
         /// used to benchmark write throughput with a variable-size blob
         /// attached to the vote. Callers should pass null (not an empty
-        /// array) to skip the payload insert entirely.
+        /// array) to skip the payload insert entirely. hashIterations, if
+        /// greater than 0, runs that many chained hash computations
+        /// inside the database engine itself before the insert, to
+        /// simulate CPU load on the database (as opposed to
+        /// LoadSimulator.SimulateCpuLoad, which simulates it in the
+        /// application) - 0 skips this entirely and just inserts.
         /// </summary>
-        Task VoteAddAsync(string option, byte[]? payload);
+        Task VoteAddAsync(string option, byte[]? payload, int hashIterations);
 
         /// <summary>
         /// Returns the vote report (counts and percentages per option),

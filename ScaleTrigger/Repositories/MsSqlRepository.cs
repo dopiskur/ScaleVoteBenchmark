@@ -51,7 +51,7 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
@@ -65,6 +65,8 @@ namespace ScaleTrigger.Repositories
             {
                 Value = (object?)payload ?? DBNull.Value
             });
+
+            cmd.Parameters.AddWithValue("@HashIterations", hashIterations);
 
             await cmd.ExecuteNonQueryAsync();
         }

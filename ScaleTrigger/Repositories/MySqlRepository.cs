@@ -20,7 +20,7 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = new MySqlConnection(connectionString);
             await connection.OpenAsync();
@@ -35,6 +35,8 @@ namespace ScaleTrigger.Repositories
             {
                 Value = (object?)payload ?? DBNull.Value
             });
+
+            cmd.Parameters.AddWithValue("pHashIterations", hashIterations);
 
             await cmd.ExecuteNonQueryAsync();
         }

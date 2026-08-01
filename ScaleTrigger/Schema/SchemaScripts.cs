@@ -32,11 +32,26 @@ namespace ScaleTrigger.Schema
 );",
 
             @"CREATE PROCEDURE dbo.VoteAdd
-    @Option  VARCHAR(10),
-    @Payload VARBINARY(MAX) = NULL
+    @Option         VARCHAR(10),
+    @Payload        VARBINARY(MAX) = NULL,
+    @HashIterations INT            = 0
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- Simulates CPU load inside the database engine itself (as opposed
+    -- to CpuIterationsPerVote, which runs in the application before this
+    -- procedure is even called). 0 = skip entirely, just insert.
+    IF @HashIterations > 0
+    BEGIN
+        DECLARE @HashState VARBINARY(32) = HASHBYTES('SHA2_256', CAST(NEWID() AS VARBINARY(16)));
+        DECLARE @i INT = 0;
+        WHILE @i < @HashIterations
+        BEGIN
+            SET @HashState = HASHBYTES('SHA2_256', @HashState);
+            SET @i += 1;
+        END
+    END
 
     INSERT INTO dbo.Vote ([Option], DateCreated)
     VALUES (@Option, SYSUTCDATETIME());
@@ -101,9 +116,24 @@ END",
 
             @"CREATE PROCEDURE `VoteAdd`(
     IN pOption VARCHAR(10),
-    IN pPayload LONGBLOB
+    IN pPayload LONGBLOB,
+    IN pHashIterations INT
 )
 BEGIN
+    DECLARE hashState CHAR(64);
+    DECLARE i INT DEFAULT 0;
+
+    -- Simulates CPU load inside the database engine itself (as opposed
+    -- to CpuIterationsPerVote, which runs in the application before this
+    -- procedure is even called). 0 = skip entirely, just insert.
+    IF pHashIterations > 0 THEN
+        SET hashState = SHA2(UUID(), 256);
+        WHILE i < pHashIterations DO
+            SET hashState = SHA2(hashState, 256);
+            SET i = i + 1;
+        END WHILE;
+    END IF;
+
     INSERT INTO `Vote` (`Option`, `DateCreated`)
     VALUES (pOption, UTC_TIMESTAMP());
 
@@ -152,12 +182,24 @@ END",
     date_created TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );",
 
-            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL)
+            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_hash_iterations INT DEFAULT 0)
 LANGUAGE plpgsql
 AS $$
 DECLARE
     new_id_vote BIGINT;
+    hash_state  BYTEA;
+    i           INT;
 BEGIN
+    -- Simulates CPU load inside the database engine itself (as opposed
+    -- to CpuIterationsPerVote, which runs in the application before this
+    -- procedure is even called). 0 = skip entirely, just insert.
+    IF p_hash_iterations > 0 THEN
+        hash_state := sha256(convert_to(p_option || clock_timestamp()::TEXT, 'UTF8'));
+        FOR i IN 1..p_hash_iterations LOOP
+            hash_state := sha256(hash_state);
+        END LOOP;
+    END IF;
+
     INSERT INTO vote (option, date_created)
     VALUES (p_option, now() AT TIME ZONE 'utc')
     RETURNING id_vote INTO new_id_vote;

@@ -182,6 +182,25 @@
     margin: 0 0 16px;
   }
 
+  .group-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 0 0 2px;
+  }
+
+  .group-title:not(:first-child) {
+    margin-top: 20px;
+  }
+
+  .group-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+
   .loadconfig-row {
     display: grid;
     grid-template-columns: 1fr 90px 90px;
@@ -281,16 +300,28 @@
 
     <button class="cleanup-btn" id="cleanup-btn" type="button">Database cleanup</button>
 
-    <p class="section-title">Load configuration</p>
+    <p class="section-title">Configuration</p>
     <p class="section-subtitle">Per-vote intensity ranges. Edit and save to apply without restarting the app (within one ConfigRefresh interval).</p>
 
     <div class="card">
+      <p class="group-title">Application</p>
+      <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
       <div class="loadconfig-row">
         <span class="loadconfig-col-heading">Setting</span>
         <span class="loadconfig-col-heading">Min</span>
         <span class="loadconfig-col-heading">Max</span>
       </div>
-      <div id="loadconfig-rows"></div>
+      <div id="loadconfig-rows-application"></div>
+
+      <p class="group-title">Database</p>
+      <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
+      <div class="loadconfig-row">
+        <span class="loadconfig-col-heading">Setting</span>
+        <span class="loadconfig-col-heading">Min</span>
+        <span class="loadconfig-col-heading">Max</span>
+      </div>
+      <div id="loadconfig-rows-database"></div>
+
       <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
       <p class="status" id="loadconfig-status"></p>
     </div>
@@ -390,22 +421,27 @@
     setInterval(refresh, 4000);
 
     const LOAD_CONFIG_LABELS = {
-      CpuIterationsPerVote: { label: 'CPU', unit: 'hash iterations' },
-      MemoryMegabytesPerVote: { label: 'Memory', unit: 'MB' },
-      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB' },
-      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms' },
-      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes' }
+      CpuIterationsPerVote: { label: 'CPU', unit: 'hash iterations', group: 'application' },
+      MemoryMegabytesPerVote: { label: 'Memory', unit: 'MB', group: 'application' },
+      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
+      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application' },
+      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database' },
+      DbHashIterationsPerVote: { label: 'CPU', unit: 'hash iterations', group: 'database' }
     };
 
-    const loadConfigRowsEl = document.getElementById('loadconfig-rows');
+    const loadConfigRowsEls = {
+      application: document.getElementById('loadconfig-rows-application'),
+      database: document.getElementById('loadconfig-rows-database')
+    };
     const loadConfigSaveBtn = document.getElementById('loadconfig-save-btn');
     const loadConfigStatusEl = document.getElementById('loadconfig-status');
 
     function renderLoadConfig(settings) {
-      loadConfigRowsEl.innerHTML = '';
+      loadConfigRowsEls.application.innerHTML = '';
+      loadConfigRowsEls.database.innerHTML = '';
 
       for (const setting of settings) {
-        const info = LOAD_CONFIG_LABELS[setting.settingName] || { label: setting.settingName, unit: '' };
+        const info = LOAD_CONFIG_LABELS[setting.settingName] || { label: setting.settingName, unit: '', group: 'application' };
 
         const row = document.createElement('div');
         row.className = 'loadconfig-row';
@@ -438,7 +474,7 @@
         row.appendChild(labelCell);
         row.appendChild(minInput);
         row.appendChild(maxInput);
-        loadConfigRowsEl.appendChild(row);
+        loadConfigRowsEls[info.group].appendChild(row);
       }
     }
 
@@ -455,7 +491,11 @@
     }
 
     loadConfigSaveBtn.addEventListener('click', async () => {
-      const settings = [...loadConfigRowsEl.querySelectorAll('.loadconfig-row')].map(row => ({
+      const rows = [
+        ...loadConfigRowsEls.application.querySelectorAll('.loadconfig-row'),
+        ...loadConfigRowsEls.database.querySelectorAll('.loadconfig-row')
+      ];
+      const settings = rows.map(row => ({
         settingName: row.dataset.settingName,
         min: Number(row.querySelector('[data-field="min"]').value),
         max: Number(row.querySelector('[data-field="max"]').value)

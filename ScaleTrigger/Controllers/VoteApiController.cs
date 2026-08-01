@@ -27,13 +27,17 @@ namespace ScaleTrigger.Controllers
         /// load-generation script exercises token validation as part of
         /// the benchmark, not just the vote write itself. Before writing
         /// to the database, simulated CPU, memory, disk write and network
-        /// latency load is executed - each intensity is picked fresh, at
-        /// random, from the Min/Max range currently in LoadConfigCache
-        /// (a fixed value is just a range where Min equals Max). If
-        /// PayloadBytesPerVote resolves to 0 for this vote, no payload
-        /// row is inserted at all - a non-zero value generates that many
+        /// latency load is executed in the application itself - each
+        /// intensity is picked fresh, at random, from the Min/Max range
+        /// currently in LoadConfigCache (a fixed value is just a range
+        /// where Min equals Max). PayloadBytesPerVote and
+        /// DbHashIterationsPerVote instead simulate load inside the
+        /// database: a non-zero PayloadBytesPerVote generates that many
         /// random bytes and inserts them into the Payload table alongside
-        /// the vote, to benchmark blob write throughput.
+        /// the vote (blob write throughput); a non-zero
+        /// DbHashIterationsPerVote makes VoteAdd itself run that many
+        /// chained hash computations before the insert (database CPU
+        /// load) - see IRepository.VoteAddAsync.
         /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
@@ -49,6 +53,7 @@ namespace ScaleTrigger.Controllers
             int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
             int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
+            int dbHashIterations = RandomizedLoadValue("DbHashIterationsPerVote");
 
             LoadSimulator.SimulateCpuLoad(cpuIterations);
             LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
@@ -62,7 +67,7 @@ namespace ScaleTrigger.Controllers
                 Random.Shared.NextBytes(payload);
             }
 
-            await repoFactory.GetRepo().VoteAddAsync(option, payload);
+            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbHashIterations);
 
             // Invalidate the cached report after a new vote
             repoFactory.GetCache().RemoveItem(ReportCacheKey);

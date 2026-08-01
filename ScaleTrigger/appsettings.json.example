@@ -46,7 +46,9 @@
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
     "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",
-    "PayloadBytesPerVote": { "Min": 0, "Max": 0 }
+    "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
+    "// DbHashIterationsPerVote": "0 = VoteAdd just inserts, no hash loop. Runs inside the database engine itself (unlike CpuIterationsPerVote, which runs in the app) - simulates database-side CPU load.",
+    "DbHashIterationsPerVote": { "Min": 0, "Max": 0 }
   },
 
   "Jwt": {

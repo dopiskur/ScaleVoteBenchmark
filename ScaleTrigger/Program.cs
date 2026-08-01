@@ -129,6 +129,7 @@ var app = builder.Build();
             ReadLoadDefault("DiskWriteKilobytesPerVote"),
             ReadLoadDefault("NetworkLatencyMillisecondsPerVote"),
             ReadLoadDefault("PayloadBytesPerVote"),
+            ReadLoadDefault("DbHashIterationsPerVote"),
         };
         await repo.LoadConfigEnsureSeededAsync(loadDefaults);
 
