@@ -326,24 +326,15 @@
         </div>
 
         <div class="card">
-          <p class="section-title">Node Benchmark</p>
+          <p class="section-title">Node benchmark</p>
 
           <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
           <div id="hw-rows"></div>
 
           <p class="group-title">Results</p>
-          <p class="group-subtitle">Median of repeated measurements.</p>
           <div class="bench-row"><span class="loadconfig-label">CPU</span><span class="bench-value" id="bench-cpu">—</span></div>
           <div class="bench-row"><span class="loadconfig-label">Memory</span><span class="bench-value" id="bench-memory">—</span></div>
           <div class="bench-row"><span class="loadconfig-label">Disk</span><span class="bench-value" id="bench-disk">—</span></div>
-
-          <div class="config-actions">
-            <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
-          </div>
-          <p class="status" id="benchmark-status"></p>
-
-          <p class="group-title">Recommended CpuIterationsPerVote</p>
-          <p class="group-subtitle">maxPrime_ceiling = R_total × S_other / (N − c); maxPrime_floor = 0.1 × maxPrime_ceiling. Needs the CPU benchmark above and the CPU overhead calibration below.</p>
 
           <div class="loadconfig-row loadconfig-row--single">
             <span class="loadconfig-label">Concurrent votes (N)</span>
@@ -353,10 +344,10 @@
           <div class="bench-row"><span class="loadconfig-label">Recommended Min (floor)</span><span class="bench-value" id="recommend-min">—</span></div>
 
           <div class="config-actions">
-            <button class="save-btn" id="calibrate-btn" type="button">Calibrate CPU overhead</button>
+            <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
             <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
           </div>
-          <p class="status" id="calibrate-status"></p>
+          <p class="status" id="benchmark-status"></p>
         </div>
       </div>
     </div>
@@ -692,14 +683,12 @@
     const recommendNInput = document.getElementById('recommend-n-input');
     const recommendMaxEl = document.getElementById('recommend-max');
     const recommendMinEl = document.getElementById('recommend-min');
-    const calibrateBtn = document.getElementById('calibrate-btn');
-    const calibrateStatusEl = document.getElementById('calibrate-status');
 
     // R_total (aggregate numbers/s from the CPU benchmark), c (logical
     // processors) and S_other (measured network+DB overhead per vote, in
     // seconds) - all three are needed before a recommendation can be shown;
-    // null until the benchmark/hardware/calibration that produces each one
-    // has actually run at least once.
+    // null until "Run benchmark" (which measures all three in one go - see
+    // its click handler below) has actually run at least once.
     let cpuNumbersPerSecondValue = null;
     let processorCountValue = null;
     let sOtherSecondsValue = null;
@@ -762,8 +751,7 @@
 
       const rows = [
         ['Environment', hw.environment],
-        ['CPU', hw.cpu],
-        ['Logical processors', hw.processorCount],
+        ['CPU', hw.cpu + ', Logic CPU ' + hw.processorCount],
         ['RAM', hw.totalMemoryMb.toLocaleString() + ' MB'],
         ['Disk', hw.diskTotalGb + ' GB']
       ];
@@ -803,89 +791,36 @@
       }
     }
 
+    // Run benchmark does two things back to back: the CPU/memory/disk
+    // hardware benchmark, then an automatic S_other measurement (network+DB
+    // overhead per vote, excluding CPU work) - briefly forcing
+    // CpuIterationsPerVote AND DbCpuIterationsPerVote down to near-zero
+    // values, timing a handful of real votes client-side, then restoring
+    // both original settings, always, even if something above fails, so a
+    // broken run can't leave live load-testing traffic stuck at the
+    // near-zero values. DbCpuIterationsPerVote is zeroed too (not just
+    // measured around) because this measurement is scoped to CPU overhead
+    // only - the database's own artificial CPU load must not be baked into
+    // S_other, or the CpuIterationsPerVote recommendation would be skewed by
+    // an unrelated database setting. Folding both steps into one click means
+    // a recommendation is ready the moment the benchmark finishes, with no
+    // separate manual calibration step.
     benchmarkBtn.addEventListener('click', async () => {
-      benchmarkBtn.disabled = true;
-      benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
-      benchCpuEl.textContent = '—';
-      benchMemoryEl.textContent = '—';
-      benchDiskEl.textContent = '—';
-
-      try {
-        // Only prompts for login if the API comes back 401.
-        let response = await fetch('/api/nodebenchmark/run', { method: 'POST' });
-
-        if (response.status === 401) {
-          const username = prompt('Admin username:');
-          if (username === null) {
-            benchmarkStatusEl.textContent = '';
-            return;
-          }
-          const password = prompt('Admin password:');
-          if (password === null) {
-            benchmarkStatusEl.textContent = '';
-            return;
-          }
-
-          const loginResponse = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          if (!loginResponse.ok) {
-            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-          }
-          const { token } = await loginResponse.json();
-
-          benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
-          response = await fetch('/api/nodebenchmark/run', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
-        }
-
-        if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
-        }
-
-        const result = await response.json();
-        benchCpuEl.textContent = Math.round(result.cpuNumbersPerSecond).toLocaleString() + ' numbers/s';
-        benchMemoryEl.textContent = result.memoryMbPerSecond.toFixed(1) + ' MB/s';
-        benchDiskEl.textContent = result.diskMbPerSecond.toFixed(1) + ' MB/s';
-        benchmarkStatusEl.textContent = 'Done.';
-        cpuNumbersPerSecondValue = result.cpuNumbersPerSecond;
-        recomputeRecommendation();
-      } catch (err) {
-        benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
-      } finally {
-        benchmarkBtn.disabled = false;
-      }
-    });
-
-    // Measures S_other (network+DB overhead per vote, excluding CPU work) by
-    // briefly forcing CpuIterationsPerVote AND DbCpuIterationsPerVote down to
-    // near-zero values, timing a handful of real votes client-side, then
-    // restoring both original settings - always, even if something above
-    // fails, so a broken calibration run can't leave live load-testing
-    // traffic stuck at the near-zero values. DbCpuIterationsPerVote is
-    // zeroed too (not just measured around) because this calibration is
-    // scoped to CPU overhead only - the database's own artificial CPU load
-    // must not be baked into S_other, or the CpuIterationsPerVote
-    // recommendation would be skewed by an unrelated database setting.
-    calibrateBtn.addEventListener('click', async () => {
-      if (!confirm('This briefly sets CpuIterationsPerVote and DbCpuIterationsPerVote to near-zero values and sends 8 real votes to the database to measure non-CPU overhead, then restores both original settings. Continue?')) {
-        return;
-      }
-
       const CALIBRATION_VOTES = 8;
       const CALIBRATION_MAX_PRIME = 500;
       const CALIBRATION_DB_MAX_PRIME = 0;
 
-      calibrateBtn.disabled = true;
-      calibrateStatusEl.textContent = 'Calibrating…';
+      benchmarkBtn.disabled = true;
+      benchCpuEl.textContent = '—';
+      benchMemoryEl.textContent = '—';
+      benchDiskEl.textContent = '—';
+      cpuNumbersPerSecondValue = null;
+      sOtherSecondsValue = null;
+      recomputeRecommendation();
 
       // Scoped to this run: obtained on the first 401 (if Auth:Enabled),
       // then reused for every remaining call so the login prompt only
-      // appears once instead of once per vote.
+      // appears once instead of once per request.
       let authToken = null;
       let authAttempted = false;
 
@@ -928,6 +863,20 @@
       let originalDbCpuSetting = null;
 
       try {
+        benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
+        const response = await authorizedFetch('/api/nodebenchmark/run', { method: 'POST' });
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const result = await response.json();
+        benchCpuEl.textContent = Math.round(result.cpuNumbersPerSecond).toLocaleString() + ' numbers/s';
+        benchMemoryEl.textContent = result.memoryMbPerSecond.toFixed(1) + ' MB/s';
+        benchDiskEl.textContent = result.diskMbPerSecond.toFixed(1) + ' MB/s';
+        cpuNumbersPerSecondValue = result.cpuNumbersPerSecond;
+
+        benchmarkStatusEl.textContent = 'Measuring vote overhead…';
+
         const currentSettings = await (await fetch('/api/loadconfig', { cache: 'no-store' })).json();
         originalCpuSetting = currentSettings.find(s => s.settingName === 'CpuIterationsPerVote') || { min: 0, max: 0 };
         originalDbCpuSetting = currentSettings.find(s => s.settingName === 'DbCpuIterationsPerVote') || { min: 0, max: 0 };
@@ -960,10 +909,10 @@
         }
 
         sOtherSecondsValue = median(samplesSeconds);
-        calibrateStatusEl.textContent = 'Calibrated: ' + (sOtherSecondsValue * 1000).toFixed(1) + ' ms/vote overhead (' + samplesSeconds.length + '/' + CALIBRATION_VOTES + ' votes).';
         recomputeRecommendation();
+        benchmarkStatusEl.textContent = 'Done.';
       } catch (err) {
-        calibrateStatusEl.textContent = 'Calibration failed (' + err.message + ').';
+        benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
       } finally {
         if (originalCpuSetting && originalDbCpuSetting) {
           try {
@@ -979,10 +928,10 @@
               throw new Error('HTTP ' + restoreResponse.status);
             }
           } catch (restoreErr) {
-            calibrateStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote/DbCpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
+            benchmarkStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote/DbCpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
           }
         }
-        calibrateBtn.disabled = false;
+        benchmarkBtn.disabled = false;
       }
     });
 
@@ -990,19 +939,19 @@
 
     setRecommendedBtn.addEventListener('click', () => {
       if (recommendedMaxValue == null || recommendedMinValue == null) {
-        calibrateStatusEl.textContent = 'Run the CPU benchmark and calibrate CPU overhead first.';
+        benchmarkStatusEl.textContent = 'Run the benchmark first.';
         return;
       }
 
       const cpuRow = loadConfigRowsEls.application.querySelector('[data-setting-name="CpuIterationsPerVote"]');
       if (!cpuRow) {
-        calibrateStatusEl.textContent = 'CPU setting not loaded yet - try again in a moment.';
+        benchmarkStatusEl.textContent = 'CPU setting not loaded yet - try again in a moment.';
         return;
       }
 
       cpuRow.querySelector('[data-field="min"]').value = Math.round(recommendedMinValue);
       cpuRow.querySelector('[data-field="max"]').value = Math.round(recommendedMaxValue);
-      calibrateStatusEl.textContent = 'Applied to CPU Min/Max above - click "Save changes" to persist.';
+      benchmarkStatusEl.textContent = 'Applied to CPU Min/Max above - click "Save changes" to persist.';
     });
 
     loadHardwareInfo();
