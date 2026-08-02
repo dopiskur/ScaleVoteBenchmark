@@ -106,6 +106,8 @@ There is no separate SQL file to run manually. `EnsureSchemaAsync()` creates the
 
 Creating tables/procedures requires DDL permissions on the configured database user. If the user only has DML rights, `EnsureSchemaAsync()` fails, and that failure follows `Startup:FailFastOnDbCheck` the same way a connection failure would.
 
+PostgreSQL additionally runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` as part of provisioning (the database-side CPU burn's SHA-512 hashing uses pgcrypto's `digest()`), which needs a role with the privilege to create extensions — usually superuser, though most managed offerings (e.g. Azure Database for PostgreSQL) grant it via a dedicated admin role instead.
+
 ## API endpoints
 
 | Endpoint | Auth | Purpose |
