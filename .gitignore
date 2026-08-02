@@ -9,6 +9,9 @@ obj/
 .idea/
 .vscode/
 
+## Claude Code - personal local overrides, not shared project config
+.claude/settings.local.json
+
 ## appsettings s tajnama - lokalne verzije se ne commitaju
 ## Predlošci (appsettings.json.example) ostaju trackani, stvarne datoteke ne.
 appsettings.json
