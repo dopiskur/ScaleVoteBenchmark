@@ -11,9 +11,29 @@ Every `POST /api/vote/add?option=yes|no` call:
 1. Records a vote in the database.
 2. Burns a controllable, randomized amount of CPU, memory, disk I/O, and network latency — the actual point of the benchmark.
 
-The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). Unlike a typical `appsettings.json` setting, these ranges live in the database (`LoadConfig` table) and can be changed **while the app is running** — from the dashboard or via `POST /api/loadconfig` — without a restart or redeploy. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, it's the database that's authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s).
+The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table) and can be changed **while the app is under live traffic** — from the dashboard or via `POST /api/loadconfig` — with no restart, no redeploy, and no gap in the request stream. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it — traffic never stops flowing while you do it.
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns yes/no counts and percentages fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
+
+## Why not just use Chaos Studio / AWS FIS / Chaos Mesh / stress-ng?
+
+Those are legitimate, more mature tools for the general "put CPU/memory pressure on something" problem, and worth knowing about:
+
+- **Azure Chaos Studio** — agent-based CPU Pressure / Memory Pressure faults directly on a VM/VMSS, no target application needed, can even orchestrate an Azure Load Testing run as part of the same experiment.
+- **AWS Fault Injection Simulator** — the same idea for EC2/ECS/EKS, with direct Chaos Mesh/Litmus integration for Kubernetes.
+- **Chaos Mesh** — `StressChaos`, cloud-agnostic, works on any Kubernetes cluster.
+- **stress-ng** — the simplest option of all: a container that just burns resources on demand.
+
+All of them are managed or well-established, and none of them require writing or maintaining a custom app. But they share a mechanism that's fundamentally different from what ScaleTrigger does: **intensity is a property of the experiment, decided before or between runs, not something you change mid-stream.**
+
+- Chaos Studio / AWS FIS: change the level → define or launch a new experiment (or a pre-scripted sequence of steps, decided in advance).
+- Chaos Mesh: change the level → edit the CRD and `kubectl apply` it again.
+- stress-ng: change the level → kill the process and restart it with new flags.
+- k6 / Locust / Azure Load Testing: don't control per-request resource cost at all — they control requests per second; what each request costs server-side is entirely up to the target app.
+
+None of them offer a live dial you can turn while traffic keeps flowing and watch the very next request pick up the new value. That's specifically what ScaleTrigger's `LoadConfig` table + dashboard does. It also means the load is exercised as real HTTP traffic through your actual routing/ingress/load balancer path, not injected directly at the VM/pod level — relevant if what you're validating is a scaler that reacts to request rate or concurrency rather than raw CPU%, which Chaos Studio's agent-based faults don't exercise on their own.
+
+None of this makes ScaleTrigger a replacement for those tools — for infrastructure-level fault injection (killing instances, network faults, service failures) it does nothing at all, and for a one-off "just burn 80% CPU for five minutes" test, stress-ng is simpler and needs zero custom code. Use ScaleTrigger specifically when you want to sweep or fine-tune a request-driven load profile live, without interrupting the traffic that's already hitting the trigger you're testing.
 
 ## Quickstart
 
@@ -91,13 +111,13 @@ Creating tables/procedures requires DDL permissions on the configured database u
 | `POST /api/vote/reset` | optional | Drops and recreates the schema — database ends up looking brand new |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password" }` → `{ "token" }` |
 | `GET /api/loadconfig` | anonymous | Current `Load:*` ranges as stored in the database |
-| `POST /api/loadconfig` | optional | Updates one or more `Load:*` ranges, takes effect within `Load:ConfigRefresh` seconds |
+| `POST /api/loadconfig` | optional | Updates one or more `Load:*` ranges live — see "How it works" |
 | `GET /api/nodebenchmark/hardware` | anonymous | Detects the hosting environment (Azure App Service/Container Apps, AWS ECS/EC2, Kubernetes, generic Docker, bare metal) and reports CPU/memory/disk |
 | `POST /api/nodebenchmark/run` | optional | Runs a one-off CPU/memory/disk saturation benchmark on the current node (~20s by default) |
 
 ## Dashboard
 
-A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`) — no separate frontend project. It shows the live Yes/No split (polling `GET /api/vote/report`), lets you edit `LoadConfig` ranges live, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
+A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`) — no separate frontend project. It shows the live Yes/No split (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
 
 ## Generating load
 
@@ -110,6 +130,8 @@ ScaleTrigger doesn't generate its own traffic — point one of these at it. All 
 | `scaleTriggerLoad.py` | Legacy option, kept for one specific reason: it targets an **exact votes-per-second rate** regardless of API latency (via a scheduled async loop), which neither k6's arrival-rate executor nor Locust's user-based model guarantee as precisely. Use this if you need to say "the trigger fired at exactly N votes/s" rather than an approximate rate. |
 
 See the header comment in each script for full usage examples and parameters (`--url`/`URL`, `--votes`/`VOTES`, `--ramp`/`RAMP`, etc. — parameter names differ slightly per tool but map to the same concepts).
+
+While a load-test script drives the request rate, the `LoadConfig` dashboard/API drives what each of those requests costs server-side — the two are independent knobs, and both can be turned during the same run.
 
 ## Deploying via GitHub Actions
 
