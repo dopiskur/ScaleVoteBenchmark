@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+.git/
+.github/
+
+# Secrets and local databases - never belong in a built image.
+ScaleTrigger/appsettings.json
+ScaleTrigger/appsettings.Development.json
+ScaleTrigger/appsettings.Local.json
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+**/__pycache__/
+**/*.pyc

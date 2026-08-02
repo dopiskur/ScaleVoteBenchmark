@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scaletrigger
+      POSTGRES_PASSWORD: scaletrigger
+      POSTGRES_DB: scaletrigger
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scaletrigger -d scaletrigger"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  scaletrigger:
+    build: .
+    container_name: scaletrigger
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DatabaseProvider: PostgreSql
+      # Fine for this local/dev stack, where the password only ever
+      # travels over the compose network - replace before using anything
+      # resembling this setup beyond a laptop.
+      ConnectionStrings__PostgreSql: "Server=postgres;Port=5432;Database=scaletrigger;User Id=scaletrigger;Password=scaletrigger;SSL Mode=Disable;"
+      Startup__FailFastOnDbCheck: "true"
+      Auth__Enabled: "false"
+      Jwt__Key: "abcdefghijklmnopqrstuvwxyz012345"
+      Jwt__Issuer: "ScaleTrigger"
+      Jwt__Audience: "ScaleTrigger.Clients"
+      Jwt__ExpirationMinutes: "60"
+      AdminUser__Username: "admin"
+      AdminUser__Password: "admin"
+      Cache__Enabled: "true"
+      Cache__SlidingExpirationMinutes: "5"
+
+volumes:
+  postgres-data:

@@ -1,12 +1,113 @@
 # ScaleTrigger
 
+## Quickstart
+
+Zero manual configuration, no Azure account needed - runs entirely in Docker with PostgreSQL as the database. From a clone of this repo:
+
+### 1. Start the stack
+
+```bash
+docker compose up -d --build
+```
+
+First run takes a minute or two (image build + Postgres image pull); the `scaletrigger` container waits for Postgres to report healthy before starting. Watch it come up:
+
+```bash
+docker compose logs -f scaletrigger
+```
+
+Once you see `Application started.`, confirm it's reachable:
+
+```bash
+curl -s http://localhost:8080/api/vote/report
+# {"yes":0,"no":0,"total":0,"yesPercent":0,"noPercent":0,"payloadCount":0,"payloadTotalBytes":0}
+```
+
+Prefer SQLite over PostgreSQL? Skip `docker compose` entirely:
+
+```bash
+docker build -t scaletrigger .
+docker run -d --name scaletrigger -p 8080:8080 \
+  -e DatabaseProvider=Sqlite \
+  -e ConnectionStrings__Sqlite="Data Source=/data/scaletrigger.db" \
+  -e Jwt__Key=abcdefghijklmnopqrstuvwxyz012345 \
+  -e Jwt__Issuer=ScaleTrigger -e Jwt__Audience=ScaleTrigger.Clients \
+  -e Auth__Enabled=false \
+  -v scaletrigger-data:/data \
+  scaletrigger
+```
+
+Everything below works identically either way.
+
+### 2. Benchmark this node's CPU
+
+```bash
+curl -s -X POST http://localhost:8080/api/nodebenchmark/run
+```
+
+Takes about 25 seconds (CPU, then memory, then disk, in that order). The response looks like:
+
+```json
+{
+  "hardware": { "environment": "Container", "cpu": "8 vCPUs", "processorCount": 8, "totalMemoryMb": 8192, "diskTotalGb": 58.0 },
+  "cpuNumbersPerSecond": 8123456.0,
+  "memoryMbPerSecond": 4210.3,
+  "diskMbPerSecond": 512.7
+}
+```
+
+`cpuNumbersPerSecond` (call it **R**) is the throughput of the exact same prime-counting algorithm that `CpuIterationsPerVote` runs per vote (see "Node hardware benchmark" below) - same unit, so it converts directly into a `CpuIterationsPerVote` recommendation, no extra benchmarking needed.
+
+### 3. Size CpuIterationsPerVote for ~70% CPU at your target rate
+
+Pick a target votes/sec (**V**) - this walkthrough uses 20. For ~70% CPU utilization at that rate:
+
+```
+Max = R × 0.7 / V
+Min = Max × 0.1        (same 10% floor the dashboard's own "Recommended CpuIterationsPerVote" calculator uses)
+```
+
+With R = 8,123,456 and V = 20: `Max = 8,123,456 × 0.7 / 20 ≈ 284,321`, `Min ≈ 28,432`. Apply it (replace with your own R and V):
+
+```bash
+curl -s -X POST http://localhost:8080/api/loadconfig \
+  -H "Content-Type: application/json" \
+  -d '[{"settingName":"CpuIterationsPerVote","min":28432,"max":284321}]'
+```
+
+(Once real votes are flowing, the dashboard's "Node Benchmark" card can compute and apply this same Min/Max for you - "Run benchmark" measures R and the per-vote network/DB overhead together, then "Set recommended" writes the result straight into Configuration.)
+
+### 4. Generate load
+
+```bash
+python scripts/scaleTriggerLoad.py --url http://localhost:8080 --votes 20 --duration 30
+```
+
+(Installs `aiohttp` on first run if it's missing.) While it runs, watch actual CPU land near the 70% target:
+
+```bash
+docker stats scaletrigger
+```
+
+### 5. See the results
+
+Open [http://localhost:8080](http://localhost:8080) for the live dashboard (vote count, payload size, node benchmark), or pull the numbers directly:
+
+```bash
+curl -s http://localhost:8080/api/vote/report
+```
+
+---
+
+The rest of this document covers every database provider, JWT auth, deploying to Azure App Service, and every setting in detail.
+
 The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
 The solution contains a single project, **ScaleTrigger** — a REST API that issues and validates JWT tokens, is the only component that talks to the database, and contains the models, repositories (MSSQL, MySQL, PostgreSQL and SQLite), caching, and load simulation.
 
 The application is used purely as an API that an external load-generation script calls directly (e.g. `POST /api/vote/add?option=yes` or `?option=no`, chosen randomly per call). Each call writes a vote to the database and, along the way, generates artificial CPU, memory, disk write and network latency load — that's the purpose of the benchmark. Each load type's intensity is a `Min`/`Max` range held in the `LoadConfig` database table (see "Live-tunable load intensity" below), and a fresh random value within that range is picked for every vote; use `Min == Max` for a fixed value. Results can be read as statistics directly from the database or via `GET /api/vote/report`.
 
-The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleTrigger/wwwroot/index.html`), showing the live Yes/No percentage split (plain numbers, no chart), total votes, and the Payload table's row count and size (adaptively in KB/MB/GB) - or "No records found." on an empty database. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
+The one exception to "no UI" is a small static dashboard served at the application's root URL (`ScaleTrigger/wwwroot/index.html`), showing total votes and the Payload table's row count and size (adaptively in KB/MB/GB) - or "No records found." on an empty database - alongside live-editable load configuration and a node hardware benchmark. It polls the anonymous `GET /api/vote/report` endpoint, which returns counts and percentages fully computed by a stored procedure/function in the database — the API only maps the returned columns onto a `VoteReport` object, it does no percentage math itself.
 
 ## Package versions
 
