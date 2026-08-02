@@ -66,9 +66,8 @@
   .dashboard-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    align-items: start;
     gap: 32px;
-    /* stretch (the default) so the Configuration column can reach down to
-       the bottom of the taller Votes+Node Benchmark column */
   }
 
   @media (max-width: 760px) {
@@ -86,22 +85,6 @@
 
   .card + .card {
     margin-top: 24px;
-  }
-
-  /* Configuration only: stretches its card to match the right column's
-     height, then spreads the extra room evenly between its groups instead
-     of dumping it all as dead space below the last one. */
-  .dashboard-column--fill {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .dashboard-column--fill .card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 20px;
   }
 
   .status {
@@ -259,6 +242,11 @@
     margin-top: 8px;
     min-height: 0;
   }
+
+  #status {
+    margin-top: 8px;
+    min-height: 0;
+  }
 </style>
 </head>
 <body>
@@ -266,49 +254,6 @@
     <h1>ScaleTrigger</h1>
 
     <div class="dashboard-columns">
-      <div class="dashboard-column--fill">
-        <div class="card">
-          <p class="section-title">Configuration</p>
-
-          <div class="config-group">
-            <div class="loadconfig-row loadconfig-row--single">
-              <span class="loadconfig-col-heading">Setting</span>
-              <span class="loadconfig-col-heading">Seconds</span>
-            </div>
-            <div id="loadconfig-rows-refresh"></div>
-          </div>
-
-          <div class="config-group">
-            <p class="group-title">Application</p>
-            <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
-            <div class="loadconfig-row">
-              <span class="loadconfig-col-heading">Setting</span>
-              <span class="loadconfig-col-heading">Min</span>
-              <span class="loadconfig-col-heading">Max</span>
-            </div>
-            <div id="loadconfig-rows-application"></div>
-          </div>
-
-          <div class="config-group">
-            <p class="group-title">Database</p>
-            <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
-            <div class="loadconfig-row">
-              <span class="loadconfig-col-heading">Setting</span>
-              <span class="loadconfig-col-heading">Min</span>
-              <span class="loadconfig-col-heading">Max</span>
-            </div>
-            <div id="loadconfig-rows-database"></div>
-          </div>
-
-          <div class="config-group">
-            <div class="config-actions">
-              <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
-            </div>
-            <p class="status" id="loadconfig-status"></p>
-          </div>
-        </div>
-      </div>
-
       <div>
         <div class="card">
           <p class="section-title">Votes</p>
@@ -348,6 +293,47 @@
             <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
           </div>
           <p class="status" id="benchmark-status"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Configuration</p>
+
+        <div class="config-group">
+          <div class="loadconfig-row loadconfig-row--single">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Seconds</span>
+          </div>
+          <div id="loadconfig-rows-refresh"></div>
+        </div>
+
+        <div class="config-group">
+          <p class="group-title">Application</p>
+          <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
+          <div class="loadconfig-row">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Min</span>
+            <span class="loadconfig-col-heading">Max</span>
+          </div>
+          <div id="loadconfig-rows-application"></div>
+        </div>
+
+        <div class="config-group">
+          <p class="group-title">Database</p>
+          <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
+          <div class="loadconfig-row">
+            <span class="loadconfig-col-heading">Setting</span>
+            <span class="loadconfig-col-heading">Min</span>
+            <span class="loadconfig-col-heading">Max</span>
+          </div>
+          <div id="loadconfig-rows-database"></div>
+        </div>
+
+        <div class="config-group">
+          <div class="config-actions">
+            <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+          </div>
+          <p class="status" id="loadconfig-status"></p>
         </div>
       </div>
     </div>
