@@ -52,7 +52,7 @@ namespace ScaleTrigger
                 return;
             }
 
-            int sizeInBytes = megabytes * 1024 * 1024;
+            long sizeInBytes = (long)megabytes * 1024 * 1024;
             byte[] buffer = new byte[sizeInBytes];
 
             Random.Shared.NextBytes(buffer);

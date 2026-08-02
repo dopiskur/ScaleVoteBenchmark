@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using ScaleTrigger.Auth;
 
 namespace ScaleTrigger.Controllers
@@ -21,21 +24,42 @@ namespace ScaleTrigger.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("login")]
         public ActionResult<string> Login([FromBody] LoginRequest request)
         {
             string adminUsername = configuration["AdminUser:Username"] ?? string.Empty;
             string adminPassword = configuration["AdminUser:Password"] ?? string.Empty;
 
-            if (request.Username != adminUsername || request.Password != adminPassword)
+            bool usernameMatches = CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(request.Username), Encoding.UTF8.GetBytes(adminUsername));
+            bool passwordMatches = CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(request.Password), Encoding.UTF8.GetBytes(adminPassword));
+
+            if (!usernameMatches || !passwordMatches)
             {
                 return Unauthorized("Invalid username or password.");
             }
 
+            string? jwtKey = configuration["Jwt:Key"];
+            string? jwtIssuer = configuration["Jwt:Issuer"];
+            string? jwtAudience = configuration["Jwt:Audience"];
+
+            if (string.IsNullOrEmpty(jwtKey) || string.IsNullOrEmpty(jwtIssuer) || string.IsNullOrEmpty(jwtAudience))
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    "Jwt:Key, Jwt:Issuer, and Jwt:Audience must all be configured.");
+            }
+
+            if (!int.TryParse(configuration["Jwt:ExpirationMinutes"], out int expirationMinutes))
+            {
+                expirationMinutes = 60;
+            }
+
             string token = JwtTokenProvider.CreateToken(
-                key: configuration["Jwt:Key"]!,
-                issuer: configuration["Jwt:Issuer"]!,
-                audience: configuration["Jwt:Audience"]!,
-                expirationMinutes: int.Parse(configuration["Jwt:ExpirationMinutes"] ?? "60"),
+                key: jwtKey,
+                issuer: jwtIssuer,
+                audience: jwtAudience,
+                expirationMinutes: expirationMinutes,
                 username: request.Username);
 
             return Ok(new { token });

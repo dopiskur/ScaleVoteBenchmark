@@ -34,11 +34,30 @@ namespace ScaleTrigger.Controllers
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult<NodeBenchmarkResult>> Run()
         {
-            int cpuDurationSeconds = int.Parse(configuration["NodeBenchmark:CpuDurationSeconds"] ?? "20");
-            int memoryBlockMegabytes = int.Parse(configuration["NodeBenchmark:MemoryBlockMegabytes"] ?? "64");
-            int memoryRepetitions = int.Parse(configuration["NodeBenchmark:MemoryRepetitions"] ?? "5");
-            int diskSizeMegabytes = int.Parse(configuration["NodeBenchmark:DiskSizeMegabytes"] ?? "20");
-            int diskRepetitions = int.Parse(configuration["NodeBenchmark:DiskRepetitions"] ?? "5");
+            if (!int.TryParse(configuration["NodeBenchmark:CpuDurationSeconds"], out int cpuDurationSeconds))
+            {
+                cpuDurationSeconds = 20;
+            }
+
+            if (!int.TryParse(configuration["NodeBenchmark:MemoryBlockMegabytes"], out int memoryBlockMegabytes))
+            {
+                memoryBlockMegabytes = 64;
+            }
+
+            if (!int.TryParse(configuration["NodeBenchmark:MemoryRepetitions"], out int memoryRepetitions))
+            {
+                memoryRepetitions = 5;
+            }
+
+            if (!int.TryParse(configuration["NodeBenchmark:DiskSizeMegabytes"], out int diskSizeMegabytes))
+            {
+                diskSizeMegabytes = 20;
+            }
+
+            if (!int.TryParse(configuration["NodeBenchmark:DiskRepetitions"], out int diskRepetitions))
+            {
+                diskRepetitions = 5;
+            }
 
             var hardware = await NodeBenchmark.GetHardwareInfoAsync();
 

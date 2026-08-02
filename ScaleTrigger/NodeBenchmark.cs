@@ -264,7 +264,8 @@ namespace ScaleTrigger
         /// </summary>
         public static double RunMemoryBenchmark(int blockMegabytes, int repetitions)
         {
-            byte[] buffer = new byte[blockMegabytes * 1024 * 1024];
+            long bufferSizeBytes = (long)blockMegabytes * 1024 * 1024;
+            byte[] buffer = new byte[bufferSizeBytes];
             var seconds = new List<double>();
 
             for (int i = 0; i < repetitions; i++)

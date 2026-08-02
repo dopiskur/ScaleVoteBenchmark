@@ -21,7 +21,7 @@ namespace ScaleTrigger.Auth
         {
             bool authEnabled = bool.TryParse(configuration["Auth:Enabled"], out bool enabled) && enabled;
 
-            if (!authEnabled || context.User.Identity?.IsAuthenticated == true)
+            if (!authEnabled || (context.User.Identity?.IsAuthenticated == true && context.User.IsInRole("admin")))
             {
                 context.Succeed(requirement);
             }
