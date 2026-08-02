@@ -69,8 +69,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 32px;
-    /* Stretch (the grid default) instead of start, so the shorter column's
-       card can grow to close the gap to the taller column's bottom edge. */
+    align-items: start;
   }
 
   @media (max-width: 760px) {
@@ -79,24 +78,15 @@
     }
   }
 
-  .dashboard-column--fill {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .dashboard-column--fill .card {
-    flex: 1;
-  }
-
-  .section-title--first {
-    margin-top: 0;
-  }
-
   .card {
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 24px;
+  }
+
+  .card + .card {
+    margin-top: 24px;
   }
 
   .tiles {
@@ -149,7 +139,7 @@
   .section-title {
     font-size: 15px;
     font-weight: 600;
-    margin: 32px 0 12px;
+    margin: 0 0 12px;
   }
 
   .group-title {
@@ -274,10 +264,10 @@
     <h1>ScaleTrigger</h1>
 
     <div class="dashboard-columns">
-      <div class="dashboard-column--fill">
-        <p class="section-title section-title--first">Configuration</p>
-
+      <div>
         <div class="card">
+          <p class="section-title">Configuration</p>
+
           <p class="group-title">Refresh</p>
           <p class="group-subtitle">How often the app polls this table for changes.</p>
           <div class="loadconfig-row loadconfig-row--single">
@@ -313,9 +303,9 @@
       </div>
 
       <div>
-        <p class="section-title section-title--first">Votes</p>
-
         <div class="card">
+          <p class="section-title">Votes</p>
+
           <div class="tiles">
             <div>
               <div class="tile-label">Yes</div>
@@ -331,13 +321,13 @@
           <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
           <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
           <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
+
+          <p class="status" id="status">Loading…</p>
         </div>
 
-        <p class="status" id="status">Loading…</p>
-
-        <p class="section-title">Node Benchmark</p>
-
         <div class="card">
+          <p class="section-title">Node Benchmark</p>
+
           <p class="group-title">Hardware</p>
           <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
           <div id="hw-rows"></div>
