@@ -34,13 +34,29 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// Postgres has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
+        /// a plain SELECT is always an MVCC snapshot read here, so it never
+        /// waits on a concurrent vote_add insert's row lock.
+        /// </summary>
+        /// <summary>Calls db_cpu_burn directly - set-based CPU burn, no INSERT into vote/payload at all.</summary>
+        public async Task DbCpuBurnAsync(int maxPrime)
+        {
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "CALL db_cpu_burn(@maxPrime)";
+            cmd.Parameters.AddWithValue("maxPrime", maxPrime);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                "SELECT yes_count, no_count, total, yes_percent, no_percent, payload_count, payload_total_bytes " +
+                "SELECT total, payload_count, payload_total_bytes " +
                 "FROM vote_report_get()";
 
             using var dr = await cmd.ExecuteReaderAsync();
@@ -48,11 +64,7 @@ namespace ScaleTrigger.Repositories
 
             if (await dr.ReadAsync())
             {
-                report.Yes = dr["yes_count"] != DBNull.Value ? Convert.ToInt64(dr["yes_count"]) : 0;
-                report.No = dr["no_count"] != DBNull.Value ? Convert.ToInt64(dr["no_count"]) : 0;
                 report.Total = dr["total"] != DBNull.Value ? Convert.ToInt64(dr["total"]) : 0;
-                report.YesPercent = dr["yes_percent"] != DBNull.Value ? Convert.ToDecimal(dr["yes_percent"]) : 0;
-                report.NoPercent = dr["no_percent"] != DBNull.Value ? Convert.ToDecimal(dr["no_percent"]) : 0;
                 report.PayloadCount = dr["payload_count"] != DBNull.Value ? Convert.ToInt64(dr["payload_count"]) : 0;
                 report.PayloadTotalBytes = dr["payload_total_bytes"] != DBNull.Value ? Convert.ToInt64(dr["payload_total_bytes"]) : 0;
             }

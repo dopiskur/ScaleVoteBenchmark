@@ -17,6 +17,13 @@ namespace ScaleTrigger.Interfaces
         Task<VoteReport> VoteReportGetAsync();
 
         /// <summary>
+        /// Runs the same database-side CPU burn VoteAdd uses (DbCpuBurn /
+        /// db_cpu_burn - set-based, no procedural loop) without touching
+        /// Vote/Payload at all. 0 is a no-op.
+        /// </summary>
+        Task DbCpuBurnAsync(int maxPrime);
+
+        /// <summary>
         /// Opens and closes a connection without querying, so a bad
         /// config surfaces at startup instead of on the first vote.
         /// </summary>

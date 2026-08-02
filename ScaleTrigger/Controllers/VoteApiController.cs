@@ -32,9 +32,14 @@ namespace ScaleTrigger.Controllers
         /// simulate load inside the database itself - see
         /// IRepository.VoteAddAsync.
         /// </summary>
+        /// <summary>
+        /// dbCpuBurnOnly=true isolates the database-side CPU cost (DbCpuBurn)
+        /// from the Vote/Payload insert, for benchmarking DB CPU capacity
+        /// under concurrency without growing the table on every call.
+        /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
-        public async Task<ActionResult> VoteAdd([FromQuery] string option)
+        public async Task<ActionResult> VoteAdd([FromQuery] string option, [FromQuery] bool dbCpuBurnOnly = false)
         {
             if (option != "yes" && option != "no")
             {
@@ -45,7 +50,6 @@ namespace ScaleTrigger.Controllers
             int memoryMegabytes = RandomizedLoadValue("MemoryMegabytesPerVote");
             int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
-            int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
             int dbMaxPrime = RandomizedLoadValue("DbCpuIterationsPerVote");
 
             // Offloaded to a background thread so this CPU/disk-bound work doesn't
@@ -59,6 +63,13 @@ namespace ScaleTrigger.Controllers
             });
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
+            if (dbCpuBurnOnly)
+            {
+                await repoFactory.GetRepo().DbCpuBurnAsync(dbMaxPrime);
+                return Ok();
+            }
+
+            int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
             byte[]? payload = null;
             if (payloadBytes > 0)
             {

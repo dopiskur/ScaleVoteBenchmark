@@ -24,6 +24,28 @@ namespace ScaleTrigger.Schema
     CONSTRAINT FK_Payload_Vote FOREIGN KEY (IDVote) REFERENCES dbo.Vote(IDVote)
 );",
 
+            @"CREATE PROCEDURE dbo.DbCpuBurn
+    @MaxPrime INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Set-based CPU burn: no procedural loop, no touch of Vote/Payload at
+    -- all - just a large row set for the query engine itself to churn
+    -- through. MAXDOP 1 keeps the cost on a single scheduler, matching a
+    -- single request's share of CPU rather than fanning out across cores.
+    IF @MaxPrime > 0
+    BEGIN
+        DECLARE @RowCount BIGINT;
+        SELECT @RowCount = COUNT(*)
+        FROM (
+            SELECT TOP (@MaxPrime) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+            FROM sys.all_objects a CROSS JOIN sys.all_objects b
+        ) x
+        OPTION (MAXDOP 1);
+    END
+END",
+
             @"CREATE PROCEDURE dbo.VoteAdd
     @Option    VARCHAR(10),
     @Payload   VARBINARY(MAX) = NULL,
@@ -32,32 +54,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
-    -- CpuIterationsPerVote), counting primes up to @MaxPrime by trial
-    -- division. 0 = skip.
-    IF @MaxPrime > 0
-    BEGIN
-        DECLARE @N BIGINT = 2;
-        DECLARE @T BIGINT;
-        DECLARE @IsPrime BIT;
-        DECLARE @PrimeCount BIGINT = 0;
-        WHILE @N <= @MaxPrime
-        BEGIN
-            SET @IsPrime = 1;
-            SET @T = 2;
-            WHILE @T * @T <= @N
-            BEGIN
-                IF @N % @T = 0
-                BEGIN
-                    SET @IsPrime = 0;
-                    BREAK;
-                END
-                SET @T += 1;
-            END
-            IF @IsPrime = 1 SET @PrimeCount += 1;
-            SET @N += 1;
-        END
-    END
+    EXEC dbo.DbCpuBurn @MaxPrime;
 
     INSERT INTO dbo.Vote ([Option], DateCreated)
     VALUES (@Option, SYSUTCDATETIME());
@@ -74,22 +71,17 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- COUNT_BIG/BIGINT sums (rather than COUNT/plain int SUM, which cap at
-    -- ~2.1 billion) since this is a load-testing tool expected to accumulate
-    -- a very large number of rows.
+    -- COUNT_BIG (rather than COUNT/plain int, which caps at ~2.1 billion)
+    -- since this is a load-testing tool expected to accumulate a very large
+    -- number of rows. WITH (NOLOCK) so this read-only report doesn't wait
+    -- behind whatever row/page lock a concurrent VoteAdd insert is holding
+    -- under the default READ COMMITTED isolation level - a stale-by-a-row
+    -- count is fine here, blocking on every insert isn't.
     SELECT
-        SUM(CASE WHEN [Option] = 'yes' THEN CAST(1 AS BIGINT) ELSE 0 END) AS [Yes],
-        SUM(CASE WHEN [Option] = 'no'  THEN CAST(1 AS BIGINT) ELSE 0 END) AS [No],
         COUNT_BIG(*) AS [Total],
-        CASE WHEN COUNT_BIG(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'yes' THEN CAST(1 AS BIGINT) ELSE 0 END) / COUNT_BIG(*), 2)
-        END AS [YesPercent],
-        CASE WHEN COUNT_BIG(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN [Option] = 'no' THEN CAST(1 AS BIGINT) ELSE 0 END) / COUNT_BIG(*), 2)
-        END AS [NoPercent],
-        (SELECT COUNT_BIG(*) FROM dbo.Payload) AS [PayloadCount],
-        (SELECT ISNULL(SUM(DATALENGTH(Data)), 0) FROM dbo.Payload) AS [PayloadTotalBytes]
-    FROM dbo.Vote;
+        (SELECT COUNT_BIG(*) FROM dbo.Payload WITH (NOLOCK)) AS [PayloadCount],
+        (SELECT ISNULL(SUM(DATALENGTH(Data)), 0) FROM dbo.Payload WITH (NOLOCK)) AS [PayloadTotalBytes]
+    FROM dbo.Vote WITH (NOLOCK);
 END",
 
             @"CREATE PROCEDURE dbo.DatabaseCleanup
@@ -123,37 +115,33 @@ END",
     CONSTRAINT `FK_Payload_Vote` FOREIGN KEY (`IDVote`) REFERENCES `Vote`(`IDVote`)
 );",
 
+            @"CREATE PROCEDURE `DbCpuBurn`(
+    IN pMaxPrime INT
+)
+BEGIN
+    IF pMaxPrime > 0 THEN
+        -- Set-based CPU burn: a recursive CTE generating pMaxPrime rows, no
+        -- procedural loop and no touch of Vote/Payload at all. MySQL caps
+        -- recursive CTE depth at 1000 by default - raised per-session so a
+        -- realistic pMaxPrime doesn't abort with 'Recursive query aborted'.
+        SET SESSION cte_max_recursion_depth = 4294967295;
+
+        WITH RECURSIVE seq(n) AS (
+            SELECT 1
+            UNION ALL
+            SELECT n + 1 FROM seq WHERE n < pMaxPrime
+        )
+        SELECT COUNT(*) FROM seq;
+    END IF;
+END",
+
             @"CREATE PROCEDURE `VoteAdd`(
     IN pOption VARCHAR(10),
     IN pPayload LONGBLOB,
     IN pMaxPrime INT
 )
 BEGIN
-    DECLARE n BIGINT DEFAULT 2;
-    DECLARE t BIGINT;
-    DECLARE isPrime BOOLEAN;
-    DECLARE primeCount BIGINT DEFAULT 0;
-
-    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
-    -- CpuIterationsPerVote), counting primes up to pMaxPrime by trial
-    -- division. 0 = skip.
-    IF pMaxPrime > 0 THEN
-        WHILE n <= pMaxPrime DO
-            SET isPrime = TRUE;
-            SET t = 2;
-            inner_loop: WHILE t * t <= n DO
-                IF n MOD t = 0 THEN
-                    SET isPrime = FALSE;
-                    LEAVE inner_loop;
-                END IF;
-                SET t = t + 1;
-            END WHILE inner_loop;
-            IF isPrime THEN
-                SET primeCount = primeCount + 1;
-            END IF;
-            SET n = n + 1;
-        END WHILE;
-    END IF;
+    CALL `DbCpuBurn`(pMaxPrime);
 
     INSERT INTO `Vote` (`Option`, `DateCreated`)
     VALUES (pOption, UTC_TIMESTAMP());
@@ -166,12 +154,10 @@ END",
 
             @"CREATE PROCEDURE `VoteReportGet`()
 BEGIN
+    -- InnoDB's plain SELECT is a non-locking consistent (MVCC) read, so this
+    -- never waits behind a concurrent VoteAdd insert regardless of isolation level.
     SELECT
-        SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) AS `Yes`,
-        SUM(CASE WHEN `Option` = 'no'  THEN 1 ELSE 0 END) AS `No`,
         COUNT(*) AS `Total`,
-        IF(COUNT(*) = 0, 0, ROUND(100.0 * SUM(CASE WHEN `Option` = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)) AS `YesPercent`,
-        IF(COUNT(*) = 0, 0, ROUND(100.0 * SUM(CASE WHEN `Option` = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)) AS `NoPercent`,
         (SELECT COUNT(*) FROM `Payload`) AS `PayloadCount`,
         (SELECT IFNULL(SUM(LENGTH(`Data`)), 0) FROM `Payload`) AS `PayloadTotalBytes`
     FROM `Vote`;
@@ -203,37 +189,27 @@ END",
     date_created TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );",
 
+            @"CREATE PROCEDURE db_cpu_burn(p_max_prime INT)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    row_count BIGINT;
+BEGIN
+    -- Set-based CPU burn: generate_series aggregation, no procedural loop
+    -- and no touch of vote/payload at all.
+    IF p_max_prime > 0 THEN
+        SELECT COUNT(*) INTO row_count FROM generate_series(1, p_max_prime);
+    END IF;
+END;
+$$;",
+
             @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_max_prime INT DEFAULT 0)
 LANGUAGE plpgsql
 AS $$
 DECLARE
     new_id_vote BIGINT;
-    n           BIGINT;
-    t           BIGINT;
-    is_prime    BOOLEAN;
-    prime_count BIGINT := 0;
 BEGIN
-    -- Sysbench's CPU algorithm: database-side CPU load (vs. app-side
-    -- CpuIterationsPerVote), counting primes up to p_max_prime by trial
-    -- division. 0 = skip.
-    IF p_max_prime > 0 THEN
-        n := 2;
-        WHILE n <= p_max_prime LOOP
-            is_prime := TRUE;
-            t := 2;
-            WHILE t * t <= n LOOP
-                IF n % t = 0 THEN
-                    is_prime := FALSE;
-                    EXIT;
-                END IF;
-                t := t + 1;
-            END LOOP;
-            IF is_prime THEN
-                prime_count := prime_count + 1;
-            END IF;
-            n := n + 1;
-        END LOOP;
-    END IF;
+    CALL db_cpu_burn(p_max_prime);
 
     INSERT INTO vote (option, date_created)
     VALUES (p_option, now() AT TIME ZONE 'utc')
@@ -247,24 +223,16 @@ END;
 $$;",
 
             @"CREATE FUNCTION vote_report_get()
-RETURNS TABLE(yes_count BIGINT, no_count BIGINT, total BIGINT, yes_percent NUMERIC, no_percent NUMERIC, payload_count BIGINT, payload_total_bytes BIGINT)
+RETURNS TABLE(total BIGINT, payload_count BIGINT, payload_total_bytes BIGINT)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- BIGINT (rather than INT, which caps at ~2.1 billion) since this is a
-    -- load-testing tool expected to accumulate a very large number of rows;
-    -- COUNT(*) is BIGINT natively in Postgres, so only the SUMs need casting.
+    -- COUNT(*) is BIGINT natively in Postgres. Plain SELECT is an MVCC
+    -- snapshot read here too, so it never waits behind a concurrent
+    -- vote_add insert regardless of isolation level.
     RETURN QUERY
     SELECT
-        SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END)::BIGINT AS yes_count,
-        SUM(CASE WHEN option = 'no'  THEN 1 ELSE 0 END)::BIGINT AS no_count,
         COUNT(*) AS total,
-        CASE WHEN COUNT(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN option = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2)
-        END AS yes_percent,
-        CASE WHEN COUNT(*) = 0 THEN 0
-             ELSE ROUND(100.0 * SUM(CASE WHEN option = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2)
-        END AS no_percent,
         (SELECT COUNT(*) FROM payload) AS payload_count,
         (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM payload)::BIGINT AS payload_total_bytes
     FROM vote;
@@ -418,6 +386,7 @@ $$;",
             @"IF OBJECT_ID('dbo.DatabaseCleanup', 'P') IS NOT NULL DROP PROCEDURE dbo.DatabaseCleanup;",
             @"IF OBJECT_ID('dbo.VoteReportGet', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteReportGet;",
             @"IF OBJECT_ID('dbo.VoteAdd', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteAdd;",
+            @"IF OBJECT_ID('dbo.DbCpuBurn', 'P') IS NOT NULL DROP PROCEDURE dbo.DbCpuBurn;",
             @"IF OBJECT_ID('dbo.Payload', 'U') IS NOT NULL DROP TABLE dbo.Payload;",
             @"IF OBJECT_ID('dbo.Vote', 'U') IS NOT NULL DROP TABLE dbo.Vote;",
         };
@@ -430,6 +399,7 @@ $$;",
             @"DROP PROCEDURE IF EXISTS `DatabaseCleanup`;",
             @"DROP PROCEDURE IF EXISTS `VoteReportGet`;",
             @"DROP PROCEDURE IF EXISTS `VoteAdd`;",
+            @"DROP PROCEDURE IF EXISTS `DbCpuBurn`;",
             @"DROP TABLE IF EXISTS `Payload`;",
             @"DROP TABLE IF EXISTS `Vote`;",
         };
@@ -442,6 +412,7 @@ $$;",
             @"DROP PROCEDURE IF EXISTS database_cleanup();",
             @"DROP FUNCTION IF EXISTS vote_report_get();",
             @"DROP PROCEDURE IF EXISTS vote_add(VARCHAR, BYTEA, INT);",
+            @"DROP PROCEDURE IF EXISTS db_cpu_burn(INT);",
             @"DROP TABLE IF EXISTS payload;",
             @"DROP TABLE IF EXISTS vote;",
         };

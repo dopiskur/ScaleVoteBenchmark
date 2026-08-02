@@ -84,6 +84,17 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteScalarAsync();
         }
 
+        /// <summary>Reuses the same sysbench_cpu scalar function VoteAdd calls, but does no INSERT at all.</summary>
+        public async Task DbCpuBurnAsync(int maxPrime)
+        {
+            using var connection = await CreateConnectionAsync();
+
+            if (maxPrime > 0)
+            {
+                await RunSysbenchCpuAsync(connection, maxPrime);
+            }
+        }
+
         public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
             using var connection = await CreateConnectionAsync();
@@ -111,21 +122,18 @@ namespace ScaleTrigger.Repositories
             }
         }
 
+        /// <summary>
+        /// SQLite has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
+        /// WAL mode (see CreateConnectionAsync) already lets this read run
+        /// against a snapshot without waiting on a concurrent VoteAdd writer.
+        /// </summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT " +
-                "SUM(CASE WHEN \"Option\" = 'yes' THEN 1 ELSE 0 END) AS Yes, " +
-                "SUM(CASE WHEN \"Option\" = 'no'  THEN 1 ELSE 0 END) AS No, " +
                 "COUNT(*) AS Total, " +
-                "CASE WHEN COUNT(*) = 0 THEN 0 " +
-                "     ELSE ROUND(100.0 * SUM(CASE WHEN \"Option\" = 'yes' THEN 1 ELSE 0 END) / COUNT(*), 2) " +
-                "END AS YesPercent, " +
-                "CASE WHEN COUNT(*) = 0 THEN 0 " +
-                "     ELSE ROUND(100.0 * SUM(CASE WHEN \"Option\" = 'no' THEN 1 ELSE 0 END) / COUNT(*), 2) " +
-                "END AS NoPercent, " +
                 "(SELECT COUNT(*) FROM Payload) AS PayloadCount, " +
                 "(SELECT IFNULL(SUM(LENGTH(Data)), 0) FROM Payload) AS PayloadTotalBytes " +
                 "FROM Vote";
@@ -135,11 +143,7 @@ namespace ScaleTrigger.Repositories
 
             if (await dr.ReadAsync())
             {
-                report.Yes = dr["Yes"] != DBNull.Value ? Convert.ToInt64(dr["Yes"]) : 0;
-                report.No = dr["No"] != DBNull.Value ? Convert.ToInt64(dr["No"]) : 0;
                 report.Total = dr["Total"] != DBNull.Value ? Convert.ToInt64(dr["Total"]) : 0;
-                report.YesPercent = dr["YesPercent"] != DBNull.Value ? Convert.ToDecimal(dr["YesPercent"]) : 0;
-                report.NoPercent = dr["NoPercent"] != DBNull.Value ? Convert.ToDecimal(dr["NoPercent"]) : 0;
                 report.PayloadCount = dr["PayloadCount"] != DBNull.Value ? Convert.ToInt64(dr["PayloadCount"]) : 0;
                 report.PayloadTotalBytes = dr["PayloadTotalBytes"] != DBNull.Value ? Convert.ToInt64(dr["PayloadTotalBytes"]) : 0;
             }

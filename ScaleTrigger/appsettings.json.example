@@ -22,10 +22,11 @@
     "FailFastOnDbCheck": false
   },
 
+  "// ConnectionStrings": "Max Pool Size raised well above the ADO.NET default (100) on every server-based provider, so the connection pool doesn't become the bottleneck before the database's own CPU does under high-concurrency load testing. Sqlite has no such setting - Microsoft.Data.Sqlite pools per-file handles internally, not a user-configurable connection ceiling.",
   "ConnectionStrings": {
-    "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleTriggerDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=True;",
-    "MySql": "Server=YOUR-SERVER.mysql.database.azure.com;Port=3306;Database=ScaleTriggerDb;Uid=YOUR-USER;Pwd=YOUR-PASSWORD;SslMode=Required;",
-    "PostgreSql": "Server=YOUR-SERVER.postgres.database.azure.com;Port=5432;Database=ScaleTriggerDb;User Id=YOUR-USER;Password=YOUR-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;",
+    "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleTriggerDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=True;Max Pool Size=1000;",
+    "MySql": "Server=YOUR-SERVER.mysql.database.azure.com;Port=3306;Database=ScaleTriggerDb;Uid=YOUR-USER;Pwd=YOUR-PASSWORD;SslMode=Required;Max Pool Size=1000;",
+    "PostgreSql": "Server=YOUR-SERVER.postgres.database.azure.com;Port=5432;Database=ScaleTriggerDb;User Id=YOUR-USER;Password=YOUR-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;Maximum Pool Size=1000;",
     "// Sqlite": "Local file, no server needed - handy for running/testing the app without an Azure database.",
     "Sqlite": "Data Source=scaletrigger.db"
   },
@@ -47,7 +48,7 @@
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
     "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",
     "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
-    "// DbCpuIterationsPerVote": "0 = VoteAdd just inserts, no prime-counting loop. Same sysbench algorithm as CpuIterationsPerVote, but runs inside the database engine itself - simulates database-side CPU load.",
+    "// DbCpuIterationsPerVote": "0 = VoteAdd/vote_add just inserts, no CPU burn. Runs inside the database engine itself via DbCpuBurn/db_cpu_burn - a set-based row-generation burn on MsSql/MySql/PostgreSql, the same sysbench trial-division algorithm as CpuIterationsPerVote on Sqlite.",
     "DbCpuIterationsPerVote": { "Min": 0, "Max": 0 }
   },
 

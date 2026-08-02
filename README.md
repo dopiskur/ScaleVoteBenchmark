@@ -17,7 +17,7 @@ Every `POST /api/vote/add?option=yes|no` call:
 
 The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table), editable from the dashboard or via `POST /api/loadconfig` — the live-tuning behavior described above. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it.
 
-Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns yes/no counts and percentages fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
+Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
 
 ## Why not just use Chaos Studio / AWS FIS / Chaos Mesh / stress-ng?
 
@@ -111,7 +111,7 @@ Creating tables/procedures requires DDL permissions on the configured database u
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /api/vote/add?option=yes\|no` | optional (`Auth:Enabled`) | Records a vote and generates the per-vote CPU/memory/disk/network load |
-| `GET /api/vote/report` | anonymous | `{ yes, no, total, yesPercent, noPercent, payloadCount, payloadTotalBytes }`, computed by the database |
+| `GET /api/vote/report` | anonymous | `{ total, payloadCount, payloadTotalBytes }`, computed by the database |
 | `POST /api/vote/reset` | optional | Drops and recreates the schema — database ends up looking brand new |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password" }` → `{ "token" }` |
 | `GET /api/loadconfig` | anonymous | Current `Load:*` ranges as stored in the database |
@@ -121,7 +121,7 @@ Creating tables/procedures requires DDL permissions on the configured database u
 
 ## Dashboard
 
-A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`) — no separate frontend project. It shows the live Yes/No split (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
+A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`) — no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
 
 ## Generating load
 

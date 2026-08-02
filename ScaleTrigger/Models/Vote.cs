@@ -7,14 +7,10 @@ namespace ScaleTrigger.Models
         public DateTime? DateCreated { get; set; }
     }
 
-    /// <summary>Fully computed by the database - no percentage math happens in application code.</summary>
+    /// <summary>Fully computed by the database - matches exactly what the dashboard displays.</summary>
     public class VoteReport
     {
-        public long Yes { get; set; }
-        public long No { get; set; }
         public long Total { get; set; }
-        public decimal YesPercent { get; set; }
-        public decimal NoPercent { get; set; }
         public long PayloadCount { get; set; }
         public long PayloadTotalBytes { get; set; }
     }
