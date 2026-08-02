@@ -272,10 +272,16 @@ namespace ScaleTrigger
         /// Repeatedly writes a fresh sizeMegabytes file (WriteThrough +
         /// flush, so it's real disk I/O, not just page cache) and deletes
         /// it immediately; the score is sizeMegabytes / median write time.
+        /// environment comes from the GetHardwareInfoAsync call the caller
+        /// already made - see LoadSimulator.ResolveDiskLoadDirectoryAsync
+        /// for why Kubernetes gets its own working-directory path instead
+        /// of the temp-path default.
         /// </summary>
-        public static double RunDiskBenchmark(int sizeMegabytes, int repetitions)
+        public static double RunDiskBenchmark(int sizeMegabytes, int repetitions, string environment)
         {
-            string dir = Path.Combine(Path.GetTempPath(), "ScaleTrigger", "nodebenchmark");
+            string dir = environment == "Kubernetes"
+                ? Path.Combine(AppContext.BaseDirectory, "nodebenchmark")
+                : Path.Combine(Path.GetTempPath(), "ScaleTrigger", "nodebenchmark");
             Directory.CreateDirectory(dir);
 
             long bufferSizeBytes = (long)sizeMegabytes * 1024 * 1024;

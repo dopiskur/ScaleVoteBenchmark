@@ -55,11 +55,11 @@ namespace ScaleTrigger.Controllers
             // Offloaded to a background thread so this CPU/disk-bound work doesn't
             // run directly on the async continuation and starve the thread pool
             // under concurrent load - same reasoning as NodeBenchmarkApiController.Run.
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
                 LoadSimulator.SimulateCpuLoad(cpuIterations);
                 LoadSimulator.SimulateMemoryLoad(memoryKilobytes);
-                LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
+                await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
             });
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 

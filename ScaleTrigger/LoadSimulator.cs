@@ -2,11 +2,26 @@ namespace ScaleTrigger
 {
     public static class LoadSimulator
     {
-        private static readonly string DiskLoadDirectory = CreateDiskLoadDirectory();
+        private static readonly Lazy<Task<string>> DiskLoadDirectory = new(ResolveDiskLoadDirectoryAsync);
 
-        private static string CreateDiskLoadDirectory()
+        /// <summary>
+        /// Kubernetes commonly mounts /tmp as an emptyDir with medium: Memory
+        /// (especially alongside readOnlyRootFilesystem: true), making
+        /// Path.GetTempPath() tmpfs rather than real disk there - so disk
+        /// load on Kubernetes instead targets the app's own working
+        /// directory, which normally sits on the container's writable layer.
+        /// Every other detected environment (Azure App Service/Functions/
+        /// Container Apps, AWS ECS/EC2, Azure VM, plain Container, Generic)
+        /// keeps the temp-path default.
+        /// </summary>
+        private static async Task<string> ResolveDiskLoadDirectoryAsync()
         {
-            string path = Path.Combine(Path.GetTempPath(), "ScaleTrigger", "diskload");
+            var hardware = await NodeBenchmark.GetHardwareInfoAsync();
+
+            string path = hardware.Environment == "Kubernetes"
+                ? Path.Combine(AppContext.BaseDirectory, "diskload")
+                : Path.Combine(Path.GetTempPath(), "ScaleTrigger", "diskload");
+
             Directory.CreateDirectory(path);
             return path;
         }
@@ -86,7 +101,7 @@ namespace ScaleTrigger
         }
 
         /// <summary>Each call uses its own uniquely-named file so concurrent votes don't serialize on a shared one.</summary>
-        public static void SimulateDiskLoad(int kilobytes)
+        public static async Task SimulateDiskLoad(int kilobytes)
         {
             if (kilobytes <= 0)
             {
@@ -97,7 +112,8 @@ namespace ScaleTrigger
             byte[] buffer = new byte[sizeInBytes];
             Random.Shared.NextBytes(buffer);
 
-            string path = Path.Combine(DiskLoadDirectory, $"{Guid.NewGuid():N}.tmp");
+            string directory = await DiskLoadDirectory.Value;
+            string path = Path.Combine(directory, $"{Guid.NewGuid():N}.tmp");
 
             try
             {

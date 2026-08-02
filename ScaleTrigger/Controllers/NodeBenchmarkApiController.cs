@@ -66,7 +66,7 @@ namespace ScaleTrigger.Controllers
             {
                 cpuScore = NodeBenchmark.RunCpuBenchmark(cpuDurationSeconds);
                 memoryScore = NodeBenchmark.RunMemoryBenchmark(memoryBlockMegabytes, memoryRepetitions);
-                diskScore = NodeBenchmark.RunDiskBenchmark(diskSizeMegabytes, diskRepetitions);
+                diskScore = NodeBenchmark.RunDiskBenchmark(diskSizeMegabytes, diskRepetitions, hardware.Environment);
             });
 
             return Ok(new NodeBenchmarkResult
