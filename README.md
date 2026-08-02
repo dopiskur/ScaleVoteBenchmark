@@ -164,7 +164,6 @@ Since `appsettings.json` never ships in the deployed package, every setting must
 | SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 (pinned above the version `Microsoft.Data.Sqlite` pulls in transitively — that older version has a known vulnerability, GHSA-2m69-gcr7-jv3q) |
 | Azure.Identity | 1.21.0 |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 (tied to the .NET runtime version) |
-| Swashbuckle.AspNetCore | 7.2.0 |
 
 `Microsoft.Extensions.Caching.Memory` and `Microsoft.Extensions.Configuration.Abstractions` need no explicit reference — both come bundled with the ASP.NET Core shared framework (`Microsoft.NET.Sdk.Web`).
 

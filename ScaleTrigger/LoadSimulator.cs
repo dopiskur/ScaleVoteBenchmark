@@ -23,26 +23,43 @@ namespace ScaleTrigger
                 return;
             }
 
-            long primeCount = 0;
-            for (long n = 2; n <= maxPrime; n++)
-            {
-                bool isPrime = true;
-                for (long t = 2; t * t <= n; t++)
-                {
-                    if (n % t == 0)
-                    {
-                        isPrime = false;
-                        break;
-                    }
-                }
+            long primeCount = CountPrimesUpTo(maxPrime);
+            GC.KeepAlive(primeCount);
+        }
 
-                if (isPrime)
+        /// <summary>
+        /// Sysbench's CPU algorithm: counts primes from 2 to max by trial
+        /// division. Shared by SimulateCpuLoad, SqliteRepository's
+        /// sysbench_cpu scalar function, and (via IsPrime)
+        /// NodeBenchmark.RunCpuBenchmark, whose time-bounded outer loop
+        /// can't reuse this directly without redoing all the smaller n's
+        /// work on every tick.
+        /// </summary>
+        internal static long CountPrimesUpTo(long max)
+        {
+            long primeCount = 0;
+            for (long n = 2; n <= max; n++)
+            {
+                if (IsPrime(n))
                 {
                     primeCount++;
                 }
             }
 
-            GC.KeepAlive(primeCount);
+            return primeCount;
+        }
+
+        internal static bool IsPrime(long n)
+        {
+            for (long t = 2; t * t <= n; t++)
+            {
+                if (n % t == 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static void SimulateMemoryLoad(int megabytes)

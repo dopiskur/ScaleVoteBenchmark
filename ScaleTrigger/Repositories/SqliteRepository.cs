@@ -54,29 +54,7 @@ namespace ScaleTrigger.Repositories
         /// </summary>
         private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int maxPrime)
         {
-            connection.CreateFunction("sysbench_cpu", (long max) =>
-            {
-                long primeCount = 0;
-                for (long n = 2; n <= max; n++)
-                {
-                    bool isPrime = true;
-                    for (long t = 2; t * t <= n; t++)
-                    {
-                        if (n % t == 0)
-                        {
-                            isPrime = false;
-                            break;
-                        }
-                    }
-
-                    if (isPrime)
-                    {
-                        primeCount++;
-                    }
-                }
-
-                return primeCount;
-            });
+            connection.CreateFunction("sysbench_cpu", (long max) => LoadSimulator.CountPrimesUpTo(max));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT sysbench_cpu($maxPrime);";
@@ -139,16 +117,8 @@ namespace ScaleTrigger.Repositories
                 "FROM Vote";
 
             using var dr = await cmd.ExecuteReaderAsync();
-            var report = new VoteReport();
 
-            if (await dr.ReadAsync())
-            {
-                report.Total = dr["Total"] != DBNull.Value ? Convert.ToInt64(dr["Total"]) : 0;
-                report.PayloadCount = dr["PayloadCount"] != DBNull.Value ? Convert.ToInt64(dr["PayloadCount"]) : 0;
-                report.PayloadTotalBytes = dr["PayloadTotalBytes"] != DBNull.Value ? Convert.ToInt64(dr["PayloadTotalBytes"]) : 0;
-            }
-
-            return report;
+            return await dr.ReadAsync() ? RepositoryMappers.MapVoteReport(dr) : new VoteReport();
         }
 
         /// <summary>SQLite creates the file on first connection, so this succeeds as long as the path is writable.</summary>
@@ -268,12 +238,7 @@ namespace ScaleTrigger.Repositories
             using var dr = await cmd.ExecuteReaderAsync();
             while (await dr.ReadAsync())
             {
-                settings.Add(new LoadConfigSetting
-                {
-                    SettingName = (string)dr["SettingName"],
-                    Min = Convert.ToInt32(dr["MinValue"]),
-                    Max = Convert.ToInt32(dr["MaxValue"])
-                });
+                settings.Add(RepositoryMappers.MapLoadConfigSetting(dr));
             }
 
             return settings;

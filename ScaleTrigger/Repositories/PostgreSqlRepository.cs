@@ -15,10 +15,16 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
+        private async Task<NpgsqlConnection> CreateConnectionAsync()
+        {
+            var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            return connection;
+        }
+
         public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL vote_add(@option, @payload, @maxPrime)";
             cmd.Parameters.AddWithValue("option", option);
@@ -34,55 +40,45 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// Postgres has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
-        /// a plain SELECT is always an MVCC snapshot read here, so it never
-        /// waits on a concurrent vote_add insert's row lock.
-        /// </summary>
         /// <summary>Calls db_cpu_burn directly - set-based CPU burn, no INSERT into vote/payload at all.</summary>
         public async Task DbCpuBurnAsync(int maxPrime)
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL db_cpu_burn(@maxPrime)";
             cmd.Parameters.AddWithValue("maxPrime", maxPrime);
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// Postgres has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
+        /// a plain SELECT is always an MVCC snapshot read here, so it never
+        /// waits on a concurrent vote_add insert's row lock. Columns are
+        /// aliased to PascalCase here so RepositoryMappers.MapVoteReport can
+        /// use the exact same column names as the other three providers.
+        /// </summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
-                "SELECT total, payload_count, payload_total_bytes " +
+                "SELECT total AS \"Total\", payload_count AS \"PayloadCount\", payload_total_bytes AS \"PayloadTotalBytes\" " +
                 "FROM vote_report_get()";
 
             using var dr = await cmd.ExecuteReaderAsync();
-            var report = new VoteReport();
 
-            if (await dr.ReadAsync())
-            {
-                report.Total = dr["total"] != DBNull.Value ? Convert.ToInt64(dr["total"]) : 0;
-                report.PayloadCount = dr["payload_count"] != DBNull.Value ? Convert.ToInt64(dr["payload_count"]) : 0;
-                report.PayloadTotalBytes = dr["payload_total_bytes"] != DBNull.Value ? Convert.ToInt64(dr["payload_total_bytes"]) : 0;
-            }
-
-            return report;
+            return await dr.ReadAsync() ? RepositoryMappers.MapVoteReport(dr) : new VoteReport();
         }
 
         /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
         public async Task TestConnectionAsync()
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
         }
 
         public async Task EnsureSchemaAsync()
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
@@ -103,8 +99,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task DropSchemaAsync()
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             // Best-effort: terminate every other backend connected to this
             // database - which rolls back any transaction it's holding
@@ -139,8 +134,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults)
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
@@ -177,23 +171,20 @@ namespace ScaleTrigger.Repositories
             }
         }
 
+        /// <summary>Columns aliased to PascalCase so RepositoryMappers.MapLoadConfigSetting can use the exact same column names as the other three providers.</summary>
         public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT setting_name, min_value, max_value FROM load_config_get()";
+            cmd.CommandText =
+                "SELECT setting_name AS \"SettingName\", min_value AS \"MinValue\", max_value AS \"MaxValue\" " +
+                "FROM load_config_get()";
 
             var settings = new List<LoadConfigSetting>();
             using var dr = await cmd.ExecuteReaderAsync();
             while (await dr.ReadAsync())
             {
-                settings.Add(new LoadConfigSetting
-                {
-                    SettingName = (string)dr["setting_name"],
-                    Min = Convert.ToInt32(dr["min_value"]),
-                    Max = Convert.ToInt32(dr["max_value"])
-                });
+                settings.Add(RepositoryMappers.MapLoadConfigSetting(dr));
             }
 
             return settings;
@@ -201,8 +192,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings)
         {
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var transaction = await connection.BeginTransactionAsync();
 
             foreach (var setting in settings)

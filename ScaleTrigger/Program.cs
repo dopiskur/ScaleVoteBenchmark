@@ -68,33 +68,6 @@ builder.Services.AddRateLimiter(options =>
         }));
 });
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-    {
-        Title = "ScaleTrigger API",
-        Version = "v1",
-        Description = "REST API for voting and result retrieval, used for testing scaling in Azure."
-    });
-
-    var jwtScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Enter only the JWT token obtained from /api/auth/login (without the 'Bearer ' prefix)."
-    };
-
-    options.AddSecurityDefinition("Bearer", jwtScheme);
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        { jwtScheme, Array.Empty<string>() }
-    });
-});
-
 var app = builder.Build();
 
 // Fails fast (or just warns) here instead of on the first real request - see "Startup:FailFastOnDbCheck".
@@ -145,16 +118,6 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
-
-// Swagger only in Development, so it's not publicly exposed on Azure.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ScaleTrigger API v1");
-    });
-}
 
 app.MapControllers();
 

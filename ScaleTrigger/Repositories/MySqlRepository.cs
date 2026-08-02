@@ -14,10 +14,16 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
+        private async Task<MySqlConnection> CreateConnectionAsync()
+        {
+            var connection = new MySqlConnection(connectionString);
+            await connection.OpenAsync();
+            return connection;
+        }
+
         public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteAdd";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -34,16 +40,10 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// MySQL has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
-        /// InnoDB's plain SELECT is a non-locking consistent (MVCC) read, so
-        /// it never waits on a concurrent VoteAdd insert's row lock.
-        /// </summary>
         /// <summary>Calls DbCpuBurn directly - set-based CPU burn, no INSERT into Vote/Payload at all.</summary>
         public async Task DbCpuBurnAsync(int maxPrime)
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "DbCpuBurn";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -51,38 +51,32 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// MySQL has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
+        /// InnoDB's plain SELECT is a non-locking consistent (MVCC) read, so
+        /// it never waits on a concurrent VoteAdd insert's row lock.
+        /// </summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteReportGet";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
             using var dr = await cmd.ExecuteReaderAsync();
-            var report = new VoteReport();
 
-            if (await dr.ReadAsync())
-            {
-                report.Total = dr["Total"] != DBNull.Value ? Convert.ToInt64(dr["Total"]) : 0;
-                report.PayloadCount = dr["PayloadCount"] != DBNull.Value ? Convert.ToInt64(dr["PayloadCount"]) : 0;
-                report.PayloadTotalBytes = dr["PayloadTotalBytes"] != DBNull.Value ? Convert.ToInt64(dr["PayloadTotalBytes"]) : 0;
-            }
-
-            return report;
+            return await dr.ReadAsync() ? RepositoryMappers.MapVoteReport(dr) : new VoteReport();
         }
 
         /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
         public async Task TestConnectionAsync()
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
         }
 
         public async Task EnsureSchemaAsync()
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
@@ -106,8 +100,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task DropSchemaAsync()
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             // Best-effort: kill every other connection to this database -
             // which rolls back any transaction it's holding immediately,
@@ -164,8 +157,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults)
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
 
             using (var checkCmd = connection.CreateCommand())
             {
@@ -207,8 +199,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "LoadConfigGet";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -217,12 +208,7 @@ namespace ScaleTrigger.Repositories
             using var dr = await cmd.ExecuteReaderAsync();
             while (await dr.ReadAsync())
             {
-                settings.Add(new LoadConfigSetting
-                {
-                    SettingName = (string)dr["SettingName"],
-                    Min = Convert.ToInt32(dr["MinValue"]),
-                    Max = Convert.ToInt32(dr["MaxValue"])
-                });
+                settings.Add(RepositoryMappers.MapLoadConfigSetting(dr));
             }
 
             return settings;
@@ -230,8 +216,7 @@ namespace ScaleTrigger.Repositories
 
         public async Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings)
         {
-            using var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            using var connection = await CreateConnectionAsync();
             using var transaction = await connection.BeginTransactionAsync();
 
             foreach (var setting in settings)

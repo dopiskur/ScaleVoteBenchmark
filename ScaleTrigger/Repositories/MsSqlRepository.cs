@@ -53,11 +53,6 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// dbo.VoteReportGet reads with WITH (NOLOCK), so this doesn't wait
-        /// behind a concurrent VoteAdd insert's lock under SQL Server's
-        /// default READ COMMITTED (locking, not snapshot) isolation.
-        /// </summary>
         /// <summary>Calls DbCpuBurn directly - set-based CPU burn, no INSERT into Vote/Payload at all.</summary>
         public async Task DbCpuBurnAsync(int maxPrime)
         {
@@ -69,6 +64,11 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// dbo.VoteReportGet reads with WITH (NOLOCK), so this doesn't wait
+        /// behind a concurrent VoteAdd insert's lock under SQL Server's
+        /// default READ COMMITTED (locking, not snapshot) isolation.
+        /// </summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -77,16 +77,8 @@ namespace ScaleTrigger.Repositories
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
             using var dr = await cmd.ExecuteReaderAsync();
-            var report = new VoteReport();
 
-            if (await dr.ReadAsync())
-            {
-                report.Total = dr["Total"] != DBNull.Value ? Convert.ToInt64(dr["Total"]) : 0;
-                report.PayloadCount = dr["PayloadCount"] != DBNull.Value ? Convert.ToInt64(dr["PayloadCount"]) : 0;
-                report.PayloadTotalBytes = dr["PayloadTotalBytes"] != DBNull.Value ? Convert.ToInt64(dr["PayloadTotalBytes"]) : 0;
-            }
-
-            return report;
+            return await dr.ReadAsync() ? RepositoryMappers.MapVoteReport(dr) : new VoteReport();
         }
 
         /// <summary>Exceptions intentionally propagate so startup logic can log a clear error.</summary>
@@ -234,12 +226,7 @@ namespace ScaleTrigger.Repositories
             using var dr = await cmd.ExecuteReaderAsync();
             while (await dr.ReadAsync())
             {
-                settings.Add(new LoadConfigSetting
-                {
-                    SettingName = (string)dr["SettingName"],
-                    Min = Convert.ToInt32(dr["MinValue"]),
-                    Max = Convert.ToInt32(dr["MaxValue"])
-                });
+                settings.Add(RepositoryMappers.MapLoadConfigSetting(dr));
             }
 
             return settings;

@@ -121,12 +121,24 @@ namespace ScaleTrigger
             return cachedHardwareInfo;
         }
 
-        private static async Task<string?> TryGetAwsEc2InstanceTypeAsync()
+        /// <summary>Opens an HttpClient with a 500ms timeout and runs fetch against it, swallowing any exception (timeout, DNS, connection refused) into a null result - the shared shape behind every metadata-service probe below, none of which should ever throw out to GetHardwareInfoAsync.</summary>
+        private static async Task<string?> TryFetchAsync(Func<HttpClient, Task<string?>> fetch)
         {
             try
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(500) };
+                return await fetch(http);
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
+        private static Task<string?> TryGetAwsEc2InstanceTypeAsync()
+        {
+            return TryFetchAsync(async http =>
+            {
                 using var tokenRequest = new HttpRequestMessage(HttpMethod.Put, "http://169.254.169.254/latest/api/token");
                 tokenRequest.Headers.Add("X-aws-ec2-metadata-token-ttl-seconds", "60");
                 using var tokenResponse = await http.SendAsync(tokenRequest);
@@ -143,20 +155,14 @@ namespace ScaleTrigger
                 return metadataResponse.IsSuccessStatusCode
                     ? await metadataResponse.Content.ReadAsStringAsync()
                     : null;
-            }
-            catch
-            {
-                return null;
-            }
+            });
         }
 
         /// <summary>Azure's IMDS (distinct from AWS's) - only reachable from inside an actual Azure VM, not App Service/Container Apps.</summary>
-        private static async Task<string?> TryGetAzureVmSizeAsync()
+        private static Task<string?> TryGetAzureVmSizeAsync()
         {
-            try
+            return TryFetchAsync(async http =>
             {
-                using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(500) };
-
                 using var request = new HttpRequestMessage(HttpMethod.Get,
                     "http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2021-02-01&format=text");
                 request.Headers.Add("Metadata", "true");
@@ -165,19 +171,14 @@ namespace ScaleTrigger
                 return response.IsSuccessStatusCode
                     ? await response.Content.ReadAsStringAsync()
                     : null;
-            }
-            catch
-            {
-                return null;
-            }
+            });
         }
 
         /// <summary>Reads the task's CPU/memory reservation off the ECS task metadata endpoint (available inside ECS/Fargate tasks only).</summary>
-        private static async Task<string?> TryGetAwsEcsSizeAsync(string metadataUri)
+        private static Task<string?> TryGetAwsEcsSizeAsync(string metadataUri)
         {
-            try
+            return TryFetchAsync(async http =>
             {
-                using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(500) };
                 using var response = await http.GetAsync($"{metadataUri}/task");
                 if (!response.IsSuccessStatusCode)
                 {
@@ -196,11 +197,7 @@ namespace ScaleTrigger
                 return cpuUnits != null || memoryMb != null
                     ? $"{cpuUnits ?? "?"} CPU units / {memoryMb ?? "?"} MiB"
                     : null;
-            }
-            catch
-            {
-                return null;
-            }
+            });
         }
 
         /// <summary>Set by Microsoft's official .NET Docker base images; /.dockerenv is Docker's own marker file on Linux hosts.</summary>
@@ -237,15 +234,7 @@ namespace ScaleTrigger
                     long n = 2;
                     while (sw.ElapsedMilliseconds < 1000)
                     {
-                        bool isPrime = true;
-                        for (long t = 2; t * t <= n; t++)
-                        {
-                            if (n % t == 0)
-                            {
-                                isPrime = false;
-                                break;
-                            }
-                        }
+                        bool isPrime = LoadSimulator.IsPrime(n);
                         GC.KeepAlive(isPrime);
                         n++;
                     }
