@@ -1,6 +1,8 @@
 # ScaleTrigger
 
-A REST API whose entire job is to be an expensive, controllable target for load-testing tools — built to verify that autoscale triggers (Azure App Service, Container Apps, AKS, or anywhere else) actually fire when they should. It is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below).
+A REST API for testing autoscale triggers (Azure App Service, Container Apps, AKS, or anywhere else), built around one distinguishing feature: how much CPU/memory/disk/network each request burns can be turned up or down **live** — from a dashboard or a single API call — while traffic keeps flowing. No redeploy, no restart, and no need to stop the run and repeat the whole experiment just to try a different intensity; scale-up and scale-down thresholds can both be swept in the same run.
+
+ScaleTrigger is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below) while adjusting how expensive each request is on the fly.
 
 The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
@@ -11,7 +13,7 @@ Every `POST /api/vote/add?option=yes|no` call:
 1. Records a vote in the database.
 2. Burns a controllable, randomized amount of CPU, memory, disk I/O, and network latency — the actual point of the benchmark.
 
-The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table) and can be changed **while the app is under live traffic** — from the dashboard or via `POST /api/loadconfig` — with no restart, no redeploy, and no gap in the request stream. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it — traffic never stops flowing while you do it.
+The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table), editable from the dashboard or via `POST /api/loadconfig` — the live-tuning behavior described above. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it.
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns yes/no counts and percentages fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
 
