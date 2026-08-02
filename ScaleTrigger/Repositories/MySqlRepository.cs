@@ -96,6 +96,49 @@ namespace ScaleTrigger.Repositories
             using var connection = new MySqlConnection(connectionString);
             await connection.OpenAsync();
 
+            // Best-effort: kill every other connection to this database -
+            // which rolls back any transaction it's holding immediately,
+            // not waiting on whatever lock it's holding - before dropping
+            // anything, so a reset can't hang behind someone else's
+            // transaction. Needs the PROCESS privilege to see other
+            // connections and CONNECTION_ADMIN/SUPER to kill them; silently
+            // skipped (per-connection, or entirely if listing them fails)
+            // if the configured account doesn't have them, in which case
+            // the DROPs below just run normally and may themselves block.
+            try
+            {
+                var connectionIdsToKill = new List<long>();
+                using (var listCmd = connection.CreateCommand())
+                {
+                    listCmd.CommandText =
+                        "SELECT id FROM information_schema.processlist " +
+                        "WHERE db = DATABASE() AND id != CONNECTION_ID()";
+                    using var reader = await listCmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        connectionIdsToKill.Add(reader.GetInt64(0));
+                    }
+                }
+
+                foreach (var id in connectionIdsToKill)
+                {
+                    try
+                    {
+                        using var killCmd = connection.CreateCommand();
+                        killCmd.CommandText = $"KILL {id};";
+                        await killCmd.ExecuteNonQueryAsync();
+                    }
+                    catch
+                    {
+                        // Already closed, or not ours to kill - move on to the next one.
+                    }
+                }
+            }
+            catch
+            {
+                // No PROCESS permission to even list other connections - proceed without forcing them out.
+            }
+
             // No separate shrink step: InnoDB's file-per-table storage
             // frees each table's .ibd file as part of DROP TABLE itself.
             foreach (var batch in SchemaScripts.MySqlDrop)

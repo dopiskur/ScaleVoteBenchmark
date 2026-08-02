@@ -94,6 +94,27 @@ namespace ScaleTrigger.Repositories
             using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
 
+            // Best-effort: terminate every other backend connected to this
+            // database - which rolls back any transaction it's holding
+            // immediately, not waiting on whatever lock it's holding -
+            // before dropping anything, so a reset can't hang behind
+            // someone else's transaction. Needs superuser or the
+            // pg_signal_backend role; silently skipped if the configured
+            // role doesn't have it, in which case the DROPs below just run
+            // normally and may themselves block on any existing lock.
+            try
+            {
+                using var terminateCmd = connection.CreateCommand();
+                terminateCmd.CommandText =
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity " +
+                    "WHERE datname = current_database() AND pid != pg_backend_pid();";
+                await terminateCmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Insufficient privilege to terminate other backends - proceed without forcing them out.
+            }
+
             // No separate shrink step: DROP TABLE frees the underlying
             // file(s) immediately, so there's nothing left for VACUUM.
             foreach (var batch in SchemaScripts.PostgreSqlDrop)

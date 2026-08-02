@@ -30,6 +30,13 @@ namespace ScaleTrigger.Interfaces
         /// space. Destructive and irreversible - callers must follow up
         /// with EnsureSchemaAsync() and LoadConfigEnsureSeededAsync() to
         /// get a working schema back (see VoteApiController.Reset()).
+        /// First makes a best-effort attempt to force out every other
+        /// connection/transaction against the database (rolling them back
+        /// immediately rather than waiting on whatever lock they hold),
+        /// so a reset can't hang behind someone else's open transaction -
+        /// silently skipped if the configured account lacks the
+        /// permission to do so, in which case the drop proceeds normally
+        /// and may itself block on an existing lock.
         /// </summary>
         Task DropSchemaAsync();
 

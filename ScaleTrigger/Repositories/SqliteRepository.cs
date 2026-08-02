@@ -178,6 +178,19 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
+            // SQLite has no server-side connections to kill - a lock here
+            // is another process/handle holding the same file, which
+            // nothing in this process can forcibly evict. The closest
+            // equivalent to "don't wait, ignore the lock" is to stop
+            // CreateConnectionAsync's normal 5s busy_timeout from waiting
+            // at all: fail fast with SQLITE_BUSY instead of blocking, so a
+            // reset can't hang behind someone else's write lock.
+            using (var busyTimeoutCmd = connection.CreateCommand())
+            {
+                busyTimeoutCmd.CommandText = "PRAGMA busy_timeout = 0;";
+                await busyTimeoutCmd.ExecuteNonQueryAsync();
+            }
+
             foreach (var batch in SchemaScripts.SqliteDrop)
             {
                 using var cmd = connection.CreateCommand();

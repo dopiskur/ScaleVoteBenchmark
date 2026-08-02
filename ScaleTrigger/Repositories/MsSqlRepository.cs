@@ -108,24 +108,67 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
-            foreach (var batch in SchemaScripts.MsSqlDrop)
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = batch;
-                await cmd.ExecuteNonQueryAsync();
-            }
-
-            // Best-effort: reclaims data + log file space; may fail on a
-            // shared/managed instance without sufficient permission.
+            // Best-effort: force out every other connection and roll back
+            // their transactions immediately - not waiting on whatever lock
+            // they're holding - before dropping anything, so a reset can't
+            // hang behind someone else's open transaction. Needs ALTER
+            // DATABASE rights; silently skipped if the configured account
+            // doesn't have them (e.g. a restricted shared/managed
+            // database), in which case the DROPs below just run normally
+            // and may themselves block on any existing lock.
+            bool forcedSingleUser = false;
             try
             {
-                using var shrinkCmd = connection.CreateCommand();
-                shrinkCmd.CommandText = "DBCC SHRINKDATABASE (0);";
-                await shrinkCmd.ExecuteNonQueryAsync();
+                using var singleUserCmd = connection.CreateCommand();
+                singleUserCmd.CommandText = $"ALTER DATABASE [{connection.Database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;";
+                await singleUserCmd.ExecuteNonQueryAsync();
+                forcedSingleUser = true;
             }
             catch
             {
-                // Shrinking is a nice-to-have.
+                // No ALTER DATABASE permission - proceed without forcing other connections out.
+            }
+
+            try
+            {
+                foreach (var batch in SchemaScripts.MsSqlDrop)
+                {
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = batch;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Best-effort: reclaims data + log file space; may fail on a
+                // shared/managed instance without sufficient permission.
+                try
+                {
+                    using var shrinkCmd = connection.CreateCommand();
+                    shrinkCmd.CommandText = "DBCC SHRINKDATABASE (0);";
+                    await shrinkCmd.ExecuteNonQueryAsync();
+                }
+                catch
+                {
+                    // Shrinking is a nice-to-have.
+                }
+            }
+            finally
+            {
+                // Always undo SINGLE_USER if we set it, even if the DROPs
+                // above failed, so the database isn't left refusing every
+                // other connection.
+                if (forcedSingleUser)
+                {
+                    try
+                    {
+                        using var multiUserCmd = connection.CreateCommand();
+                        multiUserCmd.CommandText = $"ALTER DATABASE [{connection.Database}] SET MULTI_USER;";
+                        await multiUserCmd.ExecuteNonQueryAsync();
+                    }
+                    catch
+                    {
+                        // Best-effort restore.
+                    }
+                }
             }
         }
 
