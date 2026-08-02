@@ -69,13 +69,23 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 32px;
-    align-items: start;
+    /* Stretch (the grid default) instead of start, so the shorter column's
+       card can grow to close the gap to the taller column's bottom edge. */
   }
 
   @media (max-width: 760px) {
     .dashboard-columns {
       grid-template-columns: 1fr;
     }
+  }
+
+  .dashboard-column--fill {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-column--fill .card {
+    flex: 1;
   }
 
   .section-title--first {
@@ -264,7 +274,7 @@
     <h1>ScaleTrigger</h1>
 
     <div class="dashboard-columns">
-      <div>
+      <div class="dashboard-column--fill">
         <p class="section-title section-title--first">Configuration</p>
 
         <div class="card">
