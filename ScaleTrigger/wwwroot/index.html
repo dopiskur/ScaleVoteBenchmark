@@ -63,13 +63,15 @@
     font-size: 18px;
     font-weight: 600;
     margin: 0 0 24px;
+    color: var(--text-primary);
   }
 
   .dashboard-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 32px;
-    align-items: start;
+    /* stretch (the default) so the Configuration column can reach down to
+       the bottom of the taller Votes+Node Benchmark column */
   }
 
   @media (max-width: 760px) {
@@ -89,11 +91,27 @@
     margin-top: 24px;
   }
 
+  /* Configuration only: stretches its card to match the right column's
+     height, then spreads the extra room evenly between its groups instead
+     of dumping it all as dead space below the last one. */
+  .dashboard-column--fill {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-column--fill .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
   .tiles {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 8px;
+    margin-top: 16px;
   }
 
   .tile-label {
@@ -140,6 +158,7 @@
     font-size: 15px;
     font-weight: 600;
     margin: 0 0 12px;
+    color: var(--text-primary);
   }
 
   .group-title {
@@ -264,47 +283,58 @@
     <h1>ScaleTrigger</h1>
 
     <div class="dashboard-columns">
-      <div>
+      <div class="dashboard-column--fill">
         <div class="card">
           <p class="section-title">Configuration</p>
 
-          <p class="group-title">Refresh</p>
-          <p class="group-subtitle">How often the app polls this table for changes.</p>
-          <div class="loadconfig-row loadconfig-row--single">
-            <span class="loadconfig-col-heading">Setting</span>
-            <span class="loadconfig-col-heading">Seconds</span>
+          <div class="config-group">
+            <div class="loadconfig-row loadconfig-row--single">
+              <span class="loadconfig-col-heading">Setting</span>
+              <span class="loadconfig-col-heading">Seconds</span>
+            </div>
+            <div id="loadconfig-rows-refresh"></div>
           </div>
-          <div id="loadconfig-rows-refresh"></div>
 
-          <p class="group-title">Application</p>
-          <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
-          <div class="loadconfig-row">
-            <span class="loadconfig-col-heading">Setting</span>
-            <span class="loadconfig-col-heading">Min</span>
-            <span class="loadconfig-col-heading">Max</span>
+          <div class="config-group">
+            <p class="group-title">Application</p>
+            <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
+            <div class="loadconfig-row">
+              <span class="loadconfig-col-heading">Setting</span>
+              <span class="loadconfig-col-heading">Min</span>
+              <span class="loadconfig-col-heading">Max</span>
+            </div>
+            <div id="loadconfig-rows-application"></div>
           </div>
-          <div id="loadconfig-rows-application"></div>
 
-          <p class="group-title">Database</p>
-          <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
-          <div class="loadconfig-row">
-            <span class="loadconfig-col-heading">Setting</span>
-            <span class="loadconfig-col-heading">Min</span>
-            <span class="loadconfig-col-heading">Max</span>
+          <div class="config-group">
+            <p class="group-title">Database</p>
+            <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
+            <div class="loadconfig-row">
+              <span class="loadconfig-col-heading">Setting</span>
+              <span class="loadconfig-col-heading">Min</span>
+              <span class="loadconfig-col-heading">Max</span>
+            </div>
+            <div id="loadconfig-rows-database"></div>
           </div>
-          <div id="loadconfig-rows-database"></div>
 
-          <div class="config-actions">
-            <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
-            <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+          <div class="config-group">
+            <div class="config-actions">
+              <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+              <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+            </div>
+            <p class="status" id="loadconfig-status"></p>
           </div>
-          <p class="status" id="loadconfig-status"></p>
         </div>
       </div>
 
       <div>
         <div class="card">
           <p class="section-title">Votes</p>
+
+          <p class="group-title">Details</p>
+          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
 
           <div class="tiles">
             <div>
@@ -317,18 +347,12 @@
             </div>
           </div>
 
-          <p class="group-title">Details</p>
-          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
-
           <p class="status" id="status">Loading…</p>
         </div>
 
         <div class="card">
           <p class="section-title">Node Benchmark</p>
 
-          <p class="group-title">Hardware</p>
           <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
           <div id="hw-rows"></div>
 
