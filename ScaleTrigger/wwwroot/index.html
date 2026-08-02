@@ -112,6 +112,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin-top: 16px;
+    text-align: center;
   }
 
   .tile-label {
@@ -320,7 +321,6 @@
           <div class="config-group">
             <div class="config-actions">
               <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
-              <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
             </div>
             <p class="status" id="loadconfig-status"></p>
           </div>
@@ -347,6 +347,9 @@
             </div>
           </div>
 
+          <div class="config-actions">
+            <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+          </div>
           <p class="status" id="status">Loading…</p>
         </div>
 
@@ -477,22 +480,22 @@
 
       try {
         // Only prompts for login if the API comes back 401.
-        loadConfigStatusEl.textContent = 'Resetting database…';
+        statusEl.textContent = 'Resetting database…';
         let resetResponse = await fetch('/api/vote/reset', { method: 'POST' });
 
         if (resetResponse.status === 401) {
           const username = prompt('Admin username:');
           if (username === null) {
-            loadConfigStatusEl.textContent = '';
+            statusEl.textContent = '';
             return;
           }
           const password = prompt('Admin password:');
           if (password === null) {
-            loadConfigStatusEl.textContent = '';
+            statusEl.textContent = '';
             return;
           }
 
-          loadConfigStatusEl.textContent = 'Logging in…';
+          statusEl.textContent = 'Logging in…';
           const loginResponse = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -503,7 +506,7 @@
           }
           const { token } = await loginResponse.json();
 
-          loadConfigStatusEl.textContent = 'Resetting database…';
+          statusEl.textContent = 'Resetting database…';
           resetResponse = await fetch('/api/vote/reset', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
@@ -514,11 +517,11 @@
           throw new Error('reset failed (HTTP ' + resetResponse.status + ')');
         }
 
-        loadConfigStatusEl.textContent = 'Database reset.';
+        statusEl.textContent = 'Database reset.';
         await refresh();
         await loadLoadConfig();
       } catch (err) {
-        loadConfigStatusEl.textContent = 'Reset failed (' + err.message + ').';
+        statusEl.textContent = 'Reset failed (' + err.message + ').';
       }
     });
 
