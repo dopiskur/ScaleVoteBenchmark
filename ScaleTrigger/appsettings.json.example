@@ -41,14 +41,14 @@
     "// Note": "Used only to seed the LoadConfig database table the very first time it's created. After that, this section is no longer read; edit the running values from the dashboard instead. Each value is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
     "// ConfigRefresh": "Seconds between polls of the LoadConfig table for values changed via the dashboard. Not a vote-time setting like the others below - it controls how fast an edit to ANY of these takes effect.",
     "ConfigRefresh": { "Min": 1, "Max": 1 },
-    "// CpuIterationsPerVote": "Sysbench's CPU algorithm: counts primes up to this value by trial division. Cost grows roughly as N^1.5, not linearly - keep this much lower than you would a plain iteration count.",
-    "CpuIterationsPerVote": { "Min": 5000, "Max": 20000 },
+    "// CpuIterationsPerVote": "Chained SHA-512 (each hash's output feeds the next hash's input): cost is roughly linear in this value, ~0.3 microseconds/iteration on a typical modern core with no hardware SHA-512 acceleration - measured empirically as ~30ms added latency at 100,000 and ~140ms at 500,000. Recalibrate for your own hardware if it differs noticeably.",
+    "CpuIterationsPerVote": { "Min": 100000, "Max": 500000 },
     "MemoryKilobytesPerVote": { "Min": 3072, "Max": 8192 },
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
     "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",
     "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
-    "// DbCpuIterationsPerVote": "0 = VoteAdd/vote_add just inserts, no CPU burn. Runs inside the database engine itself via DbCpuBurn/db_cpu_burn - a set-based row-generation burn on MsSql/MySql/PostgreSql, the same sysbench trial-division algorithm as CpuIterationsPerVote on Sqlite.",
+    "// DbCpuIterationsPerVote": "0 = VoteAdd/vote_add just inserts, no CPU burn. Runs inside the database engine itself via DbCpuBurn/db_cpu_burn - chained SHA-512 (HASHBYTES/SHA2+UNHEX/pgcrypto digest() on MsSql/MySql/PostgreSql, the same LoadSimulator.HashIterations as CpuIterationsPerVote on Sqlite). Per-iteration cost differs from the app-side figure above - native crypto calls inside a procedural DB loop carry more overhead per call than the tight in-process C# loop, so recalibrate separately if you enable this.",
     "DbCpuIterationsPerVote": { "Min": 0, "Max": 0 }
   },
 

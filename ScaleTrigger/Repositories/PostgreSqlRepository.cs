@@ -40,13 +40,13 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Calls db_cpu_burn directly - set-based CPU burn, no INSERT into vote/payload at all.</summary>
+        /// <summary>Calls db_cpu_burn directly - chained SHA-512 CPU burn, no INSERT into vote/payload at all.</summary>
         public async Task DbCpuBurnAsync(int maxPrime)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "CALL db_cpu_burn(@maxPrime)";
-            cmd.Parameters.AddWithValue("maxPrime", maxPrime);
+            cmd.CommandText = "CALL db_cpu_burn(@iterations)";
+            cmd.Parameters.AddWithValue("iterations", maxPrime);
             await cmd.ExecuteNonQueryAsync();
         }
 

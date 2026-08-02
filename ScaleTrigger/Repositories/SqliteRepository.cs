@@ -47,14 +47,14 @@ namespace ScaleTrigger.Repositories
         }
 
         /// <summary>
-        /// SQLite has no stored procedures, so this registers sysbench's
-        /// CPU algorithm (counts primes up to maxPrime by trial division)
-        /// as a scalar function and calls it from SQL - dispatched by
-        /// the SQL engine, matching the other three providers' VoteAdd.
+        /// SQLite has no stored procedures, so this registers the chained
+        /// SHA-512 CPU burn (see LoadSimulator.HashIterations) as a scalar
+        /// function and calls it from SQL - dispatched by the SQL engine,
+        /// matching the other three providers' VoteAdd/DbCpuBurn.
         /// </summary>
         private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int maxPrime)
         {
-            connection.CreateFunction("sysbench_cpu", (long max) => LoadSimulator.CountPrimesUpTo(max));
+            connection.CreateFunction("sysbench_cpu", (long iterations) => LoadSimulator.HashIterations(iterations));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT sysbench_cpu($maxPrime);";

@@ -25,24 +25,22 @@ namespace ScaleTrigger.Schema
 );",
 
             @"CREATE PROCEDURE dbo.DbCpuBurn
-    @MaxPrime INT
+    @Iterations INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Set-based CPU burn: no procedural loop, no touch of Vote/Payload at
-    -- all - just a large row set for the query engine itself to churn
-    -- through. MAXDOP 1 keeps the cost on a single scheduler, matching a
-    -- single request's share of CPU rather than fanning out across cores.
-    IF @MaxPrime > 0
+    -- Chained SHA-512: each hash's output feeds the next hash's input, so
+    -- the loop can't be folded away - no touch of Vote/Payload at all.
+    IF @Iterations > 0
     BEGIN
-        DECLARE @RowCount BIGINT;
-        SELECT @RowCount = COUNT(*)
-        FROM (
-            SELECT TOP (@MaxPrime) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
-            FROM sys.all_objects a CROSS JOIN sys.all_objects b
-        ) x
-        OPTION (MAXDOP 1);
+        DECLARE @buf VARBINARY(64) = HASHBYTES('SHA2_512', CONVERT(VARBINARY(8), NEWID()));
+        DECLARE @i INT = 0;
+        WHILE @i < @Iterations
+        BEGIN
+            SET @buf = HASHBYTES('SHA2_512', @buf);
+            SET @i += 1;
+        END
     END
 END",
 
@@ -107,22 +105,23 @@ END",
 );",
 
             @"CREATE PROCEDURE `DbCpuBurn`(
-    IN pMaxPrime INT
+    IN pIterations INT
 )
 BEGIN
-    IF pMaxPrime > 0 THEN
-        -- Set-based CPU burn: a recursive CTE generating pMaxPrime rows, no
-        -- procedural loop and no touch of Vote/Payload at all. MySQL caps
-        -- recursive CTE depth at 1000 by default - raised per-session so a
-        -- realistic pMaxPrime doesn't abort with 'Recursive query aborted'.
-        SET SESSION cte_max_recursion_depth = 4294967295;
+    -- Chained SHA-512: each hash's output feeds the next hash's input, so
+    -- the loop can't be folded away - no touch of Vote/Payload at all.
+    -- SHA2() returns a hex string, so UNHEX() keeps buf raw binary across
+    -- iterations instead of re-hashing an ever-stringified hex value.
+    DECLARE buf BINARY(64);
+    DECLARE i INT DEFAULT 0;
 
-        WITH RECURSIVE seq(n) AS (
-            SELECT 1
-            UNION ALL
-            SELECT n + 1 FROM seq WHERE n < pMaxPrime
-        )
-        SELECT COUNT(*) FROM seq;
+    IF pIterations > 0 THEN
+        SET buf = UNHEX(SHA2(UUID(), 512));
+
+        WHILE i < pIterations DO
+            SET buf = UNHEX(SHA2(buf, 512));
+            SET i = i + 1;
+        END WHILE;
     END IF;
 END",
 
@@ -172,16 +171,25 @@ END",
     date_created TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
 );",
 
-            @"CREATE PROCEDURE db_cpu_burn(p_max_prime INT)
+            @"CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+
+            @"CREATE PROCEDURE db_cpu_burn(p_iterations INT)
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    row_count BIGINT;
+    buf BYTEA;
+    i   INT := 0;
 BEGIN
-    -- Set-based CPU burn: generate_series aggregation, no procedural loop
-    -- and no touch of vote/payload at all.
-    IF p_max_prime > 0 THEN
-        SELECT COUNT(*) INTO row_count FROM generate_series(1, p_max_prime);
+    -- Chained SHA-512 via pgcrypto's digest(): each hash's output feeds the
+    -- next hash's input, so the loop can't be folded away - no touch of
+    -- vote/payload at all.
+    IF p_iterations > 0 THEN
+        buf := digest(gen_random_uuid()::TEXT, 'sha512');
+
+        WHILE i < p_iterations LOOP
+            buf := digest(buf, 'sha512');
+            i := i + 1;
+        END LOOP;
     END IF;
 END;
 $$;",

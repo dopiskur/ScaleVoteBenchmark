@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using ScaleTrigger.Models;
 
@@ -210,14 +211,14 @@ namespace ScaleTrigger
         }
 
         /// <summary>
-        /// Sysbench's CPU algorithm (see LoadSimulator.SimulateCpuLoad), run
-        /// on every logical processor at once, each in continuous 1-second
-        /// ticks for durationSeconds - this is a full-node saturation test
+        /// Chained SHA-512 (see LoadSimulator.SimulateCpuLoad), run on every
+        /// logical processor at once, each in continuous 1-second ticks for
+        /// durationSeconds - this is a full-node saturation test
         /// (ScaleTrigger's purpose is verifying autoscale triggers, which
         /// react to total instance CPU%, not one core), not a single-thread
         /// hardware comparison score. Each thread's score is the median
-        /// numbers-checked-per-tick, smoothing out one-off scheduling/GC
-        /// noise; the overall score is the sum across threads.
+        /// hashes-per-tick, smoothing out one-off scheduling/GC noise; the
+        /// overall score is the sum across threads.
         /// </summary>
         public static double RunCpuBenchmark(int durationSeconds)
         {
@@ -227,6 +228,8 @@ namespace ScaleTrigger
             Parallel.For(0, threadCount, threadIndex =>
             {
                 var samples = new List<double>();
+                byte[] buffer = new byte[64];
+                Random.Shared.NextBytes(buffer);
 
                 for (int tick = 0; tick < durationSeconds; tick++)
                 {
@@ -234,8 +237,7 @@ namespace ScaleTrigger
                     long n = 2;
                     while (sw.ElapsedMilliseconds < 1000)
                     {
-                        bool isPrime = LoadSimulator.IsPrime(n);
-                        GC.KeepAlive(isPrime);
+                        buffer = SHA512.HashData(buffer);
                         n++;
                     }
                     samples.Add(n);

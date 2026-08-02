@@ -6,11 +6,12 @@ namespace ScaleTrigger.Interfaces
     {
         /// <summary>
         /// Pass null, not an empty array, to skip the payload insert.
-        /// maxPrime &gt; 0 runs sysbench's CPU algorithm (counts primes up
-        /// to maxPrime by trial division) inside the database engine
-        /// itself before the insert (0 skips it) - unlike
-        /// LoadSimulator.SimulateCpuLoad, which runs the same algorithm
-        /// in the app.
+        /// maxPrime &gt; 0 runs a chained SHA-512 CPU burn (see
+        /// LoadSimulator.HashIterations) inside the database engine itself
+        /// before the insert (0 skips it) - the same algorithm as
+        /// LoadSimulator.SimulateCpuLoad on Sqlite (which calls the exact
+        /// same .NET code via a scalar function), a set-based/native-hash
+        /// equivalent on MsSql/MySql/PostgreSql.
         /// </summary>
         Task VoteAddAsync(string option, byte[]? payload, int maxPrime);
 
@@ -18,7 +19,7 @@ namespace ScaleTrigger.Interfaces
 
         /// <summary>
         /// Runs the same database-side CPU burn VoteAdd uses (DbCpuBurn /
-        /// db_cpu_burn - set-based, no procedural loop) without touching
+        /// db_cpu_burn - a chained native-hash loop) without touching
         /// Vote/Payload at all. 0 is a no-op.
         /// </summary>
         Task DbCpuBurnAsync(int maxPrime);

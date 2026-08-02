@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace ScaleTrigger
 {
     public static class LoadSimulator
@@ -27,54 +29,35 @@ namespace ScaleTrigger
         }
 
         /// <summary>
-        /// Sysbench's CPU benchmark algorithm: counts primes up to
-        /// maxPrime by trial division of each candidate by every integer
-        /// from 2 up to its square root.
+        /// Chained SHA-512: each hash's output becomes the next hash's
+        /// input, so the JIT can't fold the loop away or skip iterations -
+        /// unlike the old trial-division prime count, this doesn't get any
+        /// help from wide hardware SHA acceleration on most CPUs, so it's a
+        /// heavier, steadier per-iteration cost.
         /// </summary>
-        public static void SimulateCpuLoad(int maxPrime)
+        public static void SimulateCpuLoad(int iterations)
         {
-            if (maxPrime <= 0)
+            if (iterations <= 0)
             {
                 return;
             }
 
-            long primeCount = CountPrimesUpTo(maxPrime);
-            GC.KeepAlive(primeCount);
+            byte[] result = HashIterations(iterations);
+            GC.KeepAlive(result);
         }
 
-        /// <summary>
-        /// Sysbench's CPU algorithm: counts primes from 2 to max by trial
-        /// division. Shared by SimulateCpuLoad, SqliteRepository's
-        /// sysbench_cpu scalar function, and (via IsPrime)
-        /// NodeBenchmark.RunCpuBenchmark, whose time-bounded outer loop
-        /// can't reuse this directly without redoing all the smaller n's
-        /// work on every tick.
-        /// </summary>
-        internal static long CountPrimesUpTo(long max)
+        /// <summary>Shared by SimulateCpuLoad and SqliteRepository's sysbench_cpu scalar function.</summary>
+        internal static byte[] HashIterations(long iterations)
         {
-            long primeCount = 0;
-            for (long n = 2; n <= max; n++)
+            byte[] buffer = new byte[64];
+            Random.Shared.NextBytes(buffer);
+
+            for (long i = 0; i < iterations; i++)
             {
-                if (IsPrime(n))
-                {
-                    primeCount++;
-                }
+                buffer = SHA512.HashData(buffer);
             }
 
-            return primeCount;
-        }
-
-        internal static bool IsPrime(long n)
-        {
-            for (long t = 2; t * t <= n; t++)
-            {
-                if (n % t == 0)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return buffer;
         }
 
         public static void SimulateMemoryLoad(int kilobytes)
