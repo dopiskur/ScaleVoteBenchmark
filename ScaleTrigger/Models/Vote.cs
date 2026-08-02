@@ -1,12 +1,5 @@
 namespace ScaleTrigger.Models
 {
-    public class Vote
-    {
-        public long? IDVote { get; set; }
-        public string? Option { get; set; }
-        public DateTime? DateCreated { get; set; }
-    }
-
     /// <summary>Fully computed by the database - matches exactly what the dashboard displays.</summary>
     public class VoteReport
     {

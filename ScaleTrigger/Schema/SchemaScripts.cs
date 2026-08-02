@@ -221,14 +221,6 @@ BEGIN
     FROM vote;
 END;
 $$;",
-
-            @"CREATE PROCEDURE database_cleanup()
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    TRUNCATE TABLE payload, vote RESTART IDENTITY CASCADE;
-END;
-$$;",
         };
 
         // No stored routines - SqliteRepository runs plain SQL directly.
@@ -390,7 +382,6 @@ $$;",
             @"DROP PROCEDURE IF EXISTS load_config_set(VARCHAR, INT, INT);",
             @"DROP FUNCTION IF EXISTS load_config_get();",
             @"DROP TABLE IF EXISTS load_config;",
-            @"DROP PROCEDURE IF EXISTS database_cleanup();",
             @"DROP FUNCTION IF EXISTS vote_report_get();",
             @"DROP PROCEDURE IF EXISTS vote_add(VARCHAR, BYTEA, INT);",
             @"DROP PROCEDURE IF EXISTS db_cpu_burn(INT);",
