@@ -15,7 +15,6 @@
     --border:         rgba(11,11,11,0.10);
     --accent:         #2a78d6;
     --critical:       #d03b3b;
-    --critical-wash:  rgba(208,59,59,0.08);
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -28,7 +27,6 @@
       --border:         rgba(255,255,255,0.10);
       --accent:         #3987e5;
       --critical:       #e66767;
-      --critical-wash:  rgba(230,103,103,0.12);
     }
   }
   :root[data-theme="dark"] .viz-root {
@@ -41,7 +39,6 @@
     --border:         rgba(255,255,255,0.10);
     --accent:         #3987e5;
     --critical:       #e66767;
-    --critical-wash:  rgba(230,103,103,0.12);
   }
 
   * { box-sizing: border-box; }
@@ -144,15 +141,15 @@
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
-    color: var(--critical);
-    background: transparent;
+    color: var(--surface-1);
+    background: var(--critical);
     border: 1px solid var(--critical);
     border-radius: 6px;
     cursor: pointer;
   }
 
   .reset-btn:hover {
-    background: var(--critical-wash);
+    opacity: 0.9;
   }
 
   .section-title {
@@ -331,11 +328,6 @@
         <div class="card">
           <p class="section-title">Votes</p>
 
-          <p class="group-title">Details</p>
-          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
-
           <div class="tiles">
             <div>
               <div class="tile-label">Yes</div>
@@ -346,6 +338,11 @@
               <div class="tile-value" id="no-percent">—</div>
             </div>
           </div>
+
+          <p class="group-title">Details</p>
+          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
 
           <div class="config-actions">
             <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
@@ -369,6 +366,21 @@
             <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
           </div>
           <p class="status" id="benchmark-status"></p>
+
+          <p class="group-title">Recommended CpuIterationsPerVote</p>
+          <p class="group-subtitle">maxPrime_ceiling = R_total × S_other / (N − c); maxPrime_floor = 0.1 × maxPrime_ceiling. Needs the CPU benchmark above and the overhead calibration below.</p>
+
+          <div class="loadconfig-row loadconfig-row--single">
+            <span class="loadconfig-label">Concurrent votes (N)</span>
+            <input type="number" id="recommend-n-input" class="loadconfig-input" min="1" step="1" value="100">
+          </div>
+          <div class="bench-row"><span class="loadconfig-label">Recommended Max (ceiling)</span><span class="bench-value" id="recommend-max">—</span></div>
+          <div class="bench-row"><span class="loadconfig-label">Recommended Min (floor)</span><span class="bench-value" id="recommend-min">—</span></div>
+
+          <div class="config-actions">
+            <button class="save-btn" id="calibrate-btn" type="button">Calibrate overhead</button>
+          </div>
+          <p class="status" id="calibrate-status"></p>
         </div>
       </div>
     </div>
@@ -707,6 +719,60 @@
     const benchMemoryEl = document.getElementById('bench-memory');
     const benchDiskEl = document.getElementById('bench-disk');
 
+    const recommendNInput = document.getElementById('recommend-n-input');
+    const recommendMaxEl = document.getElementById('recommend-max');
+    const recommendMinEl = document.getElementById('recommend-min');
+    const calibrateBtn = document.getElementById('calibrate-btn');
+    const calibrateStatusEl = document.getElementById('calibrate-status');
+
+    // R_total (aggregate numbers/s from the CPU benchmark), c (logical
+    // processors) and S_other (measured network+DB overhead per vote, in
+    // seconds) - all three are needed before a recommendation can be shown;
+    // null until the benchmark/hardware/calibration that produces each one
+    // has actually run at least once.
+    let cpuNumbersPerSecondValue = null;
+    let processorCountValue = null;
+    let sOtherSecondsValue = null;
+
+    function median(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    // maxPrime_ceiling = R_total * S_other / (N - c); maxPrime_floor = 0.1 * ceiling.
+    // Recomputed client-side only - never re-runs the benchmark or calibration.
+    function recomputeRecommendation() {
+      if (cpuNumbersPerSecondValue == null || processorCountValue == null || sOtherSecondsValue == null) {
+        recommendMaxEl.textContent = '—';
+        recommendMinEl.textContent = '—';
+        return;
+      }
+
+      const n = Number(recommendNInput.value);
+      const denominator = n - processorCountValue;
+
+      if (!Number.isFinite(n) || n <= 0) {
+        recommendMaxEl.textContent = 'Enter N';
+        recommendMinEl.textContent = '—';
+        return;
+      }
+
+      if (denominator <= 0) {
+        recommendMaxEl.textContent = 'N must exceed ' + processorCountValue;
+        recommendMinEl.textContent = '—';
+        return;
+      }
+
+      const ceiling = (cpuNumbersPerSecondValue * sOtherSecondsValue) / denominator;
+      const floor = 0.1 * ceiling;
+
+      recommendMaxEl.textContent = Math.round(ceiling).toLocaleString();
+      recommendMinEl.textContent = Math.round(floor).toLocaleString();
+    }
+
+    recommendNInput.addEventListener('input', recomputeRecommendation);
+
     function renderHardwareRows(hw) {
       hwRowsEl.innerHTML = '';
 
@@ -745,6 +811,8 @@
         const hw = await response.json();
         hwStatusEl.textContent = '';
         renderHardwareRows(hw);
+        processorCountValue = hw.processorCount;
+        recomputeRecommendation();
       } catch (err) {
         hwStatusEl.textContent = 'Could not load hardware info.';
         hwRowsEl.innerHTML = '';
@@ -800,10 +868,124 @@
         benchMemoryEl.textContent = result.memoryMbPerSecond.toFixed(1) + ' MB/s';
         benchDiskEl.textContent = result.diskMbPerSecond.toFixed(1) + ' MB/s';
         benchmarkStatusEl.textContent = 'Done.';
+        cpuNumbersPerSecondValue = result.cpuNumbersPerSecond;
+        recomputeRecommendation();
       } catch (err) {
         benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
       } finally {
         benchmarkBtn.disabled = false;
+      }
+    });
+
+    // Measures S_other (network+DB overhead per vote, excluding CPU work) by
+    // briefly forcing CpuIterationsPerVote down to a near-zero value, timing
+    // a handful of real votes client-side, then restoring the original
+    // setting - always, even if something above fails, so a broken
+    // calibration run can't leave live load-testing traffic stuck at the
+    // near-zero value.
+    calibrateBtn.addEventListener('click', async () => {
+      if (!confirm('This briefly sets CpuIterationsPerVote to a near-zero value and sends 8 real votes to the database to measure network/DB overhead, then restores the original setting. Continue?')) {
+        return;
+      }
+
+      const CALIBRATION_VOTES = 8;
+      const CALIBRATION_MAX_PRIME = 500;
+
+      calibrateBtn.disabled = true;
+      calibrateStatusEl.textContent = 'Calibrating…';
+
+      // Scoped to this run: obtained on the first 401 (if Auth:Enabled),
+      // then reused for every remaining call so the login prompt only
+      // appears once instead of once per vote.
+      let authToken = null;
+      let authAttempted = false;
+
+      async function authorizedFetch(url, options) {
+        const headers = { ...(options?.headers || {}) };
+        if (authToken) {
+          headers['Authorization'] = 'Bearer ' + authToken;
+        }
+        let response = await fetch(url, { ...options, headers });
+
+        if (response.status === 401 && !authAttempted) {
+          authAttempted = true;
+          const username = prompt('Admin username:');
+          if (username === null) {
+            throw new Error('login cancelled');
+          }
+          const password = prompt('Admin password:');
+          if (password === null) {
+            throw new Error('login cancelled');
+          }
+
+          const loginResponse = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          if (!loginResponse.ok) {
+            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+          }
+          const { token } = await loginResponse.json();
+          authToken = token;
+          headers['Authorization'] = 'Bearer ' + authToken;
+          response = await fetch(url, { ...options, headers });
+        }
+
+        return response;
+      }
+
+      let originalSetting = null;
+
+      try {
+        const currentSettings = await (await fetch('/api/loadconfig', { cache: 'no-store' })).json();
+        originalSetting = currentSettings.find(s => s.settingName === 'CpuIterationsPerVote') || { min: 0, max: 0 };
+
+        const lowerResponse = await authorizedFetch('/api/loadconfig', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([{ settingName: 'CpuIterationsPerVote', min: CALIBRATION_MAX_PRIME, max: CALIBRATION_MAX_PRIME }])
+        });
+        if (!lowerResponse.ok) {
+          throw new Error('could not lower CpuIterationsPerVote (HTTP ' + lowerResponse.status + ')');
+        }
+
+        const samplesSeconds = [];
+        for (let i = 0; i < CALIBRATION_VOTES; i++) {
+          const option = i % 2 === 0 ? 'yes' : 'no';
+          const startedAt = performance.now();
+          const voteResponse = await authorizedFetch('/api/vote/add?option=' + option, { method: 'POST' });
+          const elapsedMs = performance.now() - startedAt;
+          if (voteResponse.ok) {
+            samplesSeconds.push(elapsedMs / 1000);
+          }
+        }
+
+        if (samplesSeconds.length === 0) {
+          throw new Error('no calibration votes succeeded');
+        }
+
+        sOtherSecondsValue = median(samplesSeconds);
+        calibrateStatusEl.textContent = 'Calibrated: ' + (sOtherSecondsValue * 1000).toFixed(1) + ' ms/vote overhead (' + samplesSeconds.length + '/' + CALIBRATION_VOTES + ' votes).';
+        recomputeRecommendation();
+      } catch (err) {
+        calibrateStatusEl.textContent = 'Calibration failed (' + err.message + ').';
+      } finally {
+        if (originalSetting) {
+          try {
+            const restoreResponse = await authorizedFetch('/api/loadconfig', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([{ settingName: 'CpuIterationsPerVote', min: originalSetting.min, max: originalSetting.max }])
+            });
+            if (!restoreResponse.ok) {
+              throw new Error('HTTP ' + restoreResponse.status);
+            }
+          } catch (restoreErr) {
+            calibrateStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
+          }
+        }
+        calibrateBtn.disabled = false;
       }
     });
 
