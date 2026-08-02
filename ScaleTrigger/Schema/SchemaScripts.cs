@@ -83,15 +83,6 @@ BEGIN
         (SELECT ISNULL(SUM(DATALENGTH(Data)), 0) FROM dbo.Payload WITH (NOLOCK)) AS [PayloadTotalBytes]
     FROM dbo.Vote WITH (NOLOCK);
 END",
-
-            @"CREATE PROCEDURE dbo.DatabaseCleanup
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    TRUNCATE TABLE dbo.Payload;
-    TRUNCATE TABLE dbo.Vote;
-END",
         };
 
         public static readonly string[] MySql =
@@ -161,14 +152,6 @@ BEGIN
         (SELECT COUNT(*) FROM `Payload`) AS `PayloadCount`,
         (SELECT IFNULL(SUM(LENGTH(`Data`)), 0) FROM `Payload`) AS `PayloadTotalBytes`
     FROM `Vote`;
-END",
-
-            @"CREATE PROCEDURE `DatabaseCleanup`()
-BEGIN
-    SET FOREIGN_KEY_CHECKS = 0;
-    TRUNCATE TABLE `Payload`;
-    TRUNCATE TABLE `Vote`;
-    SET FOREIGN_KEY_CHECKS = 1;
 END",
         };
 
@@ -383,7 +366,6 @@ $$;",
             @"IF OBJECT_ID('dbo.LoadConfigSet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigSet;",
             @"IF OBJECT_ID('dbo.LoadConfigGet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigGet;",
             @"IF OBJECT_ID('dbo.LoadConfig', 'U') IS NOT NULL DROP TABLE dbo.LoadConfig;",
-            @"IF OBJECT_ID('dbo.DatabaseCleanup', 'P') IS NOT NULL DROP PROCEDURE dbo.DatabaseCleanup;",
             @"IF OBJECT_ID('dbo.VoteReportGet', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteReportGet;",
             @"IF OBJECT_ID('dbo.VoteAdd', 'P') IS NOT NULL DROP PROCEDURE dbo.VoteAdd;",
             @"IF OBJECT_ID('dbo.DbCpuBurn', 'P') IS NOT NULL DROP PROCEDURE dbo.DbCpuBurn;",
@@ -396,7 +378,6 @@ $$;",
             @"DROP PROCEDURE IF EXISTS `LoadConfigSet`;",
             @"DROP PROCEDURE IF EXISTS `LoadConfigGet`;",
             @"DROP TABLE IF EXISTS `LoadConfig`;",
-            @"DROP PROCEDURE IF EXISTS `DatabaseCleanup`;",
             @"DROP PROCEDURE IF EXISTS `VoteReportGet`;",
             @"DROP PROCEDURE IF EXISTS `VoteAdd`;",
             @"DROP PROCEDURE IF EXISTS `DbCpuBurn`;",

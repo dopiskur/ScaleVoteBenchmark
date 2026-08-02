@@ -110,7 +110,7 @@ Creating tables/procedures requires DDL permissions on the configured database u
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `POST /api/vote/add?option=yes\|no` | optional (`Auth:Enabled`) | Records a vote and generates the per-vote CPU/memory/disk/network load |
+| `POST /api/vote/add?option=yes\|no` | optional (`Auth:Enabled`) | Records a vote and generates the per-vote CPU/memory/disk/network load. Add `&dbCpuBurnOnly=true` to isolate the database-side CPU burn (`DbCpuBurn`/`db_cpu_burn`) from the `Vote`/`Payload` insert — no row is written |
 | `GET /api/vote/report` | anonymous | `{ total, payloadCount, payloadTotalBytes }`, computed by the database |
 | `POST /api/vote/reset` | optional | Drops and recreates the schema — database ends up looking brand new |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password" }` → `{ "token" }` |

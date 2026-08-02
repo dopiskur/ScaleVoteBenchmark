@@ -12,7 +12,7 @@ namespace ScaleTrigger
         private static readonly string[] SettingNames =
         {
             "CpuIterationsPerVote",
-            "MemoryMegabytesPerVote",
+            "MemoryKilobytesPerVote",
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
@@ -26,8 +26,16 @@ namespace ScaleTrigger
 
             foreach (var settingName in SettingNames)
             {
-                int min = int.Parse(configuration[$"Load:{settingName}:Min"] ?? "0");
-                int max = int.Parse(configuration[$"Load:{settingName}:Max"] ?? "0");
+                if (!int.TryParse(configuration[$"Load:{settingName}:Min"], out int min))
+                {
+                    min = 0;
+                }
+
+                if (!int.TryParse(configuration[$"Load:{settingName}:Max"], out int max))
+                {
+                    max = 0;
+                }
+
                 defaults.Add(new LoadConfigSetting { SettingName = settingName, Min = min, Max = max });
             }
 

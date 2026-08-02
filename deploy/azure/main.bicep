@@ -88,8 +88,8 @@ param loadConfigRefreshMinSeconds int = 1
 param loadConfigRefreshMaxSeconds int = 1
 param loadCpuIterationsPerVoteMin int = 5000
 param loadCpuIterationsPerVoteMax int = 20000
-param loadMemoryMegabytesPerVoteMin int = 3
-param loadMemoryMegabytesPerVoteMax int = 8
+param loadMemoryKilobytesPerVoteMin int = 3072
+param loadMemoryKilobytesPerVoteMax int = 8192
 param loadDiskWriteKilobytesPerVoteMin int = 32
 param loadDiskWriteKilobytesPerVoteMax int = 96
 param loadNetworkLatencyMillisecondsPerVoteMin int = 10
@@ -179,8 +179,8 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Load__ConfigRefresh__Max', value: string(loadConfigRefreshMaxSeconds) }
         { name: 'Load__CpuIterationsPerVote__Min', value: string(loadCpuIterationsPerVoteMin) }
         { name: 'Load__CpuIterationsPerVote__Max', value: string(loadCpuIterationsPerVoteMax) }
-        { name: 'Load__MemoryMegabytesPerVote__Min', value: string(loadMemoryMegabytesPerVoteMin) }
-        { name: 'Load__MemoryMegabytesPerVote__Max', value: string(loadMemoryMegabytesPerVoteMax) }
+        { name: 'Load__MemoryKilobytesPerVote__Min', value: string(loadMemoryKilobytesPerVoteMin) }
+        { name: 'Load__MemoryKilobytesPerVote__Max', value: string(loadMemoryKilobytesPerVoteMax) }
         { name: 'Load__DiskWriteKilobytesPerVote__Min', value: string(loadDiskWriteKilobytesPerVoteMin) }
         { name: 'Load__DiskWriteKilobytesPerVote__Max', value: string(loadDiskWriteKilobytesPerVoteMax) }
         { name: 'Load__NetworkLatencyMillisecondsPerVote__Min', value: string(loadNetworkLatencyMillisecondsPerVoteMin) }

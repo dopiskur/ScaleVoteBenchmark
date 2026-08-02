@@ -11,7 +11,7 @@ namespace ScaleTrigger.Controllers
         private static readonly string[] KnownSettingNames =
         {
             "CpuIterationsPerVote",
-            "MemoryMegabytesPerVote",
+            "MemoryKilobytesPerVote",
             "DiskWriteKilobytesPerVote",
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
@@ -23,7 +23,7 @@ namespace ScaleTrigger.Controllers
         private static readonly Dictionary<string, int> MaxAllowedValues = new()
         {
             ["CpuIterationsPerVote"] = 100_000_000,
-            ["MemoryMegabytesPerVote"] = 4096,
+            ["MemoryKilobytesPerVote"] = 4_194_304,
             ["DiskWriteKilobytesPerVote"] = 1_048_576,
             ["NetworkLatencyMillisecondsPerVote"] = 60_000,
             ["PayloadBytesPerVote"] = 10_485_760,

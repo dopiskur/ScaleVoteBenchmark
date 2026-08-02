@@ -278,7 +278,8 @@ namespace ScaleTrigger
             string dir = Path.Combine(Path.GetTempPath(), "ScaleTrigger", "nodebenchmark");
             Directory.CreateDirectory(dir);
 
-            byte[] buffer = new byte[sizeMegabytes * 1024 * 1024];
+            long bufferSizeBytes = (long)sizeMegabytes * 1024 * 1024;
+            byte[] buffer = new byte[bufferSizeBytes];
             Random.Shared.NextBytes(buffer);
 
             var seconds = new List<double>();

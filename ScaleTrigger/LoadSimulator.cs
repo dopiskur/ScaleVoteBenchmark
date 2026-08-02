@@ -62,14 +62,14 @@ namespace ScaleTrigger
             return true;
         }
 
-        public static void SimulateMemoryLoad(int megabytes)
+        public static void SimulateMemoryLoad(int kilobytes)
         {
-            if (megabytes <= 0)
+            if (kilobytes <= 0)
             {
                 return;
             }
 
-            long sizeInBytes = (long)megabytes * 1024 * 1024;
+            long sizeInBytes = (long)kilobytes * 1024;
             byte[] buffer = new byte[sizeInBytes];
 
             Random.Shared.NextBytes(buffer);
@@ -93,7 +93,8 @@ namespace ScaleTrigger
                 return;
             }
 
-            byte[] buffer = new byte[kilobytes * 1024];
+            long sizeInBytes = (long)kilobytes * 1024;
+            byte[] buffer = new byte[sizeInBytes];
             Random.Shared.NextBytes(buffer);
 
             string path = Path.Combine(DiskLoadDirectory, $"{Guid.NewGuid():N}.tmp");

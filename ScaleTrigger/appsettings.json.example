@@ -43,7 +43,7 @@
     "ConfigRefresh": { "Min": 1, "Max": 1 },
     "// CpuIterationsPerVote": "Sysbench's CPU algorithm: counts primes up to this value by trial division. Cost grows roughly as N^1.5, not linearly - keep this much lower than you would a plain iteration count.",
     "CpuIterationsPerVote": { "Min": 5000, "Max": 20000 },
-    "MemoryMegabytesPerVote": { "Min": 3, "Max": 8 },
+    "MemoryKilobytesPerVote": { "Min": 3072, "Max": 8192 },
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
     "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",

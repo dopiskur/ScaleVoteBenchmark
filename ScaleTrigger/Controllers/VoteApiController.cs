@@ -47,7 +47,7 @@ namespace ScaleTrigger.Controllers
             }
 
             int cpuIterations = RandomizedLoadValue("CpuIterationsPerVote");
-            int memoryMegabytes = RandomizedLoadValue("MemoryMegabytesPerVote");
+            int memoryKilobytes = RandomizedLoadValue("MemoryKilobytesPerVote");
             int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
             int dbMaxPrime = RandomizedLoadValue("DbCpuIterationsPerVote");
@@ -58,7 +58,7 @@ namespace ScaleTrigger.Controllers
             await Task.Run(() =>
             {
                 LoadSimulator.SimulateCpuLoad(cpuIterations);
-                LoadSimulator.SimulateMemoryLoad(memoryMegabytes);
+                LoadSimulator.SimulateMemoryLoad(memoryKilobytes);
                 LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
             });
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
