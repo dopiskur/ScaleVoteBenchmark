@@ -296,3 +296,7 @@ Run with no arguments for a quick parameter summary, or `--help` for full descri
 ## Vote table primary key
 
 The `Vote` table's primary key (`IDVote` / `id_vote`) is `BIGINT`/`BIGSERIAL` in the MSSQL/MySQL/PostgreSQL schemas, not a 32-bit `INT`, since this is a load-testing tool expected to accumulate a very large number of rows. The SQLite schema uses `INTEGER PRIMARY KEY AUTOINCREMENT`, which is already a 64-bit rowid in SQLite (there's no separate `INT`/`BIGINT` distinction), so no separate sizing decision is needed there.
+
+## Author
+
+[Domagoj Piškur](https://github.com/dopiskur) — licensed under the [MIT License](LICENSE).

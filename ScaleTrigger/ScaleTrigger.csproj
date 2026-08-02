@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Authors>Domagoj Piškur</Authors>
+    <RepositoryUrl>https://github.com/dopiskur/scaleTrigger</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
