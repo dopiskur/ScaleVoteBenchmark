@@ -104,26 +104,6 @@
     gap: 20px;
   }
 
-  .tiles {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 16px;
-    text-align: center;
-  }
-
-  .tile-label {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-  }
-
-  .tile-value {
-    font-size: 13px;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-  }
-
   .status {
     margin-top: 16px;
     font-size: 12px;
@@ -266,8 +246,13 @@
 
   .config-actions {
     display: flex;
+    align-items: center;
     gap: 10px;
     margin-top: 16px;
+  }
+
+  .status--inline {
+    margin-top: 0;
   }
 
   #benchmark-status {
@@ -328,17 +313,6 @@
         <div class="card">
           <p class="section-title">Votes</p>
 
-          <div class="tiles">
-            <div>
-              <div class="tile-label">Yes</div>
-              <div class="tile-value" id="yes-percent">—</div>
-            </div>
-            <div>
-              <div class="tile-label">No</div>
-              <div class="tile-value" id="no-percent">—</div>
-            </div>
-          </div>
-
           <p class="group-title">Details</p>
           <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
           <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
@@ -346,6 +320,7 @@
 
           <div class="config-actions">
             <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+            <span class="status status--inline" id="db-unavailable-indicator"></span>
           </div>
           <p class="status" id="status">Loading…</p>
         </div>
@@ -379,6 +354,7 @@
 
           <div class="config-actions">
             <button class="save-btn" id="calibrate-btn" type="button">Calibrate overhead</button>
+            <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
           </div>
           <p class="status" id="calibrate-status"></p>
         </div>
@@ -387,28 +363,26 @@
   </div>
 
   <script>
-    const yesPercentEl = document.getElementById('yes-percent');
-    const noPercentEl = document.getElementById('no-percent');
     const totalEl = document.getElementById('total');
     const updatedEl = document.getElementById('updated');
     const payloadEl = document.getElementById('payload');
     const statusEl = document.getElementById('status');
     const resetBtn = document.getElementById('reset-btn');
     const loadConfigStatusEl = document.getElementById('loadconfig-status');
+    const dbUnavailableEl = document.getElementById('db-unavailable-indicator');
 
-    // The single "Database unavailable" indicator - shown below the Save
-    // changes/Reset database buttons, since those are the actions that need
-    // the database - regardless of whether it was the report poll or the
+    // The single "Database unavailable" indicator - shown next to the Reset
+    // database button, regardless of whether it was the report poll or the
     // one-shot LoadConfig fetch that noticed the outage.
     function setDbUnavailable() {
-      loadConfigStatusEl.textContent = 'Database unavailable';
-      loadConfigStatusEl.classList.add('status--error');
+      dbUnavailableEl.textContent = 'Database unavailable';
+      dbUnavailableEl.classList.add('status--error');
     }
 
     function clearDbUnavailableIfShown() {
-      if (loadConfigStatusEl.classList.contains('status--error') && loadConfigStatusEl.textContent === 'Database unavailable') {
-        loadConfigStatusEl.textContent = '';
-        loadConfigStatusEl.classList.remove('status--error');
+      if (dbUnavailableEl.textContent === 'Database unavailable') {
+        dbUnavailableEl.textContent = '';
+        dbUnavailableEl.classList.remove('status--error');
       }
     }
 
@@ -457,13 +431,9 @@
           return; // a newer refresh already completed - don't apply a stale result
         }
 
-        const yesPercent = report.yesPercent ?? 0;
-        const noPercent = report.noPercent ?? 0;
         const payloadCount = report.payloadCount ?? 0;
         const payloadBytes = report.payloadTotalBytes ?? 0;
 
-        yesPercentEl.textContent = yesPercent + '%';
-        noPercentEl.textContent = noPercent + '%';
         totalEl.textContent = (report.total ?? 0).toLocaleString();
         updatedEl.textContent = new Date().toLocaleTimeString();
         payloadEl.textContent = payloadCount.toLocaleString() + ' rows (' + formatPayloadSize(payloadBytes) + ')';
@@ -734,6 +704,12 @@
     let processorCountValue = null;
     let sOtherSecondsValue = null;
 
+    // Unrounded ceiling/floor from the last successful recomputeRecommendation()
+    // call - what "Set recommended" actually writes into the CPU Min/Max
+    // fields, kept separate from the rounded, formatted text shown to the user.
+    let recommendedMaxValue = null;
+    let recommendedMinValue = null;
+
     function median(values) {
       const sorted = [...values].sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
@@ -746,6 +722,8 @@
       if (cpuNumbersPerSecondValue == null || processorCountValue == null || sOtherSecondsValue == null) {
         recommendMaxEl.textContent = '—';
         recommendMinEl.textContent = '—';
+        recommendedMaxValue = null;
+        recommendedMinValue = null;
         return;
       }
 
@@ -755,12 +733,16 @@
       if (!Number.isFinite(n) || n <= 0) {
         recommendMaxEl.textContent = 'Enter N';
         recommendMinEl.textContent = '—';
+        recommendedMaxValue = null;
+        recommendedMinValue = null;
         return;
       }
 
       if (denominator <= 0) {
         recommendMaxEl.textContent = 'N must exceed ' + processorCountValue;
         recommendMinEl.textContent = '—';
+        recommendedMaxValue = null;
+        recommendedMinValue = null;
         return;
       }
 
@@ -769,6 +751,8 @@
 
       recommendMaxEl.textContent = Math.round(ceiling).toLocaleString();
       recommendMinEl.textContent = Math.round(floor).toLocaleString();
+      recommendedMaxValue = ceiling;
+      recommendedMinValue = floor;
     }
 
     recommendNInput.addEventListener('input', recomputeRecommendation);
@@ -987,6 +971,25 @@
         }
         calibrateBtn.disabled = false;
       }
+    });
+
+    const setRecommendedBtn = document.getElementById('set-recommended-btn');
+
+    setRecommendedBtn.addEventListener('click', () => {
+      if (recommendedMaxValue == null || recommendedMinValue == null) {
+        calibrateStatusEl.textContent = 'Run the CPU benchmark and calibrate overhead first.';
+        return;
+      }
+
+      const cpuRow = loadConfigRowsEls.application.querySelector('[data-setting-name="CpuIterationsPerVote"]');
+      if (!cpuRow) {
+        calibrateStatusEl.textContent = 'CPU setting not loaded yet - try again in a moment.';
+        return;
+      }
+
+      cpuRow.querySelector('[data-field="min"]').value = Math.round(recommendedMinValue);
+      cpuRow.querySelector('[data-field="max"]').value = Math.round(recommendedMaxValue);
+      calibrateStatusEl.textContent = 'Applied to CPU Min/Max above - click "Save changes" to persist.';
     });
 
     loadHardwareInfo();
