@@ -518,12 +518,12 @@
 
     const LOAD_CONFIG_LABELS = {
       ConfigRefresh: { label: 'Poll interval', group: 'refresh', single: true },
-      CpuIterationsPerVote: { label: 'CPU', unit: 'primes ≤ N', group: 'application' },
+      CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application' },
       MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application' },
       DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
       NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application' },
       PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database' },
-      DbCpuIterationsPerVote: { label: 'CPU', unit: 'primes ≤ N', group: 'database' }
+      DbCpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'database' }
     };
 
     const loadConfigRowsEls = {
@@ -691,7 +691,11 @@
       return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
-    // maxPrime_ceiling = R_total * S_other / (N - c); maxPrime_floor = 0.5 * ceiling.
+    // iterations_ceiling = R_total * S_other / (N - c); iterations_floor = 0.5 * ceiling.
+    // Assumes CPU cost scales linearly with the CpuIterationsPerVote value -
+    // true for chained SHA-512 (measured ~constant per-iteration cost), so
+    // R_total (hashes/s from the benchmark) directly predicts how many
+    // iterations fit in a given time budget.
     // Recomputed client-side only - never re-runs the benchmark or calibration.
     function recomputeRecommendation() {
       if (cpuNumbersPerSecondValue == null || processorCountValue == null || sOtherSecondsValue == null) {
@@ -793,8 +797,8 @@
     // separate manual calibration step.
     benchmarkBtn.addEventListener('click', async () => {
       const CALIBRATION_VOTES = 8;
-      const CALIBRATION_MAX_PRIME = 500;
-      const CALIBRATION_DB_MAX_PRIME = 0;
+      const CALIBRATION_NEAR_ZERO_ITERATIONS = 500;
+      const CALIBRATION_DB_NEAR_ZERO_ITERATIONS = 0;
 
       benchmarkBtn.disabled = true;
       benchCpuEl.textContent = '—';
@@ -871,8 +875,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify([
-            { settingName: 'CpuIterationsPerVote', min: CALIBRATION_MAX_PRIME, max: CALIBRATION_MAX_PRIME },
-            { settingName: 'DbCpuIterationsPerVote', min: CALIBRATION_DB_MAX_PRIME, max: CALIBRATION_DB_MAX_PRIME }
+            { settingName: 'CpuIterationsPerVote', min: CALIBRATION_NEAR_ZERO_ITERATIONS, max: CALIBRATION_NEAR_ZERO_ITERATIONS },
+            { settingName: 'DbCpuIterationsPerVote', min: CALIBRATION_DB_NEAR_ZERO_ITERATIONS, max: CALIBRATION_DB_NEAR_ZERO_ITERATIONS }
           ])
         });
         if (!lowerResponse.ok) {
