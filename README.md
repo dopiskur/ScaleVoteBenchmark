@@ -1,5 +1,7 @@
 # ScaleTrigger
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure%2Fmain.json)
+
 A REST API for testing autoscale triggers (Azure App Service, Container Apps, AKS, or anywhere else), built around one distinguishing feature: how much CPU/memory/disk/network each request burns can be turned up or down **live** — from a dashboard or a single API call — while traffic keeps flowing. No redeploy, no restart, and no need to stop the run and repeat the whole experiment just to try a different intensity; scale-up and scale-down thresholds can both be swept in the same run.
 
 ScaleTrigger is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below) while adjusting how expensive each request is on the fly.
