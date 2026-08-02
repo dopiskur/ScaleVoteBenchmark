@@ -103,11 +103,9 @@
   }
 
   .tile-value {
-    font-size: 40px;
-    font-weight: 600;
-    line-height: 1;
-    font-variant-numeric: proportional-nums;
+    font-size: 13px;
     color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
   }
 
   .status {
@@ -254,6 +252,11 @@
     gap: 10px;
     margin-top: 16px;
   }
+
+  #benchmark-status {
+    margin-top: 8px;
+    min-height: 0;
+  }
 </style>
 </head>
 <body>
@@ -352,6 +355,23 @@
     const payloadEl = document.getElementById('payload');
     const statusEl = document.getElementById('status');
     const resetBtn = document.getElementById('reset-btn');
+    const loadConfigStatusEl = document.getElementById('loadconfig-status');
+
+    // The single "Database unavailable" indicator - shown below the Save
+    // changes/Reset database buttons, since those are the actions that need
+    // the database - regardless of whether it was the report poll or the
+    // one-shot LoadConfig fetch that noticed the outage.
+    function setDbUnavailable() {
+      loadConfigStatusEl.textContent = 'Database unavailable';
+      loadConfigStatusEl.classList.add('status--error');
+    }
+
+    function clearDbUnavailableIfShown() {
+      if (loadConfigStatusEl.classList.contains('status--error') && loadConfigStatusEl.textContent === 'Database unavailable') {
+        loadConfigStatusEl.textContent = '';
+        loadConfigStatusEl.classList.remove('status--error');
+      }
+    }
 
     function formatPayloadSize(bytes) {
       const kb = bytes / 1024;
@@ -409,7 +429,7 @@
         updatedEl.textContent = new Date().toLocaleTimeString();
         payloadEl.textContent = payloadCount.toLocaleString() + ' rows (' + formatPayloadSize(payloadBytes) + ')';
         statusEl.textContent = (report.total ?? 0) === 0 ? 'No records found.' : '';
-        statusEl.classList.remove('status--error');
+        clearDbUnavailableIfShown();
 
         // Configuration only loads once (so it doesn't clobber in-progress
         // edits every refresh) - but if it failed, retry opportunistically
@@ -421,8 +441,8 @@
         if (callId !== refreshCallId) {
           return;
         }
-        statusEl.textContent = 'Database unavailable';
-        statusEl.classList.add('status--error');
+        statusEl.textContent = '';
+        setDbUnavailable();
       }
     }
 
@@ -526,7 +546,6 @@
       database: document.getElementById('loadconfig-rows-database')
     };
     const loadConfigSaveBtn = document.getElementById('loadconfig-save-btn');
-    const loadConfigStatusEl = document.getElementById('loadconfig-status');
 
     function renderLoadConfig(settings) {
       loadConfigRowsEls.refresh.innerHTML = '';
@@ -598,14 +617,13 @@
           return;
         }
         renderLoadConfig(settings);
-        loadConfigStatusEl.classList.remove('status--error');
+        clearDbUnavailableIfShown();
         loadConfigNeedsRetry = false;
       } catch (err) {
         if (callId !== loadConfigCallId) {
           return;
         }
-        loadConfigStatusEl.textContent = 'Database unavailable';
-        loadConfigStatusEl.classList.add('status--error');
+        setDbUnavailable();
         loadConfigNeedsRetry = true;
       }
     }
