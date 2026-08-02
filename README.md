@@ -137,6 +137,8 @@ While a load-test script drives the request rate, the `LoadConfig` dashboard/API
 
 ## Deploying via GitHub Actions
 
+Need to actually stand up an App Service resource first, or want a one-click deploy? See [deploy/azure/README.md](deploy/azure/README.md).
+
 `.github/workflows/deploy-api.yml` builds and deploys `ScaleTrigger` to Azure App Service, triggered on changes within `ScaleTrigger/` or the workflow file itself.
 
 Before running it the first time:

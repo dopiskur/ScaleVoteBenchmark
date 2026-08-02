@@ -1,0 +1,42 @@
+name: Build Bicep template
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'deploy/azure/main.bicep'
+      - '.github/workflows/build-bicep.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ubuntu-latest ships Azure CLI already; this only installs the bicep
+      # extension for it (or upgrades it if it's somehow already present).
+      - name: Install/upgrade Bicep CLI
+        run: az bicep install || az bicep upgrade
+
+      - name: Build main.json from main.bicep
+        run: az bicep build --file deploy/azure/main.bicep --outfile deploy/azure/main.json
+
+      - name: Commit regenerated main.json if it changed
+        run: |
+          if git diff --quiet -- deploy/azure/main.json; then
+            echo "main.json already up to date - nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/azure/main.json
+          git commit -m "chore: regenerate deploy/azure/main.json from main.bicep [skip ci]"
+          git push

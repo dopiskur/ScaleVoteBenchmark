@@ -1,0 +1,471 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.32.4.45862"
+    }
+  },
+  "parameters": {
+    "appServiceName": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 60,
+      "metadata": {
+        "description": "Name of the App Service (must be globally unique - becomes <name>.azurewebsites.net)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "S1",
+      "allowedValues": [
+        "S1",
+        "S2",
+        "S3",
+        "P0v3",
+        "P1v3",
+        "P2v3",
+        "P3v3"
+      ],
+      "metadata": {
+        "description": "App Service Plan SKU. Autoscale rules (the whole point of this tool) need Standard tier or higher - Basic/Free plans cannot be autoscaled."
+      }
+    },
+    "repositoryUrl": {
+      "type": "string",
+      "defaultValue": "https://github.com/dopiskur/scaleTrigger",
+      "metadata": {
+        "description": "Public GitHub repository to build and deploy from (Oryx builds ScaleTrigger.sln automatically - no publish profile or GitHub token needed for a public repo)."
+      }
+    },
+    "branch": {
+      "type": "string",
+      "defaultValue": "master",
+      "metadata": {
+        "description": "Branch to deploy from."
+      }
+    },
+    "databaseProvider": {
+      "type": "string",
+      "defaultValue": "Sqlite",
+      "allowedValues": [
+        "MsSql",
+        "MySql",
+        "PostgreSql",
+        "Sqlite"
+      ],
+      "metadata": {
+        "description": "Selects the repository implementation - matches appsettings.json.example. Sqlite needs no external database but its file lives on ephemeral App Service storage (wiped on restart/scale) - fine to try the deploy, not for anything you need to keep."
+      }
+    },
+    "useManagedIdentity": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "true = MSSQL only, authenticate via the App Service system-assigned managed identity instead of a connection-string password (the identity still needs to be granted access on the SQL side separately - this template does not do that)."
+      }
+    },
+    "connectionStringMsSql": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "MSSQL connection string. Leave empty unless DatabaseProvider is MsSql."
+      }
+    },
+    "connectionStringMySql": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "MySQL connection string. Leave empty unless DatabaseProvider is MySql."
+      }
+    },
+    "connectionStringPostgreSql": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PostgreSQL connection string. Leave empty unless DatabaseProvider is PostgreSql."
+      }
+    },
+    "connectionStringSqlite": {
+      "type": "securestring",
+      "defaultValue": "Data Source=scaletrigger.db",
+      "metadata": {
+        "description": "SQLite connection string (a relative file path is fine - see DatabaseProvider above for the ephemeral-storage caveat)."
+      }
+    },
+    "authEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "true = POST /api/vote/add and other admin actions require a JWT from POST /api/auth/login."
+      }
+    },
+    "failFastOnDbCheck": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "true = refuse to start if the database is unreachable at startup; false = log a critical error and keep running (dashboard shows \"Database unavailable\" and keeps retrying)."
+      }
+    },
+    "cacheEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "true = cache GET /api/vote/report in memory; false = every read goes straight to the database."
+      }
+    },
+    "cacheSlidingExpirationMinutes": {
+      "type": "int",
+      "defaultValue": 5
+    },
+    "loadConfigRefreshMinSeconds": {
+      "type": "int",
+      "defaultValue": 1
+    },
+    "loadConfigRefreshMaxSeconds": {
+      "type": "int",
+      "defaultValue": 1
+    },
+    "loadCpuIterationsPerVoteMin": {
+      "type": "int",
+      "defaultValue": 5000
+    },
+    "loadCpuIterationsPerVoteMax": {
+      "type": "int",
+      "defaultValue": 20000
+    },
+    "loadMemoryMegabytesPerVoteMin": {
+      "type": "int",
+      "defaultValue": 3
+    },
+    "loadMemoryMegabytesPerVoteMax": {
+      "type": "int",
+      "defaultValue": 8
+    },
+    "loadDiskWriteKilobytesPerVoteMin": {
+      "type": "int",
+      "defaultValue": 32
+    },
+    "loadDiskWriteKilobytesPerVoteMax": {
+      "type": "int",
+      "defaultValue": 96
+    },
+    "loadNetworkLatencyMillisecondsPerVoteMin": {
+      "type": "int",
+      "defaultValue": 10
+    },
+    "loadNetworkLatencyMillisecondsPerVoteMax": {
+      "type": "int",
+      "defaultValue": 30
+    },
+    "loadPayloadBytesPerVoteMin": {
+      "type": "int",
+      "defaultValue": 0
+    },
+    "loadPayloadBytesPerVoteMax": {
+      "type": "int",
+      "defaultValue": 0
+    },
+    "loadDbCpuIterationsPerVoteMin": {
+      "type": "int",
+      "defaultValue": 0
+    },
+    "loadDbCpuIterationsPerVoteMax": {
+      "type": "int",
+      "defaultValue": 0
+    },
+    "nodeBenchmarkCpuDurationSeconds": {
+      "type": "int",
+      "defaultValue": 20
+    },
+    "nodeBenchmarkMemoryBlockMegabytes": {
+      "type": "int",
+      "defaultValue": 64
+    },
+    "nodeBenchmarkMemoryRepetitions": {
+      "type": "int",
+      "defaultValue": 5
+    },
+    "nodeBenchmarkDiskSizeMegabytes": {
+      "type": "int",
+      "defaultValue": 20
+    },
+    "nodeBenchmarkDiskRepetitions": {
+      "type": "int",
+      "defaultValue": 5
+    },
+    "jwtKey": {
+      "type": "securestring",
+      "defaultValue": "abcdefghijklmnopqrstuvwxyz012345",
+      "metadata": {
+        "description": "JWT signing key, at least 32 characters. The appsettings.json.example placeholder is reused as the default since this is a stress-test tool with no real secrets to protect by default - replace it if that ever stops being true."
+      }
+    },
+    "jwtIssuer": {
+      "type": "string",
+      "defaultValue": "ScaleTrigger"
+    },
+    "jwtAudience": {
+      "type": "string",
+      "defaultValue": "ScaleTrigger.Clients"
+    },
+    "jwtExpirationMinutes": {
+      "type": "int",
+      "defaultValue": 60
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "admin",
+      "metadata": {
+        "description": "POST /api/auth/login username."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "defaultValue": "admin",
+      "metadata": {
+        "description": "POST /api/auth/login password. Default matches appsettings.json.example - change it if Auth:Enabled is ever true outside a throwaway environment."
+      }
+    },
+    "loggingLevelDefault": {
+      "type": "string",
+      "defaultValue": "Information"
+    },
+    "loggingLevelAspNetCore": {
+      "type": "string",
+      "defaultValue": "Warning"
+    },
+    "allowedHosts": {
+      "type": "string",
+      "defaultValue": "*"
+    }
+  },
+  "variables": {
+    "appServicePlanName": "[format('{0}-plan', parameters('appServiceName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": {
+        "name": "[parameters('skuName')]"
+      },
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[parameters('appServiceName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "DOTNETCORE|10.0",
+          "alwaysOn": true,
+          "appSettings": [
+            {
+              "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+              "value": "true"
+            },
+            {
+              "name": "DatabaseProvider",
+              "value": "[parameters('databaseProvider')]"
+            },
+            {
+              "name": "UseManagedIdentity",
+              "value": "[string(parameters('useManagedIdentity'))]"
+            },
+            {
+              "name": "ConnectionStrings__MsSql",
+              "value": "[parameters('connectionStringMsSql')]"
+            },
+            {
+              "name": "ConnectionStrings__MySql",
+              "value": "[parameters('connectionStringMySql')]"
+            },
+            {
+              "name": "ConnectionStrings__PostgreSql",
+              "value": "[parameters('connectionStringPostgreSql')]"
+            },
+            {
+              "name": "ConnectionStrings__Sqlite",
+              "value": "[parameters('connectionStringSqlite')]"
+            },
+            {
+              "name": "Auth__Enabled",
+              "value": "[string(parameters('authEnabled'))]"
+            },
+            {
+              "name": "Startup__FailFastOnDbCheck",
+              "value": "[string(parameters('failFastOnDbCheck'))]"
+            },
+            {
+              "name": "Cache__Enabled",
+              "value": "[string(parameters('cacheEnabled'))]"
+            },
+            {
+              "name": "Cache__SlidingExpirationMinutes",
+              "value": "[string(parameters('cacheSlidingExpirationMinutes'))]"
+            },
+            {
+              "name": "Load__ConfigRefresh__Min",
+              "value": "[string(parameters('loadConfigRefreshMinSeconds'))]"
+            },
+            {
+              "name": "Load__ConfigRefresh__Max",
+              "value": "[string(parameters('loadConfigRefreshMaxSeconds'))]"
+            },
+            {
+              "name": "Load__CpuIterationsPerVote__Min",
+              "value": "[string(parameters('loadCpuIterationsPerVoteMin'))]"
+            },
+            {
+              "name": "Load__CpuIterationsPerVote__Max",
+              "value": "[string(parameters('loadCpuIterationsPerVoteMax'))]"
+            },
+            {
+              "name": "Load__MemoryMegabytesPerVote__Min",
+              "value": "[string(parameters('loadMemoryMegabytesPerVoteMin'))]"
+            },
+            {
+              "name": "Load__MemoryMegabytesPerVote__Max",
+              "value": "[string(parameters('loadMemoryMegabytesPerVoteMax'))]"
+            },
+            {
+              "name": "Load__DiskWriteKilobytesPerVote__Min",
+              "value": "[string(parameters('loadDiskWriteKilobytesPerVoteMin'))]"
+            },
+            {
+              "name": "Load__DiskWriteKilobytesPerVote__Max",
+              "value": "[string(parameters('loadDiskWriteKilobytesPerVoteMax'))]"
+            },
+            {
+              "name": "Load__NetworkLatencyMillisecondsPerVote__Min",
+              "value": "[string(parameters('loadNetworkLatencyMillisecondsPerVoteMin'))]"
+            },
+            {
+              "name": "Load__NetworkLatencyMillisecondsPerVote__Max",
+              "value": "[string(parameters('loadNetworkLatencyMillisecondsPerVoteMax'))]"
+            },
+            {
+              "name": "Load__PayloadBytesPerVote__Min",
+              "value": "[string(parameters('loadPayloadBytesPerVoteMin'))]"
+            },
+            {
+              "name": "Load__PayloadBytesPerVote__Max",
+              "value": "[string(parameters('loadPayloadBytesPerVoteMax'))]"
+            },
+            {
+              "name": "Load__DbCpuIterationsPerVote__Min",
+              "value": "[string(parameters('loadDbCpuIterationsPerVoteMin'))]"
+            },
+            {
+              "name": "Load__DbCpuIterationsPerVote__Max",
+              "value": "[string(parameters('loadDbCpuIterationsPerVoteMax'))]"
+            },
+            {
+              "name": "NodeBenchmark__CpuDurationSeconds",
+              "value": "[string(parameters('nodeBenchmarkCpuDurationSeconds'))]"
+            },
+            {
+              "name": "NodeBenchmark__MemoryBlockMegabytes",
+              "value": "[string(parameters('nodeBenchmarkMemoryBlockMegabytes'))]"
+            },
+            {
+              "name": "NodeBenchmark__MemoryRepetitions",
+              "value": "[string(parameters('nodeBenchmarkMemoryRepetitions'))]"
+            },
+            {
+              "name": "NodeBenchmark__DiskSizeMegabytes",
+              "value": "[string(parameters('nodeBenchmarkDiskSizeMegabytes'))]"
+            },
+            {
+              "name": "NodeBenchmark__DiskRepetitions",
+              "value": "[string(parameters('nodeBenchmarkDiskRepetitions'))]"
+            },
+            {
+              "name": "Jwt__Key",
+              "value": "[parameters('jwtKey')]"
+            },
+            {
+              "name": "Jwt__Issuer",
+              "value": "[parameters('jwtIssuer')]"
+            },
+            {
+              "name": "Jwt__Audience",
+              "value": "[parameters('jwtAudience')]"
+            },
+            {
+              "name": "Jwt__ExpirationMinutes",
+              "value": "[string(parameters('jwtExpirationMinutes'))]"
+            },
+            {
+              "name": "AdminUser__Username",
+              "value": "[parameters('adminUsername')]"
+            },
+            {
+              "name": "AdminUser__Password",
+              "value": "[parameters('adminPassword')]"
+            },
+            {
+              "name": "Logging__LogLevel__Default",
+              "value": "[parameters('loggingLevelDefault')]"
+            },
+            {
+              "name": "Logging__LogLevel__Microsoft.AspNetCore",
+              "value": "[parameters('loggingLevelAspNetCore')]"
+            },
+            {
+              "name": "AllowedHosts",
+              "value": "[parameters('allowedHosts')]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/sourcecontrols",
+      "apiVersion": "2023-12-01",
+      "name": "[format('{0}/{1}', parameters('appServiceName'), 'web')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('appServiceName'))]"
+      ],
+      "properties": {
+        "repoUrl": "[parameters('repositoryUrl')]",
+        "branch": "[parameters('branch')]",
+        "isManualIntegration": true
+      }
+    }
+  ],
+  "outputs": {
+    "appServiceUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', parameters('appServiceName')), '2023-12-01').defaultHostName)]"
+    },
+    "appServiceName": {
+      "type": "string",
+      "value": "[parameters('appServiceName')]"
+    }
+  }
+}
