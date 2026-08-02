@@ -343,7 +343,7 @@
           <p class="status" id="benchmark-status"></p>
 
           <p class="group-title">Recommended CpuIterationsPerVote</p>
-          <p class="group-subtitle">maxPrime_ceiling = R_total × S_other / (N − c); maxPrime_floor = 0.1 × maxPrime_ceiling. Needs the CPU benchmark above and the overhead calibration below.</p>
+          <p class="group-subtitle">maxPrime_ceiling = R_total × S_other / (N − c); maxPrime_floor = 0.1 × maxPrime_ceiling. Needs the CPU benchmark above and the CPU overhead calibration below.</p>
 
           <div class="loadconfig-row loadconfig-row--single">
             <span class="loadconfig-label">Concurrent votes (N)</span>
@@ -353,7 +353,7 @@
           <div class="bench-row"><span class="loadconfig-label">Recommended Min (floor)</span><span class="bench-value" id="recommend-min">—</span></div>
 
           <div class="config-actions">
-            <button class="save-btn" id="calibrate-btn" type="button">Calibrate overhead</button>
+            <button class="save-btn" id="calibrate-btn" type="button">Calibrate CPU overhead</button>
             <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
           </div>
           <p class="status" id="calibrate-status"></p>
@@ -862,18 +862,23 @@
     });
 
     // Measures S_other (network+DB overhead per vote, excluding CPU work) by
-    // briefly forcing CpuIterationsPerVote down to a near-zero value, timing
-    // a handful of real votes client-side, then restoring the original
-    // setting - always, even if something above fails, so a broken
-    // calibration run can't leave live load-testing traffic stuck at the
-    // near-zero value.
+    // briefly forcing CpuIterationsPerVote AND DbCpuIterationsPerVote down to
+    // near-zero values, timing a handful of real votes client-side, then
+    // restoring both original settings - always, even if something above
+    // fails, so a broken calibration run can't leave live load-testing
+    // traffic stuck at the near-zero values. DbCpuIterationsPerVote is
+    // zeroed too (not just measured around) because this calibration is
+    // scoped to CPU overhead only - the database's own artificial CPU load
+    // must not be baked into S_other, or the CpuIterationsPerVote
+    // recommendation would be skewed by an unrelated database setting.
     calibrateBtn.addEventListener('click', async () => {
-      if (!confirm('This briefly sets CpuIterationsPerVote to a near-zero value and sends 8 real votes to the database to measure network/DB overhead, then restores the original setting. Continue?')) {
+      if (!confirm('This briefly sets CpuIterationsPerVote and DbCpuIterationsPerVote to near-zero values and sends 8 real votes to the database to measure non-CPU overhead, then restores both original settings. Continue?')) {
         return;
       }
 
       const CALIBRATION_VOTES = 8;
       const CALIBRATION_MAX_PRIME = 500;
+      const CALIBRATION_DB_MAX_PRIME = 0;
 
       calibrateBtn.disabled = true;
       calibrateStatusEl.textContent = 'Calibrating…';
@@ -919,19 +924,24 @@
         return response;
       }
 
-      let originalSetting = null;
+      let originalCpuSetting = null;
+      let originalDbCpuSetting = null;
 
       try {
         const currentSettings = await (await fetch('/api/loadconfig', { cache: 'no-store' })).json();
-        originalSetting = currentSettings.find(s => s.settingName === 'CpuIterationsPerVote') || { min: 0, max: 0 };
+        originalCpuSetting = currentSettings.find(s => s.settingName === 'CpuIterationsPerVote') || { min: 0, max: 0 };
+        originalDbCpuSetting = currentSettings.find(s => s.settingName === 'DbCpuIterationsPerVote') || { min: 0, max: 0 };
 
         const lowerResponse = await authorizedFetch('/api/loadconfig', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([{ settingName: 'CpuIterationsPerVote', min: CALIBRATION_MAX_PRIME, max: CALIBRATION_MAX_PRIME }])
+          body: JSON.stringify([
+            { settingName: 'CpuIterationsPerVote', min: CALIBRATION_MAX_PRIME, max: CALIBRATION_MAX_PRIME },
+            { settingName: 'DbCpuIterationsPerVote', min: CALIBRATION_DB_MAX_PRIME, max: CALIBRATION_DB_MAX_PRIME }
+          ])
         });
         if (!lowerResponse.ok) {
-          throw new Error('could not lower CpuIterationsPerVote (HTTP ' + lowerResponse.status + ')');
+          throw new Error('could not lower CpuIterationsPerVote/DbCpuIterationsPerVote (HTTP ' + lowerResponse.status + ')');
         }
 
         const samplesSeconds = [];
@@ -955,18 +965,21 @@
       } catch (err) {
         calibrateStatusEl.textContent = 'Calibration failed (' + err.message + ').';
       } finally {
-        if (originalSetting) {
+        if (originalCpuSetting && originalDbCpuSetting) {
           try {
             const restoreResponse = await authorizedFetch('/api/loadconfig', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify([{ settingName: 'CpuIterationsPerVote', min: originalSetting.min, max: originalSetting.max }])
+              body: JSON.stringify([
+                { settingName: 'CpuIterationsPerVote', min: originalCpuSetting.min, max: originalCpuSetting.max },
+                { settingName: 'DbCpuIterationsPerVote', min: originalDbCpuSetting.min, max: originalDbCpuSetting.max }
+              ])
             });
             if (!restoreResponse.ok) {
               throw new Error('HTTP ' + restoreResponse.status);
             }
           } catch (restoreErr) {
-            calibrateStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
+            calibrateStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote/DbCpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
           }
         }
         calibrateBtn.disabled = false;
@@ -977,7 +990,7 @@
 
     setRecommendedBtn.addEventListener('click', () => {
       if (recommendedMaxValue == null || recommendedMinValue == null) {
-        calibrateStatusEl.textContent = 'Run the CPU benchmark and calibrate overhead first.';
+        calibrateStatusEl.textContent = 'Run the CPU benchmark and calibrate CPU overhead first.';
         return;
       }
 
