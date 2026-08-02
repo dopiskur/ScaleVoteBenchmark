@@ -127,6 +127,14 @@ namespace ScaleTrigger.Repositories
                 singleUserCmd.CommandText = $"ALTER DATABASE [{connection.Database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;";
                 await singleUserCmd.ExecuteNonQueryAsync();
                 forcedSingleUser = true;
+
+                // ROLLBACK IMMEDIATE just killed every other session against this
+                // database server-side, including whatever idle connections this
+                // process's own pool was holding for reuse - the pool has no way
+                // to know that. Without clearing it, the next CreateConnectionAsync()
+                // anywhere in the app (even in a different request) can be handed
+                // one of those now-dead connections and hang or fail on it.
+                SqlConnection.ClearPool(connection);
             }
             catch
             {

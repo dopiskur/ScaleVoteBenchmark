@@ -116,6 +116,14 @@ namespace ScaleTrigger.Repositories
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity " +
                     "WHERE datname = current_database() AND pid != pg_backend_pid();";
                 await terminateCmd.ExecuteNonQueryAsync();
+
+                // pg_terminate_backend just killed every other backend against this
+                // database server-side, including whatever idle connections this
+                // process's own pool was holding for reuse - the pool has no way to
+                // know that. Without clearing it, the next CreateConnectionAsync()
+                // anywhere in the app (even in a different request) can be handed
+                // one of those now-dead connections and hang or fail on it.
+                NpgsqlConnection.ClearPool(connection);
             }
             catch
             {
