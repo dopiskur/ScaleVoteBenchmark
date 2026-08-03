@@ -15,27 +15,29 @@ Every `POST /api/vote/add?option=yes|no` call:
 1. Records a vote in the database.
 2. Burns a controllable, randomized amount of CPU, memory, disk I/O, and network latency — the actual point of the benchmark.
 
-The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table), editable from the dashboard or via `POST /api/loadconfig` — the live-tuning behavior described above. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it.
+Live-tunable load
+#live-tunable-load
+Every POST /api/vote/add call picks a fresh random value, per load type, from a Min/Max range — but unlike a value baked into appsettings.json, these ranges live in the LoadConfig database table and can be changed while the app is running and under test, with no restart or redeploy:
+
+CpuIterationsPerVote — chained SHA-512 hashing in the app process (each hash's output feeds the next, so the JIT can't fold the loop away)
+MemoryKilobytesPerVote — a buffer allocated and touched page-by-page so the OS actually reserves physical memory, not just address space
+DiskWriteKilobytesPerVote — a uniquely-named temp file per call, written with FileOptions.WriteThrough + Flush(true) (real disk I/O, not page cache) then deleted immediately
+NetworkLatencyMillisecondsPerVote — a non-blocking Task.Delay, so it frees the request thread the way a real downstream call would
+PayloadBytesPerVote — optional extra random bytes written into a Payload table row (off by default, since unlike the others this permanently grows the database — opt in for write-throughput benchmarking)
+DbCpuIterationsPerVote — CPU burn that runs inside the database engine itself, not the app (see "Database-side CPU load" below)
+ConfigRefresh — not a vote-time load setting; it's how often (in seconds) the app re-polls LoadConfig for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
 
 ## Why not just use Chaos Studio / AWS FIS / Chaos Mesh / stress-ng?
 
-Those are legitimate, more mature tools for the general "put CPU/memory pressure on something" problem, and worth knowing about:
+None of them offer a live dial you can turn while traffic keeps flowing and watch the very next request pick up the new value. That's specifically what ScaleTrigger's `LoadConfig` table + dashboard does. It also means the load is exercised as real HTTP traffic through your actual routing/ingress/load balancer path, not injected directly at the VM/pod level — relevant if what you're validating is a scaler that reacts to request rate or concurrency rather than raw CPU%, which Chaos Studio's agent-based faults don't exercise on their own.
 
-- **Azure Chaos Studio** — agent-based CPU Pressure / Memory Pressure faults directly on a VM/VMSS, no target application needed, can even orchestrate an Azure Load Testing run as part of the same experiment.
-- **AWS Fault Injection Simulator** — the same idea for EC2/ECS/EKS, with direct Chaos Mesh/Litmus integration for Kubernetes.
-- **Chaos Mesh** — `StressChaos`, cloud-agnostic, works on any Kubernetes cluster.
-- **stress-ng** — the simplest option of all: a container that just burns resources on demand.
-
-All of them are managed or well-established, and none of them require writing or maintaining a custom app. But they share a mechanism that's fundamentally different from what ScaleTrigger does: **intensity is a property of the experiment, decided before or between runs, not something you change mid-stream.**
-
+Those are legitimate, more mature tools for the general "put CPU/memory pressure on something" problem, but:
 - Chaos Studio / AWS FIS: change the level → define or launch a new experiment (or a pre-scripted sequence of steps, decided in advance).
 - Chaos Mesh: change the level → edit the CRD and `kubectl apply` it again.
 - stress-ng: change the level → kill the process and restart it with new flags.
 - k6 / Locust / Azure Load Testing: don't control per-request resource cost at all — they control requests per second; what each request costs server-side is entirely up to the target app.
-
-None of them offer a live dial you can turn while traffic keeps flowing and watch the very next request pick up the new value. That's specifically what ScaleTrigger's `LoadConfig` table + dashboard does. It also means the load is exercised as real HTTP traffic through your actual routing/ingress/load balancer path, not injected directly at the VM/pod level — relevant if what you're validating is a scaler that reacts to request rate or concurrency rather than raw CPU%, which Chaos Studio's agent-based faults don't exercise on their own.
 
 None of this makes ScaleTrigger a replacement for those tools — for infrastructure-level fault injection (killing instances, network faults, service failures) it does nothing at all, and for a one-off "just burn 80% CPU for five minutes" test, stress-ng is simpler and needs zero custom code. Use ScaleTrigger specifically when you want to sweep or fine-tune a request-driven load profile live, without interrupting the traffic that's already hitting the trigger you're testing.
 
