@@ -24,9 +24,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       DatabaseProvider: PostgreSql
-      # Fine for this local/dev stack, where the password only ever
-      # travels over the compose network - replace before using anything
-      # resembling this setup beyond a laptop.
+      # Fine for this local/dev stack; replace before using beyond a laptop.
       ConnectionStrings__PostgreSql: "Server=postgres;Port=5432;Database=scaletrigger;User Id=scaletrigger;Password=scaletrigger;SSL Mode=Disable;"
       Startup__FailFastOnDbCheck: "true"
       Auth__Enabled: "false"

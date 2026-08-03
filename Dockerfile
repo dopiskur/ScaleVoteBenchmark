@@ -3,8 +3,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy just the project file first so `dotnet restore` is cached across
-# builds unless the package references themselves change.
+# Copy just the project file first so `dotnet restore` is cached across builds.
 COPY ScaleTrigger/ScaleTrigger.csproj ScaleTrigger/
 RUN dotnet restore ScaleTrigger/ScaleTrigger.csproj
 
@@ -15,11 +14,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# appsettings.json is intentionally never baked into the image (it's
-# gitignored and holds secrets outside this build context anyway) - all
-# configuration comes from environment variables (DatabaseProvider,
-# ConnectionStrings__*, Jwt__*, ...), the same __ convention documented in
-# README.md's "appsettings.json on Azure" table.
+# appsettings.json is never baked into the image; config comes from env vars
+# (DatabaseProvider, ConnectionStrings__*, Jwt__*, ...) via the __ nesting
+# convention documented in README.md's "appsettings.json on Azure" table.
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 

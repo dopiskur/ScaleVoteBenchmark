@@ -9,51 +9,51 @@
 
   "DatabaseProvider": "Sqlite",
 
-  "// UseManagedIdentity": "false = connect via connection string (username/password, less secure); true = Azure AD Managed Identity",
+  "// UseManagedIdentity": "false = connection string password; true = Azure AD Managed Identity",
   "UseManagedIdentity": false,
 
   "Auth": {
-    "// Enabled": "true = POST /api/vote/add requires a valid JWT (from POST /api/auth/login); false = it can be called without a token",
+    "// Enabled": "true = POST /api/vote/add requires a JWT from POST /api/auth/login",
     "Enabled": false
   },
 
   "Startup": {
-    "// FailFastOnDbCheck": "true = the application stops immediately if the database is unavailable at startup; false = only a warning is written to the log, and the app keeps running (the dashboard shows 'Database unavailable' and keeps retrying until the database comes back)",
+    "// FailFastOnDbCheck": "true = stop immediately if the database is unreachable at startup; false = log and keep running",
     "FailFastOnDbCheck": false
   },
 
-  "// ConnectionStrings": "Max Pool Size raised well above the ADO.NET default (100) on every server-based provider, so the connection pool doesn't become the bottleneck before the database's own CPU does under high-concurrency load testing. Sqlite has no such setting - Microsoft.Data.Sqlite pools per-file handles internally, not a user-configurable connection ceiling.",
+  "// ConnectionStrings": "Max Pool Size raised well above the ADO.NET default (100) so the pool isn't the bottleneck under high-concurrency load testing. No such setting for Sqlite.",
   "ConnectionStrings": {
     "MsSql": "Server=tcp:YOUR-SERVER.database.windows.net,1433;Database=ScaleTriggerDb;User ID=YOUR-USER;Password=YOUR-PASSWORD;Encrypt=True;TrustServerCertificate=True;Max Pool Size=1000;",
     "MySql": "Server=YOUR-SERVER.mysql.database.azure.com;Port=3306;Database=ScaleTriggerDb;Uid=YOUR-USER;Pwd=YOUR-PASSWORD;SslMode=Required;Max Pool Size=1000;",
     "PostgreSql": "Server=YOUR-SERVER.postgres.database.azure.com;Port=5432;Database=ScaleTriggerDb;User Id=YOUR-USER;Password=YOUR-PASSWORD;SSL Mode=Require;Trust Server Certificate=true;Maximum Pool Size=1000;",
-    "// Sqlite": "Local file, no server needed - handy for running/testing the app without an Azure database.",
+    "// Sqlite": "Local file, no server needed.",
     "Sqlite": "Data Source=scaletrigger.db"
   },
 
   "Cache": {
-    "// Enabled": "true = voting results are cached (MemoryCache); false = every retrieval goes straight to the database",
+    "// Enabled": "true = cache voting results (MemoryCache); false = every read hits the database",
     "Enabled": true,
     "SlidingExpirationMinutes": 5
   },
 
   "Load": {
-    "// Note": "Used only to seed the LoadConfig database table the very first time it's created. After that, this section is no longer read; edit the running values from the dashboard instead. Each value is picked fresh, at random, between Min and Max for every vote. Use Min == Max for a fixed value.",
-    "// ConfigRefresh": "Seconds between polls of the LoadConfig table for values changed via the dashboard. Not a vote-time setting like the others below - it controls how fast an edit to ANY of these takes effect.",
+    "// Note": "Seeds LoadConfig only the first time it's created; edit live values from the dashboard afterward. Each vote picks fresh, at random, between Min and Max (Min == Max for a fixed value).",
+    "// ConfigRefresh": "Seconds between polls of LoadConfig for dashboard edits; controls how fast a change to any setting below takes effect.",
     "ConfigRefresh": { "Min": 1, "Max": 1 },
-    "// CpuIterationsPerVote": "Chained SHA-512 (each hash's output feeds the next hash's input): cost is roughly linear in this value, ~0.3 microseconds/iteration on a typical modern core with no hardware SHA-512 acceleration - measured empirically as ~30ms added latency at 100,000 and ~140ms at 500,000. Recalibrate for your own hardware if it differs noticeably.",
+    "// CpuIterationsPerVote": "Chained SHA-512, ~0.3us/iteration on a typical core (no hardware SHA-512 acceleration) - roughly 30ms at 100,000 and 140ms at 500,000. Recalibrate for your own hardware if it differs noticeably.",
     "CpuIterationsPerVote": { "Min": 100000, "Max": 500000 },
     "MemoryKilobytesPerVote": { "Min": 3072, "Max": 8192 },
     "DiskWriteKilobytesPerVote": { "Min": 32, "Max": 96 },
     "NetworkLatencyMillisecondsPerVote": { "Min": 10, "Max": 30 },
-    "// PayloadBytesPerVote": "0 = no Payload table insert for that vote. Off by default, since unlike the others this permanently grows the database - opt in for write-throughput benchmarking.",
+    "// PayloadBytesPerVote": "0 = no Payload insert. Off by default since, unlike the others, this permanently grows the database.",
     "PayloadBytesPerVote": { "Min": 0, "Max": 0 },
-    "// DbCpuIterationsPerVote": "0 = VoteAdd/vote_add just inserts, no CPU burn. Runs inside the database engine itself via DbCpuBurn/db_cpu_burn - chained SHA-512 (HASHBYTES/SHA2+UNHEX/pgcrypto digest() on MsSql/MySql/PostgreSql, the same LoadSimulator.HashIterations as CpuIterationsPerVote on Sqlite). Per-iteration cost differs from the app-side figure above - native crypto calls inside a procedural DB loop carry more overhead per call than the tight in-process C# loop, so recalibrate separately if you enable this.",
+    "// DbCpuIterationsPerVote": "0 = no CPU burn. Runs inside the database engine (DbCpuBurn/db_cpu_burn); per-iteration cost differs from CpuIterationsPerVote above, so recalibrate separately if enabled.",
     "DbCpuIterationsPerVote": { "Min": 0, "Max": 0 }
   },
 
   "NodeBenchmark": {
-    "// Note": "One-off hardware benchmark triggered from the dashboard (not per-vote, unlike the Load section above). CPU runs continuously for CpuDurationSeconds; Memory/Disk repeat their block write MemoryRepetitions/DiskRepetitions times. Each score is the median across its samples.",
+    "// Note": "One-off hardware benchmark from the dashboard, unrelated to per-vote Load. CPU runs continuously for CpuDurationSeconds; Memory/Disk repeat MemoryRepetitions/DiskRepetitions times; each score is the median.",
     "CpuDurationSeconds": 20,
     "MemoryBlockMegabytes": 64,
     "MemoryRepetitions": 5,

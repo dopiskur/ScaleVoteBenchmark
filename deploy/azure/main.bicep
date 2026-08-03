@@ -1,15 +1,12 @@
 // ScaleTrigger - Azure App Service deployment.
 //
 // Provisions a Linux App Service Plan + App Service, wires up GitHub source
-// control so App Service's own Oryx build picks up ScaleTrigger.sln straight
-// from the repo (no separate CI/CD needed for a first deploy - see
-// deploy/azure/README.md, scenario 1), and sets every Application Setting
-// that appsettings.json.example seeds ScaleTrigger from, using the
-// ':' -> '__' nesting convention documented in the main README.
+// control (Oryx builds ScaleTrigger.sln directly - see deploy/azure/README.md,
+// scenario 1), and sets every Application Setting appsettings.json.example
+// seeds ScaleTrigger from, via the ':' -> '__' nesting convention.
 //
-// This is INFRASTRUCTURE + CONFIGURATION only. For repeatable deploys after
-// the first one, use the GitHub Actions workflow instead (scenario 2) -
-// this template does not need to be re-run for every code change.
+// Infrastructure + configuration only; does not need to be re-run per code
+// change (use the GitHub Actions workflow instead, scenario 2).
 //
 // Compiled to main.json via `az bicep build` - see deploy/azure/README.md.
 
