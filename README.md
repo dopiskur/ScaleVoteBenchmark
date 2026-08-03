@@ -4,8 +4,6 @@
 
 A REST API for testing autoscale triggers on the app tier (Azure App Service, Container Apps, AKS, or anywhere else) and on the database tier (e.g. Azure SQL serverless, Flexible Server autoscale). How much CPU/memory/disk/network each request burns, in the app and separately inside the database itself, can be turned up or down **live**, from a dashboard or a single API call, while traffic keeps flowing. No redeploy, no restart, and no need to stop the run and repeat the whole experiment just to try a different intensity; scale-up and scale-down thresholds can both be swept in the same run.
 
-ScaleTrigger is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below) while adjusting how expensive each request is on the fly.
-
 The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
 ## How it works
