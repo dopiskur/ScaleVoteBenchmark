@@ -198,32 +198,63 @@ namespace ScaleTrigger
         /// Chained SHA-512 on every logical processor at once for durationSeconds
         /// - a full-node saturation test, not a single-thread score. Each thread's
         /// score is the median hashes-per-tick; overall is the sum across threads.
+        /// Uses dedicated Thread objects, not the ThreadPool/Parallel.For: the pool
+        /// throttles how fast it injects new worker threads, and is also shared
+        /// with concurrent HTTP request handling - exactly when someone benchmarks
+        /// mid-load-test, that starves this of the guaranteed one-thread-per-core
+        /// it needs to actually reach 100% CPU.
         /// </summary>
         public static double RunCpuBenchmark(int durationSeconds)
         {
             int threadCount = Environment.ProcessorCount;
             var perThreadScores = new double[threadCount];
+            var threads = new Thread[threadCount];
 
-            Parallel.For(0, threadCount, threadIndex =>
+            for (int t = 0; t < threadCount; t++)
             {
-                var samples = new List<double>();
-                byte[] buffer = new byte[64];
-                Random.Shared.NextBytes(buffer);
-
-                for (int tick = 0; tick < durationSeconds; tick++)
+                int threadIndex = t;
+                threads[t] = new Thread(() =>
                 {
-                    var sw = Stopwatch.StartNew();
-                    long n = 2;
-                    while (sw.ElapsedMilliseconds < 1000)
-                    {
-                        buffer = SHA512.HashData(buffer);
-                        n++;
-                    }
-                    samples.Add(n);
-                }
+                    var samples = new List<double>();
 
-                perThreadScores[threadIndex] = Median(samples);
-            });
+                    // Ping-ponged between two buffers instead of reassigning to a fresh
+                    // SHA512.HashData(byte[]) result every iteration, which at millions
+                    // of hashes/sec/thread would otherwise turn this into a GC-pressure
+                    // test as much as a CPU one.
+                    byte[] bufferA = new byte[64];
+                    byte[] bufferB = new byte[64];
+                    Random.Shared.NextBytes(bufferA);
+
+                    for (int tick = 0; tick < durationSeconds; tick++)
+                    {
+                        var sw = Stopwatch.StartNew();
+                        long n = 2;
+                        while (sw.ElapsedMilliseconds < 1000)
+                        {
+                            SHA512.HashData(bufferA, bufferB);
+                            (bufferA, bufferB) = (bufferB, bufferA);
+                            n++;
+                        }
+                        samples.Add(n);
+                    }
+
+                    perThreadScores[threadIndex] = Median(samples);
+                })
+                {
+                    IsBackground = true,
+                    Priority = ThreadPriority.Highest
+                };
+            }
+
+            foreach (var thread in threads)
+            {
+                thread.Start();
+            }
+
+            foreach (var thread in threads)
+            {
+                thread.Join();
+            }
 
             return perThreadScores.Sum();
         }
