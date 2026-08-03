@@ -106,21 +106,21 @@ MySQL, PostgreSQL, and SQLite currently support connection string authentication
 
 ### JWT authentication
 
-`Auth:Enabled = true` makes `POST /api/vote/add`, `POST /api/vote/reset`, `POST /api/loadconfig`, and `POST /api/nodebenchmark/run` require a JWT from `POST /api/auth/login`, so a load test also exercises token validation as part of the benchmark, not just the vote write. This is implemented via `OptionalAuthorizationHandler`, which succeeds every pending authorization requirement while the setting is off, so no controller code changes based on it. `GET /api/vote/report`, `GET /api/loadconfig`, and `GET /api/nodebenchmark/hardware` are always anonymous.
+`Auth:Enabled = true` makes `POST /api/vote/add`, `POST /api/vote/reset`, `POST /api/loadconfig`, and `POST /api/nodebenchmark/run` require a JWT from `POST /api/auth/login`, so a load test also exercises token validation as part of the benchmark. `GET /api/vote/report`, `GET /api/loadconfig`, and `GET /api/nodebenchmark/hardware` are always anonymous.
 
 ## Schema provisioning
 
-There is no separate SQL file to run manually. `EnsureSchemaAsync()` creates the `Vote` table (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) from schema embedded directly in the code (`ScaleTrigger/Schema/SchemaScripts.cs`), but only if the table doesn't already exist, so an already-provisioned database is never touched on restart. Point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app; nothing else is required.
+There is no separate SQL file to run manually. `EnsureSchemaAsync()` creates the schema (and, for MSSQL/MySQL/PostgreSQL, its stored procedures/functions) automatically at startup, but only if it doesn't already exist, so an already-provisioned database is never touched on restart. Point `ConnectionStrings:<Provider>` at an empty database (or, for SQLite, just a file path) and start the app; nothing else is required.
 
-Creating tables/procedures requires DDL permissions on the configured database user. If the user only has DML rights, `EnsureSchemaAsync()` fails, and that failure follows `Startup:FailFastOnDbCheck` the same way a connection failure would.
-
-PostgreSQL additionally runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` as part of provisioning (the database-side CPU burn's SHA-512 hashing uses pgcrypto's `digest()`), which needs a role with the privilege to create extensions. That's usually superuser, though most managed offerings (e.g. Azure Database for PostgreSQL) grant it via a dedicated admin role instead.
+Creating tables/procedures requires DDL permissions on the configured database user; if the user only has DML rights, `EnsureSchemaAsync()` fails and follows `Startup:FailFastOnDbCheck` the same way a connection failure would. On PostgreSQL, provisioning also needs permission to create the `pgcrypto` extension (used for the database-side CPU burn), which most managed offerings grant via a dedicated admin role.
 
 ## API endpoints
 
+A "vote" is just the load-generation unit: each call is a fake yes/no choice that exists to carry a configurable amount of CPU/memory/disk/network cost, not a real feature.
+
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `POST /api/vote/add?option=yes\|no` | optional (`Auth:Enabled`) | Records a vote and generates the per-vote CPU/memory/disk/network load. Add `&dbCpuBurnOnly=true` to isolate the database-side CPU burn (`DbCpuBurn`/`db_cpu_burn`) from the `Vote`/`Payload` insert; no row is written |
+| `POST /api/vote/add?option=yes\|no` | optional (`Auth:Enabled`) | Generates the per-vote CPU/memory/disk/network load and records the result. Add `&dbCpuBurnOnly=true` to isolate the database-side CPU burn; no row is written |
 | `GET /api/vote/report` | anonymous | `{ total, payloadCount, payloadTotalBytes }`, computed by the database |
 | `POST /api/vote/reset` | optional | Drops and recreates the schema; database ends up looking brand new |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password" }` → `{ "token" }` |
@@ -133,21 +133,21 @@ PostgreSQL additionally runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` as part o
 
 A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
 
-**CPU calibration:** "Run benchmark" measures the node's raw hash throughput, then briefly drops `CpuIterationsPerVote`/`DbCpuIterationsPerVote` to near-zero and times a few real votes to isolate everything else a vote costs (network, DB round trip). From those two numbers and a target concurrency `N` you enter, it computes a `CpuIterationsPerVote` range that should saturate all cores at exactly `N` concurrent votes; "Set recommended" writes it into the Min/Max fields above (still needs "Save changes" to persist). Original load settings are restored automatically once the calibration votes finish.
+**CPU calibration:** "Run benchmark" measures the node's raw performance, briefly runs a few real votes with load turned off to see what a vote costs regardless of CPU burn, then suggests a `CpuIterationsPerVote` range that should saturate all cores at a target concurrency `N` you set. "Set recommended" fills in the Min/Max fields above (still needs "Save changes" to persist); original load settings are restored automatically afterward.
 
 ## Generating load
 
-ScaleTrigger doesn't generate its own traffic; point one of these at it. All three live in `scripts/` and share the same behavior: `POST /api/vote/add` with `yes`/`no` chosen randomly per call, and automatic JWT login if the API responds `401` (detected via a probe request, using `AdminUser:Username`/`AdminUser:Password`).
+ScaleTrigger doesn't generate its own traffic; point one of these at it. All three live in `scripts/`, call `POST /api/vote/add` with `yes`/`no` chosen randomly, and log in automatically if `Auth:Enabled` is on.
 
 | Script | When to use it |
 |---|---|
-| `scaleTriggerLoad_k6.js` | Default choice for most runs: precise ramp-up (`stages`), CI-friendly pass/fail thresholds, and the most mature reporting of the three. |
-| `scaleTriggerLoad_locust.py` | Same test, runnable locally (`locust -f ...`) **or uploaded directly to Azure Load Testing as a Locust test**, unmodified. Note: Locust ramps by number of simulated users, not by a direct requests-per-second target, so expect the actual rate to be an approximation, not an exact number. |
-| `scaleTriggerLoad.py` | Legacy option, kept for one specific reason: it targets an **exact votes-per-second rate** regardless of API latency (via a scheduled async loop), which neither k6's arrival-rate executor nor Locust's user-based model guarantee as precisely. Use this if you need to say "the trigger fired at exactly N votes/s" rather than an approximate rate. |
+| `scaleTriggerLoad_k6.js` | Default choice for most runs: ramp-up, CI-friendly pass/fail thresholds, mature reporting. |
+| `scaleTriggerLoad_locust.py` | Same test, runnable locally or uploaded directly to Azure Load Testing as a Locust test. Rate is approximate, not exact, since Locust ramps by simulated users. |
+| `scaleTriggerLoad.py` | Use this if you need an exact votes-per-second rate rather than an approximation. |
 
-See the header comment in each script for full usage examples and parameters (`--url`/`URL`, `--votes`/`VOTES`, `--ramp`/`RAMP`, etc.; parameter names differ slightly per tool but map to the same concepts).
+See the header comment in each script for usage examples and parameters.
 
-While a load-test script drives the request rate, the `LoadConfig` dashboard/API drives what each of those requests costs server-side. The two are independent knobs, and both can be turned during the same run.
+While a load-test script drives the request rate, the `LoadConfig` dashboard/API drives what each request costs server-side; independent knobs, both adjustable during the same run.
 
 ## Deploying via GitHub Actions
 
@@ -173,12 +173,7 @@ Since `appsettings.json` never ships in the deployed package, every setting must
 | MySqlConnector | 2.6.1 |
 | Npgsql | 10.0.3 |
 | Microsoft.Data.Sqlite | 10.0.10 |
-| SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 (pinned above the version `Microsoft.Data.Sqlite` pulls in transitively; that older version has a known vulnerability, GHSA-2m69-gcr7-jv3q) |
+| SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 |
 | Azure.Identity | 1.21.0 |
-| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 (tied to the .NET runtime version) |
+| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 |
 
-`Microsoft.Extensions.Caching.Memory` and `Microsoft.Extensions.Configuration.Abstractions` need no explicit reference; both come bundled with the ASP.NET Core shared framework (`Microsoft.NET.Sdk.Web`).
-
-## Notes on the `Vote` table primary key
-
-`IDVote`/`id_vote` is `BIGINT`/`BIGSERIAL` on MSSQL/MySQL/PostgreSQL, not a 32-bit `INT`, since this tool is expected to accumulate a very large row count under sustained load testing. SQLite's `INTEGER PRIMARY KEY AUTOINCREMENT` is already a 64-bit rowid, so no separate sizing decision was needed there.
