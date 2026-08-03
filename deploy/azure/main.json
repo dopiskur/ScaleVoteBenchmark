@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "5450869639107937710"
+      "templateHash": "11542965052535119460"
     }
   },
   "parameters": {
@@ -127,6 +127,13 @@
     "loadConfigRefreshMaxSeconds": {
       "type": "int",
       "defaultValue": 1
+    },
+    "loadEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "true = per-vote load and the Vote/Payload write run normally; false = POST /api/vote/add is a fast no-op. Live via LoadConfig, shared by every node."
+      }
     },
     "loadCacheEnabled": {
       "type": "bool",
@@ -329,6 +336,14 @@
             {
               "name": "Load__ConfigRefresh__Max",
               "value": "[string(parameters('loadConfigRefreshMaxSeconds'))]"
+            },
+            {
+              "name": "Load__LoadEnabled__Min",
+              "value": "[string(if(parameters('loadEnabled'), 1, 0))]"
+            },
+            {
+              "name": "Load__LoadEnabled__Max",
+              "value": "[string(if(parameters('loadEnabled'), 1, 0))]"
             },
             {
               "name": "Load__CacheEnabled__Min",
