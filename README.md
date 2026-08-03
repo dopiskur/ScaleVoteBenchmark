@@ -1,5 +1,7 @@
 # ScaleTrigger
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A REST API for testing autoscale triggers on the app tier (Azure App Service, Container Apps, AKS, or anywhere else) and on the database tier (e.g. Azure SQL serverless, Flexible Server autoscale). How much CPU/memory/disk/network each request burns, in the app and separately inside the database itself, can be turned up or down **live**, from a dashboard or a single API call, while traffic keeps flowing. No redeploy, no restart, and no need to stop the run and repeat the whole experiment just to try a different intensity; scale-up and scale-down thresholds can both be swept in the same run.
 
 ScaleTrigger is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below) while adjusting how expensive each request is on the fly.
@@ -130,6 +132,8 @@ PostgreSQL additionally runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` as part o
 ## Dashboard
 
 A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
+
+**CPU calibration:** "Run benchmark" measures the node's raw hash throughput, then briefly drops `CpuIterationsPerVote`/`DbCpuIterationsPerVote` to near-zero and times a few real votes to isolate everything else a vote costs (network, DB round trip). From those two numbers and a target concurrency `N` you enter, it computes a `CpuIterationsPerVote` range that should saturate all cores at exactly `N` concurrent votes; "Set recommended" writes it into the Min/Max fields above (still needs "Save changes" to persist). Original load settings are restored automatically once the calibration votes finish.
 
 ## Generating load
 
