@@ -45,14 +45,14 @@ BEGIN
 END",
 
             @"CREATE PROCEDURE dbo.VoteAdd
-    @Option    VARCHAR(10),
-    @Payload   VARBINARY(MAX) = NULL,
-    @MaxPrime  INT            = 0
+    @Option          VARCHAR(10),
+    @Payload         VARBINARY(MAX) = NULL,
+    @HashIterations  INT            = 0
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    EXEC dbo.DbCpuBurn @MaxPrime;
+    EXEC dbo.DbCpuBurn @HashIterations;
 
     INSERT INTO dbo.Vote ([Option], DateCreated)
     VALUES (@Option, SYSUTCDATETIME());
@@ -128,10 +128,10 @@ END",
             @"CREATE PROCEDURE `VoteAdd`(
     IN pOption VARCHAR(10),
     IN pPayload LONGBLOB,
-    IN pMaxPrime INT
+    IN pHashIterations INT
 )
 BEGIN
-    CALL `DbCpuBurn`(pMaxPrime);
+    CALL `DbCpuBurn`(pHashIterations);
 
     INSERT INTO `Vote` (`Option`, `DateCreated`)
     VALUES (pOption, UTC_TIMESTAMP());
@@ -194,13 +194,13 @@ BEGIN
 END;
 $$;",
 
-            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_max_prime INT DEFAULT 0)
+            @"CREATE PROCEDURE vote_add(p_option VARCHAR(10), p_payload BYTEA DEFAULT NULL, p_hash_iterations INT DEFAULT 0)
 LANGUAGE plpgsql
 AS $$
 DECLARE
     new_id_vote BIGINT;
 BEGIN
-    CALL db_cpu_burn(p_max_prime);
+    CALL db_cpu_burn(p_hash_iterations);
 
     INSERT INTO vote (option, date_created)
     VALUES (p_option, now() AT TIME ZONE 'utc')

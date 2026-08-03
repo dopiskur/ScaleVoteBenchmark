@@ -21,7 +21,7 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
@@ -35,19 +35,19 @@ namespace ScaleTrigger.Repositories
                 Value = (object?)payload ?? DBNull.Value
             });
 
-            cmd.Parameters.AddWithValue("pMaxPrime", maxPrime);
+            cmd.Parameters.AddWithValue("pHashIterations", hashIterations);
 
             await cmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>Calls DbCpuBurn directly - chained SHA-512 CPU burn, no INSERT into Vote/Payload at all.</summary>
-        public async Task DbCpuBurnAsync(int maxPrime)
+        public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "DbCpuBurn";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
-            cmd.Parameters.AddWithValue("pIterations", maxPrime);
+            cmd.Parameters.AddWithValue("pIterations", hashIterations);
             await cmd.ExecuteNonQueryAsync();
         }
 

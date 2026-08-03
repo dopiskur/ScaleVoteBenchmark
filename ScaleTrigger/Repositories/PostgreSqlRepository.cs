@@ -22,11 +22,11 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "CALL vote_add(@option, @payload, @maxPrime)";
+            cmd.CommandText = "CALL vote_add(@option, @payload, @hashIterations)";
             cmd.Parameters.AddWithValue("option", option);
 
             // AddWithValue can't infer a type from a bare DBNull.Value.
@@ -35,18 +35,18 @@ namespace ScaleTrigger.Repositories
                 Value = (object?)payload ?? DBNull.Value
             });
 
-            cmd.Parameters.AddWithValue("maxPrime", maxPrime);
+            cmd.Parameters.AddWithValue("hashIterations", hashIterations);
 
             await cmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>Calls db_cpu_burn directly - chained SHA-512 CPU burn, no INSERT into vote/payload at all.</summary>
-        public async Task DbCpuBurnAsync(int maxPrime)
+        public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL db_cpu_burn(@iterations)";
-            cmd.Parameters.AddWithValue("iterations", maxPrime);
+            cmd.Parameters.AddWithValue("iterations", hashIterations);
             await cmd.ExecuteNonQueryAsync();
         }
 

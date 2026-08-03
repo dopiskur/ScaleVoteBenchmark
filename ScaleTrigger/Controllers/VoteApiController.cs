@@ -50,7 +50,7 @@ namespace ScaleTrigger.Controllers
             int memoryKilobytes = RandomizedLoadValue("MemoryKilobytesPerVote");
             int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
-            int dbMaxPrime = RandomizedLoadValue("DbCpuIterationsPerVote");
+            int dbHashIterations = RandomizedLoadValue("DbCpuIterationsPerVote");
 
             // Offloaded to a background thread so this CPU/disk-bound work doesn't
             // run directly on the async continuation and starve the thread pool
@@ -65,7 +65,7 @@ namespace ScaleTrigger.Controllers
 
             if (dbCpuBurnOnly)
             {
-                await repoFactory.GetRepo().DbCpuBurnAsync(dbMaxPrime);
+                await repoFactory.GetRepo().DbCpuBurnAsync(dbHashIterations);
                 return Ok();
             }
 
@@ -77,7 +77,7 @@ namespace ScaleTrigger.Controllers
                 Random.Shared.NextBytes(payload);
             }
 
-            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbMaxPrime);
+            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbHashIterations);
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();

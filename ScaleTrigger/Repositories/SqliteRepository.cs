@@ -52,34 +52,34 @@ namespace ScaleTrigger.Repositories
         /// function and calls it from SQL - dispatched by the SQL engine,
         /// matching the other three providers' VoteAdd/DbCpuBurn.
         /// </summary>
-        private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int maxPrime)
+        private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int hashIterations)
         {
             connection.CreateFunction("sysbench_cpu", (long iterations) => LoadSimulator.HashIterations(iterations));
 
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT sysbench_cpu($maxPrime);";
-            cmd.Parameters.AddWithValue("$maxPrime", maxPrime);
+            cmd.CommandText = "SELECT sysbench_cpu($hashIterations);";
+            cmd.Parameters.AddWithValue("$hashIterations", hashIterations);
             await cmd.ExecuteScalarAsync();
         }
 
         /// <summary>Reuses the same sysbench_cpu scalar function VoteAdd calls, but does no INSERT at all.</summary>
-        public async Task DbCpuBurnAsync(int maxPrime)
+        public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
 
-            if (maxPrime > 0)
+            if (hashIterations > 0)
             {
-                await RunSysbenchCpuAsync(connection, maxPrime);
+                await RunSysbenchCpuAsync(connection, hashIterations);
             }
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int maxPrime)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
 
-            if (maxPrime > 0)
+            if (hashIterations > 0)
             {
-                await RunSysbenchCpuAsync(connection, maxPrime);
+                await RunSysbenchCpuAsync(connection, hashIterations);
             }
 
             long newIdVote;
