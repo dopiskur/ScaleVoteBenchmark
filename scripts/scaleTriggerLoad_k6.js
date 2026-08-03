@@ -3,21 +3,14 @@
  *
  * k6 load-test script for the ScaleTrigger API.
  *
- * Sends POST /api/vote/add?option=yes|no against a real, external URL of
- * the application, randomly choosing yes/no per request (50/50). Uses
- * k6's ramping-arrival-rate executor, which targets a fixed number of
- * requests per second regardless of how many VUs that takes - the same
- * "votes per second" semantics as the original scaleTriggerLoad.py.
+ * Sends POST /api/vote/add?option=yes|no, randomly choosing yes/no per
+ * request. Uses k6's ramping-arrival-rate executor, which targets a fixed
+ * number of requests per second regardless of how many VUs that takes.
  *
- * Authentication: setup() sends a single probe vote with no Authorization
- * header before the test starts. If the API responds 401 Unauthorized
- * (i.e. Auth:Enabled=true on the API side), it automatically logs in
- * with admin:admin (the API's default AdminUser:Username /
- * AdminUser:Password - override via AUTH_USER / AUTH_PASS if you
- * changed them) and every VU attaches the resulting JWT as a Bearer
- * token. If the probe does not come back 401, the test runs with no
- * Authorization header at all. Note: the probe itself sends a real vote
- * if auth is disabled, same as the original script.
+ * Authentication is auto-detected: setup() sends a single probe vote
+ * before the test starts, and if the API responds 401, logs in with
+ * admin:admin (override via AUTH_USER / AUTH_PASS) and every VU attaches
+ * the resulting JWT as a Bearer token.
  *
  * Install k6: https://k6.io/docs/get-started/installation/
  *
@@ -73,11 +66,9 @@ const TIMEOUT = __ENV.TIMEOUT || '10s';
 const AUTH_USER = __ENV.AUTH_USER || 'admin';
 const AUTH_PASS = __ENV.AUTH_PASS || 'admin';
 
-// Builds k6 "stages" (target rate + duration pairs) matching the
-// original script's ramp behavior: every RAMP_INTERVAL_SECONDS, the
-// rate grows by RAMP_STEP_PERCENT percent, optionally capped at
-// RAMP_MAX, until DURATION_SECONDS is covered. If RAMP is false, this
-// is just one flat stage at START_RATE for the whole duration.
+// Builds k6 "stages" (target rate + duration pairs): every RAMP_INTERVAL_SECONDS the
+// rate grows by RAMP_STEP_PERCENT, capped at RAMP_MAX, until DURATION_SECONDS is covered.
+// One flat stage at START_RATE if RAMP is false.
 function buildStages() {
   if (!RAMP) {
     return [{ target: START_RATE, duration: `${DURATION_SECONDS}s` }];
@@ -112,8 +103,7 @@ export const options = {
     },
   },
   thresholds: {
-    // Fails the run (non-zero exit code) if more than 5% of requests
-    // error out - useful as a CI gate. Adjust or remove as needed.
+    // Fails the run (non-zero exit code) above a 5% error rate; adjust or remove for CI.
     http_req_failed: ['rate<0.05'],
   },
 };

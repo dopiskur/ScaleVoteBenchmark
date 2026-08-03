@@ -4,27 +4,18 @@ scaleTriggerLoad.py
 
 External load generator for the ScaleTrigger API.
 
-Sends POST /api/vote/add?option=yes|no to a real, external URL of the
-application (not locally, not in-process), randomly choosing yes/no per
-request. Supports running several parallel processes so the target
-requests-per-second rate can still be reached even if a single process
-(due to the GIL and network/TLS overhead) becomes the bottleneck of the
-generator itself.
+Sends POST /api/vote/add?option=yes|no to a real, external URL, randomly
+choosing yes/no per request. Supports several parallel processes so a
+single process's GIL/network overhead doesn't cap the achievable rate.
 
-Authentication: the script first sends a single probe vote request with no
-Authorization header. If the API responds with 401 Unauthorized (i.e.
-Auth:Enabled=true on the API side), it automatically logs in with the
-hardcoded credentials admin:admin (matching the API's default
-AdminUser:Username / AdminUser:Password) and uses the resulting JWT as a
-Bearer token on every subsequent vote request. If the probe does not
-come back 401, the load test runs with no Authorization header at all.
-No flag needed either way.
+Authentication is auto-detected: a probe vote with no Authorization header
+is sent first, and if the API responds 401, the script logs in with
+admin:admin (matching the API's default AdminUser:Username/Password) and
+attaches the resulting JWT to every subsequent request. No flag needed.
 
-Ramp-up mode: when --ramp is set to true, --votes is treated as the
-starting rate. Every --ramp-interval seconds, the rate is increased by
---ramp-step percent, for the rest of the test duration. Useful for
-finding the breaking point of an instance before autoscale kicks in,
-rather than hammering it at a single fixed rate for the whole run.
+Ramp-up mode (--ramp true): --votes becomes the starting rate, increasing
+by --ramp-step percent every --ramp-interval seconds for the rest of the
+run - useful for finding an instance's breaking point before autoscale kicks in.
 
 Examples:
 
@@ -50,8 +41,7 @@ Parameters:
         Base URL of the API, e.g. https://xyz.azurewebsites.net
 
     --votes (per second)                    (required)
-        Total target number of votes per second (yes/no chosen randomly,
-        50/50), spread evenly across all processes.
+        Total target votes per second (yes/no random, 50/50), spread across all processes.
 
     --duration (seconds)                     (optional, default: 60)
         Test duration in seconds.
@@ -60,40 +50,29 @@ Parameters:
         Number of parallel processes jointly generating traffic.
 
     --concurrency (per process)               (optional, default: 200)
-        Max number of concurrent in-flight (not-yet-answered) requests
-        per process. Caps memory/socket growth if the API responds
-        slower than the target rate; raise it for very high
-        votes (per second) values.
+        Max concurrent in-flight requests per process; caps memory/socket growth
+        if the API responds slower than the target rate.
 
     --report (interval in seconds)           (optional, default: 5)
         Interval for printing statistics, in seconds.
 
     --ramp (connection increase)             (optional, default: false)
-        true/false. If true, --votes becomes the starting rate instead
-        of a fixed rate for the whole run; the rate increases by
-        --ramp-step percent every --ramp-interval seconds until the
-        test ends. Useful for finding the breaking point of an
-        instance before autoscale triggers.
+        true/false. If true, --votes is the starting rate, increasing by
+        --ramp-step percent every --ramp-interval seconds for the rest of the run.
 
     --ramp-step (percent)                    (optional, default: 10)
-        Percentage the rate increases by at each ramp step. Only used
-        when --ramp is true.
+        Percentage the rate increases by at each ramp step. Only used when --ramp is true.
 
     --ramp-interval (seconds)                (optional, default: 5)
         How often the rate increases when --ramp is true.
 
     --ramp-max (votes per second)            (optional, default: none)
-        Caps the rate so it stops increasing once this value is
-        reached, holding steady there for the rest of the run instead
-        of continuing to grow. Only used when --ramp is true; leave
-        unset for unlimited (exponential) growth.
+        Caps the rate so it holds steady once reached, instead of growing unbounded.
+        Only used when --ramp is true.
 
     --timeout (seconds per request)          (optional, default: 10)
-        Max time to wait for a single vote request (connect + response)
-        before treating it as failed. Without this, a request to a
-        server that accepts the connection but never responds would
-        hang for aiohttp's default of 300s, holding its concurrency
-        slot the whole time instead of freeing it up quickly.
+        Max time to wait for a single vote request before treating it as failed
+        (aiohttp's default is 300s, which would hold a concurrency slot too long).
 """
 
 import subprocess
@@ -122,10 +101,7 @@ import random
 import time
 from dataclasses import dataclass, field
 
-# Hardcoded credentials used to obtain a JWT token automatically when
-# the API responds 401 to the initial probe request. These match the
-# API's default AdminUser:Username / AdminUser:Password (see
-# appsettings.json.example).
+# Matches the API's default AdminUser:Username/Password (see appsettings.json.example).
 JWT_USERNAME = "admin"
 JWT_PASSWORD = "admin"
 
@@ -160,13 +136,7 @@ class Stats:
 
 
 class SharedStats:
-    """
-    Same interface as Stats (record / snapshot_and_reset), but backed by
-    multiprocessing shared memory + a lock, so counts and latencies from
-    every process accumulate into one combined total instead of being
-    tracked separately per process. Created once in main() and passed
-    down to every worker process.
-    """
+    """Same interface as Stats, but backed by multiprocessing shared memory + a lock, so every process accumulates into one combined total."""
 
     def __init__(self):
         self._lock = multiprocessing.Lock()
@@ -219,14 +189,7 @@ async def fetch_jwt_token(api_url: str, username: str, password: str, timeout_se
 
 
 async def probe_requires_auth(api_url: str, timeout_seconds: float) -> bool:
-    """
-    Sends a single vote request with no Authorization header to detect
-    whether the API requires a JWT (i.e. Auth:Enabled=true on the API
-    side, which makes POST /api/vote/add respond 401 Unauthorized).
-    If the probe request fails outright (network error, or no response
-    within timeout_seconds), assumes no auth is needed and lets the
-    real load test surface the problem.
-    """
+    """Detects Auth:Enabled via a single unauthenticated probe. If the probe fails outright, assumes no auth and lets the real load test surface the problem."""
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         try:
@@ -261,13 +224,7 @@ def pick_random_option() -> str:
 def build_ramp_schedule(starting_rate: float, ramp_step_percent: float,
                          ramp_interval_seconds: float, duration_seconds: float,
                          ramp_max: float = None):
-    """
-    Builds a list of (segment_start_seconds, votes_per_second) pairs,
-    starting at starting_rate and increasing by ramp_step_percent every
-    ramp_interval_seconds, covering the full test duration. If ramp_max
-    is set, the rate stops increasing once it reaches that value and
-    holds steady there for the remaining segments.
-    """
+    """Builds (segment_start_seconds, votes_per_second) pairs; rate grows by ramp_step_percent every ramp_interval_seconds, capped at ramp_max if set."""
     schedule = []
     t = 0.0
     rate = starting_rate
@@ -286,19 +243,10 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
                           ramp_max: float, process_label: str, total_process_count: int,
                           timeout_seconds: float):
     """
-    Starts one new request at a time, fire-and-forget, bounded by a
-    semaphore that caps the maximum number of requests in flight at
-    once (so a slow API response doesn't cause unbounded task growth).
-
-    When ramp_enabled is False, requests are started on a fixed
-    interval (1 / votes_per_second seconds) for the whole duration.
-
-    When ramp_enabled is True, votes_per_second is the starting rate;
-    the rate increases by ramp_step_percent every ramp_interval_seconds
-    for the rest of the run, based on a precomputed schedule, optionally
-    capped at ramp_max. All processes share an identical schedule shape
-    (only proportionally divided), so the ramp step is only printed once,
-    from process-1, to avoid duplicate identical lines from every process.
+    Fires one request at a time, bounded by a semaphore capping in-flight
+    requests. If ramp_enabled, votes_per_second is the starting rate and
+    grows per a precomputed schedule; only process-1 prints ramp-step lines
+    since every process shares the same schedule shape.
     """
     semaphore = asyncio.Semaphore(max_in_flight_requests)
     start_time = time.perf_counter()
@@ -345,8 +293,7 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
             if sleep_for > 0:
                 await asyncio.sleep(sleep_for)
             else:
-                # Rate increased faster than we can keep up scheduling ticks;
-                # resync so we don't fire a burst of catch-up requests.
+                # Resync instead of firing a burst of catch-up requests.
                 next_tick = time.perf_counter()
 
         # wait for remaining in-flight requests to drain
@@ -379,10 +326,7 @@ async def run_single_process_worker(api_url: str, votes_per_second: float, durat
 
     stop_event = asyncio.Event()
 
-    # Only process-1 prints the periodic report; shared_stats already
-    # aggregates counts/latencies from every process, so a single reporter
-    # is enough - having every process print it would just duplicate the
-    # same combined totals N times.
+    # Only process-1 prints the report; shared_stats already aggregates every process.
     report_task = None
     if process_label == "process-1":
         report_task = asyncio.create_task(
