@@ -19,16 +19,13 @@ Live-tunable load
 #live-tunable-load
 Every POST /api/vote/add call picks a fresh random value, per load type, from a Min/Max range — but unlike a value baked into appsettings.json, these ranges live in the LoadConfig database table and can be changed while the app is running and under test, with no restart or redeploy:
 
-
-```bash
-CpuIterationsPerVote — chained SHA-512 hashing in the app process (each hash's output feeds the next, so the JIT can't fold the loop away)
-MemoryKilobytesPerVote — a buffer allocated and touched page-by-page so the OS actually reserves physical memory, not just address space
-DiskWriteKilobytesPerVote — a uniquely-named temp file per call, written with FileOptions.WriteThrough + Flush(true) (real disk I/O, not page cache) then deleted immediately
-NetworkLatencyMillisecondsPerVote — a non-blocking Task.Delay, so it frees the request thread the way a real downstream call would
-PayloadBytesPerVote — optional extra random bytes written into a Payload table row (off by default, since unlike the others this permanently grows the database — opt in for write-throughput benchmarking)
-DbCpuIterationsPerVote — CPU burn that runs inside the database engine itself, not the app (see "Database-side CPU load" below)
-ConfigRefresh — not a vote-time load setting; it's how often (in seconds) the app re-polls LoadConfig for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
-```
+- CpuIterationsPerVote — chained SHA-512 hashing in the app process (each hash's output feeds the next, so the JIT can't fold the loop away)
+- MemoryKilobytesPerVote — a buffer allocated and touched page-by-page so the OS actually reserves physical memory, not just address space
+- DiskWriteKilobytesPerVote — a uniquely-named temp file per call, written with FileOptions.WriteThrough + Flush(true) (real disk I/O, not page cache) then deleted immediately
+- NetworkLatencyMillisecondsPerVote — a non-blocking Task.Delay, so it frees the request thread the way a real downstream call would
+- PayloadBytesPerVote — optional extra random bytes written into a Payload table row (off by default, since unlike the others this permanently grows the database — opt in for write-throughput benchmarking)
+- DbCpuIterationsPerVote — CPU burn that runs inside the database engine itself, not the app (see "Database-side CPU load" below)
+- ConfigRefresh — not a vote-time load setting; it's how often (in seconds) the app re-polls LoadConfig for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
 
