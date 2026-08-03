@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "693729035404583626"
+      "templateHash": "5450869639107937710"
     }
   },
   "parameters": {
@@ -116,13 +116,6 @@
         "description": "true = refuse to start if the database is unreachable at startup; false = log a critical error and keep running (dashboard shows \"Database unavailable\" and keeps retrying)."
       }
     },
-    "cacheEnabled": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "true = cache GET /api/vote/report in memory; false = every read goes straight to the database."
-      }
-    },
     "cacheSlidingExpirationMinutes": {
       "type": "int",
       "defaultValue": 5
@@ -134,6 +127,13 @@
     "loadConfigRefreshMaxSeconds": {
       "type": "int",
       "defaultValue": 1
+    },
+    "loadCacheEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "true = cache GET /api/vote/report in memory; false = every read goes straight to the database. Live via LoadConfig, shared by every node - not a one-time Application Setting like the other params above."
+      }
     },
     "loadCpuIterationsPerVoteMin": {
       "type": "int",
@@ -319,10 +319,6 @@
               "value": "[string(parameters('failFastOnDbCheck'))]"
             },
             {
-              "name": "Cache__Enabled",
-              "value": "[string(parameters('cacheEnabled'))]"
-            },
-            {
               "name": "Cache__SlidingExpirationMinutes",
               "value": "[string(parameters('cacheSlidingExpirationMinutes'))]"
             },
@@ -333,6 +329,14 @@
             {
               "name": "Load__ConfigRefresh__Max",
               "value": "[string(parameters('loadConfigRefreshMaxSeconds'))]"
+            },
+            {
+              "name": "Load__CacheEnabled__Min",
+              "value": "[string(if(parameters('loadCacheEnabled'), 1, 0))]"
+            },
+            {
+              "name": "Load__CacheEnabled__Max",
+              "value": "[string(if(parameters('loadCacheEnabled'), 1, 0))]"
             },
             {
               "name": "Load__CpuIterationsPerVote__Min",
