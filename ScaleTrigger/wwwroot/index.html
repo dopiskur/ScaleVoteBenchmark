@@ -661,24 +661,19 @@
     const recommendMaxEl = document.getElementById('recommend-max');
     const recommendMinEl = document.getElementById('recommend-min');
 
-    // R_total and c (logical processors) are needed before a recommendation can be
-    // shown; null until "Run benchmark" has run at least once.
+    // R_total is needed before a recommendation can be shown; null until "Run
+    // benchmark" has run at least once.
     let cpuNumbersPerSecondValue = null;
-    let processorCountValue = null;
 
     // Unrounded ceiling/floor from the last recomputeRecommendation() call - what
     // "Set recommended" writes, kept separate from the rounded text shown to the user.
     let recommendedMaxValue = null;
     let recommendedMinValue = null;
 
-    // ceiling(N) = 0.8 * R_total * (100 - c) / (N - c); floor = 0.5 * ceiling.
-    // CPU saturation is a threshold effect of concurrency vs. core count, not a
-    // flat percentage of R_total - once N exceeds c, cores queue up regardless of
-    // how small CpuIterationsPerVote is, so this keeps the real 1/(N-c) shape
-    // rather than a flat R_total-based recommendation. The shape is anchored so
-    // the default N=100 recommends exactly 80% of R_total.
+    // ceiling(N) = 0.8 * (R_total / N); floor = 0.5 * ceiling. Per-vote fair share
+    // of the node's total capacity, at 80% of that share.
     function recomputeRecommendation() {
-      if (cpuNumbersPerSecondValue == null || processorCountValue == null) {
+      if (cpuNumbersPerSecondValue == null) {
         recommendMaxEl.textContent = '—';
         recommendMinEl.textContent = '—';
         recommendedMaxValue = null;
@@ -687,7 +682,6 @@
       }
 
       const n = Number(recommendNInput.value);
-      const denominator = n - processorCountValue;
 
       if (!Number.isFinite(n) || n <= 0) {
         recommendMaxEl.textContent = 'Enter N';
@@ -697,15 +691,7 @@
         return;
       }
 
-      if (denominator <= 0) {
-        recommendMaxEl.textContent = 'N must exceed ' + processorCountValue;
-        recommendMinEl.textContent = '—';
-        recommendedMaxValue = null;
-        recommendedMinValue = null;
-        return;
-      }
-
-      const ceiling = 0.8 * cpuNumbersPerSecondValue * (100 - processorCountValue) / denominator;
+      const ceiling = 0.8 * (cpuNumbersPerSecondValue / n);
       const floor = 0.5 * ceiling;
 
       recommendMaxEl.textContent = Math.round(ceiling).toLocaleString();
@@ -753,8 +739,6 @@
         const hw = await response.json();
         hwStatusEl.textContent = '';
         renderHardwareRows(hw);
-        processorCountValue = hw.processorCount;
-        recomputeRecommendation();
       } catch (err) {
         hwStatusEl.textContent = 'Could not load hardware info.';
         hwRowsEl.innerHTML = '';

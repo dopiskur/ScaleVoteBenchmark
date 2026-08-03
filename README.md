@@ -133,7 +133,7 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 
 A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
 
-**CPU calibration:** "Run benchmark" measures the node's raw CPU throughput (`R_total`) and logical core count (`c`), then suggests a `CpuIterationsPerVote` range for a target concurrency `N` you set: Max = `0.8 * R_total * (100 - c) / (N - c)`, Min = 50% of Max. CPU saturation is a threshold effect of concurrency vs. core count, not a flat percentage of raw throughput - once concurrent votes exceed `c`, cores queue up regardless of how small `CpuIterationsPerVote` is - so this keeps the real `1/(N-c)` shape rather than a flat `R_total`-based recommendation, anchored so the default `N=100` recommends exactly 80% of `R_total`. "Set recommended" fills in the Min/Max fields above (still needs "Save changes" to persist).
+**CPU calibration:** "Run benchmark" measures the node's raw CPU throughput (`R_total`), then suggests a `CpuIterationsPerVote` range for a target vote count `N` you set (default 100): Max = `0.8 * (R_total / N)` - 80% of the per-vote fair share of total capacity - Min = 50% of Max. "Set recommended" fills in the Min/Max fields above (still needs "Save changes" to persist).
 
 ## Generating load
 
