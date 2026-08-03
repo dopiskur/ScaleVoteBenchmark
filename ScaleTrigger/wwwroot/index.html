@@ -131,7 +131,7 @@
     margin: 0 0 2px;
   }
 
-  .group-title:not(:first-child) {
+  .config-group + .config-group {
     margin-top: 20px;
   }
 
@@ -156,6 +156,10 @@
 
   .loadconfig-row--single {
     grid-template-columns: 1fr 90px;
+  }
+
+  .loadconfig-row--boolean {
+    grid-template-columns: 1fr auto;
   }
 
   .bench-row {
@@ -203,10 +207,22 @@
     border-color: var(--critical);
   }
 
-  .loadconfig-checkbox {
-    width: 18px;
-    height: 18px;
-    justify-self: start;
+  .loadconfig-radio-group {
+    display: flex;
+    gap: 16px;
+    justify-self: end;
+  }
+
+  .loadconfig-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  .loadconfig-radio-option input {
     accent-color: var(--accent);
     cursor: pointer;
   }
@@ -318,7 +334,6 @@
 
         <div class="config-group">
           <p class="group-title">Application</p>
-          <p class="group-subtitle">Simulated inside ScaleTrigger itself, before the vote is written.</p>
           <div class="loadconfig-row">
             <span class="loadconfig-col-heading">Setting</span>
             <span class="loadconfig-col-heading">Min</span>
@@ -329,7 +344,6 @@
 
         <div class="config-group">
           <p class="group-title">Database</p>
-          <p class="group-subtitle">Simulated by the database itself while processing the vote.</p>
           <div class="loadconfig-row">
             <span class="loadconfig-col-heading">Setting</span>
             <span class="loadconfig-col-heading">Min</span>
@@ -517,14 +531,14 @@
     }
 
     const LOAD_CONFIG_LABELS = {
-      ConfigRefresh: { label: 'Poll interval', unit: 'seconds', group: 'refresh', single: true },
-      CacheEnabled: { label: 'Cache GET /api/vote/report', group: 'refresh', single: true, boolean: true },
-      CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application' },
-      MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application' },
-      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
-      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application' },
-      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database' },
-      DbCpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'database' }
+      ConfigRefresh: { label: 'Poll interval', unit: 'seconds', group: 'refresh', single: true, order: 0 },
+      CacheEnabled: { label: 'Cache GET /api/vote/report', group: 'refresh', boolean: true, order: 1 },
+      CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application', order: 2 },
+      MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application', order: 3 },
+      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application', order: 4 },
+      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application', order: 5 },
+      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database', order: 6 },
+      DbCpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'database', order: 7 }
     };
 
     const loadConfigRowsEls = {
@@ -539,11 +553,14 @@
       loadConfigRowsEls.application.innerHTML = '';
       loadConfigRowsEls.database.innerHTML = '';
 
-      for (const setting of settings) {
+      const ordered = [...settings].sort((a, b) =>
+        (LOAD_CONFIG_LABELS[a.settingName]?.order ?? 999) - (LOAD_CONFIG_LABELS[b.settingName]?.order ?? 999));
+
+      for (const setting of ordered) {
         const info = LOAD_CONFIG_LABELS[setting.settingName] || { label: setting.settingName, unit: '', group: 'application' };
 
         const row = document.createElement('div');
-        row.className = 'loadconfig-row' + (info.single ? ' loadconfig-row--single' : '');
+        row.className = 'loadconfig-row' + (info.boolean ? ' loadconfig-row--boolean' : info.single ? ' loadconfig-row--single' : '');
         row.dataset.settingName = setting.settingName;
 
         const labelCell = document.createElement('div');
@@ -560,12 +577,25 @@
 
         if (info.boolean) {
           // Still saved as Min === Max (0 or 1) under the hood.
-          const checkboxInput = document.createElement('input');
-          checkboxInput.type = 'checkbox';
-          checkboxInput.className = 'loadconfig-checkbox';
-          checkboxInput.dataset.field = 'value';
-          checkboxInput.checked = setting.min > 0;
-          row.appendChild(checkboxInput);
+          const radioGroup = document.createElement('div');
+          radioGroup.className = 'loadconfig-radio-group';
+
+          for (const [radioValue, radioLabel] of [['1', 'Enabled'], ['0', 'Disabled']]) {
+            const optionLabel = document.createElement('label');
+            optionLabel.className = 'loadconfig-radio-option';
+
+            const radioInput = document.createElement('input');
+            radioInput.type = 'radio';
+            radioInput.name = 'radio-' + setting.settingName;
+            radioInput.value = radioValue;
+            radioInput.checked = (setting.min > 0) === (radioValue === '1');
+
+            optionLabel.appendChild(radioInput);
+            optionLabel.appendChild(document.createTextNode(radioLabel));
+            radioGroup.appendChild(optionLabel);
+          }
+
+          row.appendChild(radioGroup);
         } else if (info.single) {
           // Still saved as Min === Max under the hood.
           const valueInput = document.createElement('input');
@@ -630,9 +660,14 @@
         ...loadConfigRowsEls.database.querySelectorAll('.loadconfig-row')
       ];
       const settings = rows.map(row => {
+        const checkedRadio = row.querySelector('input[type="radio"]:checked');
+        if (checkedRadio) {
+          const value = Number(checkedRadio.value);
+          return { settingName: row.dataset.settingName, min: value, max: value };
+        }
         const valueInput = row.querySelector('[data-field="value"]');
         if (valueInput) {
-          const value = valueInput.type === 'checkbox' ? (valueInput.checked ? 1 : 0) : Number(valueInput.value);
+          const value = Number(valueInput.value);
           return { settingName: row.dataset.settingName, min: value, max: value };
         }
         return {
