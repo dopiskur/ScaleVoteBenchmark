@@ -661,29 +661,19 @@
     const recommendMaxEl = document.getElementById('recommend-max');
     const recommendMinEl = document.getElementById('recommend-min');
 
-    // R_total, c (logical processors) and S_other (measured network+DB overhead per
-    // vote) are all needed before a recommendation can be shown; null until "Run
-    // benchmark" has run at least once.
+    // R_total (raw CPU benchmark score) is needed before a recommendation can be
+    // shown; null until "Run benchmark" has run at least once.
     let cpuNumbersPerSecondValue = null;
-    let processorCountValue = null;
-    let sOtherSecondsValue = null;
 
     // Unrounded ceiling/floor from the last recomputeRecommendation() call - what
     // "Set recommended" writes, kept separate from the rounded text shown to the user.
     let recommendedMaxValue = null;
     let recommendedMinValue = null;
 
-    function median(values) {
-      const sorted = [...values].sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    }
-
-    // iterations_ceiling = R_total * S_other / (N - c); floor = 0.5 * ceiling.
-    // Assumes CPU cost scales linearly with CpuIterationsPerVote (true for chained
-    // SHA-512). Recomputed client-side only - never re-runs the benchmark or calibration.
+    // ceiling = 0.8 * R_total * (100 / N); floor = 0.5 * ceiling. Calibrated so the
+    // default N=100 recommends 80% of the raw benchmark score.
     function recomputeRecommendation() {
-      if (cpuNumbersPerSecondValue == null || processorCountValue == null || sOtherSecondsValue == null) {
+      if (cpuNumbersPerSecondValue == null) {
         recommendMaxEl.textContent = '—';
         recommendMinEl.textContent = '—';
         recommendedMaxValue = null;
@@ -692,7 +682,6 @@
       }
 
       const n = Number(recommendNInput.value);
-      const denominator = n - processorCountValue;
 
       if (!Number.isFinite(n) || n <= 0) {
         recommendMaxEl.textContent = 'Enter N';
@@ -702,15 +691,7 @@
         return;
       }
 
-      if (denominator <= 0) {
-        recommendMaxEl.textContent = 'N must exceed ' + processorCountValue;
-        recommendMinEl.textContent = '—';
-        recommendedMaxValue = null;
-        recommendedMinValue = null;
-        return;
-      }
-
-      const ceiling = (cpuNumbersPerSecondValue * sOtherSecondsValue) / denominator;
+      const ceiling = 80 * cpuNumbersPerSecondValue / n;
       const floor = 0.5 * ceiling;
 
       recommendMaxEl.textContent = Math.round(ceiling).toLocaleString();
@@ -758,45 +739,25 @@
         const hw = await response.json();
         hwStatusEl.textContent = '';
         renderHardwareRows(hw);
-        processorCountValue = hw.processorCount;
-        recomputeRecommendation();
       } catch (err) {
         hwStatusEl.textContent = 'Could not load hardware info.';
         hwRowsEl.innerHTML = '';
       }
     }
 
-    // Runs the hardware benchmark, then measures S_other (network+DB overhead per
-    // vote) by zeroing CpuIterationsPerVote AND DbCpuIterationsPerVote - the DB's
-    // own CPU load must not leak into S_other either - and timing real votes.
-    // Original settings are always restored, even on failure, so a broken run
-    // can't leave live load-testing traffic stuck at near-zero.
     benchmarkBtn.addEventListener('click', async () => {
-      const CALIBRATION_VOTES = 8;
-      const CALIBRATION_NEAR_ZERO_ITERATIONS = 500;
-      const CALIBRATION_DB_NEAR_ZERO_ITERATIONS = 0;
-
       benchmarkBtn.disabled = true;
       benchCpuEl.textContent = '—';
       benchMemoryEl.textContent = '—';
       benchDiskEl.textContent = '—';
       cpuNumbersPerSecondValue = null;
-      sOtherSecondsValue = null;
       recomputeRecommendation();
 
-      // Scoped to this run: obtained on the first 401 and reused so the login prompt appears once.
-      let authToken = null;
-      let authAttempted = false;
+      try {
+        benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
+        let response = await fetch('/api/nodebenchmark/run', { method: 'POST' });
 
-      async function authorizedFetch(url, options) {
-        const headers = { ...(options?.headers || {}) };
-        if (authToken) {
-          headers['Authorization'] = 'Bearer ' + authToken;
-        }
-        let response = await fetch(url, { ...options, headers });
-
-        if (response.status === 401 && !authAttempted) {
-          authAttempted = true;
+        if (response.status === 401) {
           const username = prompt('Admin username:');
           if (username === null) {
             throw new Error('login cancelled');
@@ -815,20 +776,12 @@
             throw new Error('login failed (HTTP ' + loginResponse.status + ')');
           }
           const { token } = await loginResponse.json();
-          authToken = token;
-          headers['Authorization'] = 'Bearer ' + authToken;
-          response = await fetch(url, { ...options, headers });
+          response = await fetch('/api/nodebenchmark/run', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token }
+          });
         }
 
-        return response;
-      }
-
-      let originalCpuSetting = null;
-      let originalDbCpuSetting = null;
-
-      try {
-        benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
-        const response = await authorizedFetch('/api/nodebenchmark/run', { method: 'POST' });
         if (!response.ok) {
           throw new Error('HTTP ' + response.status);
         }
@@ -838,63 +791,11 @@
         benchMemoryEl.textContent = result.memoryMbPerSecond.toFixed(1) + ' MB/s';
         benchDiskEl.textContent = result.diskMbPerSecond.toFixed(1) + ' MB/s';
         cpuNumbersPerSecondValue = result.cpuNumbersPerSecond;
-
-        benchmarkStatusEl.textContent = 'Measuring vote overhead…';
-
-        const currentSettings = await (await fetch('/api/loadconfig', { cache: 'no-store' })).json();
-        originalCpuSetting = currentSettings.find(s => s.settingName === 'CpuIterationsPerVote') || { min: 0, max: 0 };
-        originalDbCpuSetting = currentSettings.find(s => s.settingName === 'DbCpuIterationsPerVote') || { min: 0, max: 0 };
-
-        const lowerResponse = await authorizedFetch('/api/loadconfig', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([
-            { settingName: 'CpuIterationsPerVote', min: CALIBRATION_NEAR_ZERO_ITERATIONS, max: CALIBRATION_NEAR_ZERO_ITERATIONS },
-            { settingName: 'DbCpuIterationsPerVote', min: CALIBRATION_DB_NEAR_ZERO_ITERATIONS, max: CALIBRATION_DB_NEAR_ZERO_ITERATIONS }
-          ])
-        });
-        if (!lowerResponse.ok) {
-          throw new Error('could not lower CpuIterationsPerVote/DbCpuIterationsPerVote (HTTP ' + lowerResponse.status + ')');
-        }
-
-        const samplesSeconds = [];
-        for (let i = 0; i < CALIBRATION_VOTES; i++) {
-          const option = i % 2 === 0 ? 'yes' : 'no';
-          const startedAt = performance.now();
-          const voteResponse = await authorizedFetch('/api/vote/add?option=' + option, { method: 'POST' });
-          const elapsedMs = performance.now() - startedAt;
-          if (voteResponse.ok) {
-            samplesSeconds.push(elapsedMs / 1000);
-          }
-        }
-
-        if (samplesSeconds.length === 0) {
-          throw new Error('no calibration votes succeeded');
-        }
-
-        sOtherSecondsValue = median(samplesSeconds);
         recomputeRecommendation();
         benchmarkStatusEl.textContent = 'Done.';
       } catch (err) {
         benchmarkStatusEl.textContent = 'Benchmark failed (' + err.message + ').';
       } finally {
-        if (originalCpuSetting && originalDbCpuSetting) {
-          try {
-            const restoreResponse = await authorizedFetch('/api/loadconfig', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify([
-                { settingName: 'CpuIterationsPerVote', min: originalCpuSetting.min, max: originalCpuSetting.max },
-                { settingName: 'DbCpuIterationsPerVote', min: originalDbCpuSetting.min, max: originalDbCpuSetting.max }
-              ])
-            });
-            if (!restoreResponse.ok) {
-              throw new Error('HTTP ' + restoreResponse.status);
-            }
-          } catch (restoreErr) {
-            benchmarkStatusEl.textContent = 'WARNING: failed to restore original CpuIterationsPerVote/DbCpuIterationsPerVote (' + restoreErr.message + ') - check Configuration and fix it manually.';
-          }
-        }
         benchmarkBtn.disabled = false;
       }
     });
