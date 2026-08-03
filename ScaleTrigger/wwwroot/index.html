@@ -203,6 +203,14 @@
     border-color: var(--critical);
   }
 
+  .loadconfig-checkbox {
+    width: 18px;
+    height: 18px;
+    justify-self: start;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
   .loadconfig-col-heading {
     font-size: 11px;
     text-transform: uppercase;
@@ -300,9 +308,10 @@
         <p class="section-title">Configuration</p>
 
         <div class="config-group">
+          <p class="group-title">Operational</p>
           <div class="loadconfig-row loadconfig-row--single">
             <span class="loadconfig-col-heading">Setting</span>
-            <span class="loadconfig-col-heading">Seconds</span>
+            <span class="loadconfig-col-heading">Value</span>
           </div>
           <div id="loadconfig-rows-refresh"></div>
         </div>
@@ -508,7 +517,8 @@
     }
 
     const LOAD_CONFIG_LABELS = {
-      ConfigRefresh: { label: 'Poll interval', group: 'refresh', single: true },
+      ConfigRefresh: { label: 'Poll interval', unit: 'seconds', group: 'refresh', single: true },
+      CacheEnabled: { label: 'Cache GET /api/vote/report', group: 'refresh', single: true, boolean: true },
       CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application' },
       MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application' },
       DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application' },
@@ -548,7 +558,15 @@
 
         row.appendChild(labelCell);
 
-        if (info.single) {
+        if (info.boolean) {
+          // Still saved as Min === Max (0 or 1) under the hood.
+          const checkboxInput = document.createElement('input');
+          checkboxInput.type = 'checkbox';
+          checkboxInput.className = 'loadconfig-checkbox';
+          checkboxInput.dataset.field = 'value';
+          checkboxInput.checked = setting.min > 0;
+          row.appendChild(checkboxInput);
+        } else if (info.single) {
           // Still saved as Min === Max under the hood.
           const valueInput = document.createElement('input');
           valueInput.type = 'number';
@@ -614,7 +632,7 @@
       const settings = rows.map(row => {
         const valueInput = row.querySelector('[data-field="value"]');
         if (valueInput) {
-          const value = Number(valueInput.value);
+          const value = valueInput.type === 'checkbox' ? (valueInput.checked ? 1 : 0) : Number(valueInput.value);
           return { settingName: row.dataset.settingName, min: value, max: value };
         }
         return {

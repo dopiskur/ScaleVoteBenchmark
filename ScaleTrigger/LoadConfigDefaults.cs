@@ -13,7 +13,8 @@ namespace ScaleTrigger
             "NetworkLatencyMillisecondsPerVote",
             "PayloadBytesPerVote",
             "DbCpuIterationsPerVote",
-            "ConfigRefresh"
+            "ConfigRefresh",
+            "CacheEnabled"
         };
 
         public static List<LoadConfigSetting> ReadFrom(IConfiguration configuration)

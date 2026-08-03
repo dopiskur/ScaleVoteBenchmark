@@ -74,15 +74,15 @@ param authEnabled bool = false
 @description('true = refuse to start if the database is unreachable at startup; false = log a critical error and keep running (dashboard shows "Database unavailable" and keeps retrying).')
 param failFastOnDbCheck bool = false
 
-@description('true = cache GET /api/vote/report in memory; false = every read goes straight to the database.')
-param cacheEnabled bool = true
-
 param cacheSlidingExpirationMinutes int = 5
 
 // --- Load:* (seeds LoadConfig the first time it's created - edit live afterwards) ---
 
 param loadConfigRefreshMinSeconds int = 1
 param loadConfigRefreshMaxSeconds int = 1
+
+@description('true = cache GET /api/vote/report in memory; false = every read goes straight to the database. Live via LoadConfig, shared by every node - not a one-time Application Setting like the other params above.')
+param loadCacheEnabled bool = true
 param loadCpuIterationsPerVoteMin int = 5000
 param loadCpuIterationsPerVoteMax int = 20000
 param loadMemoryKilobytesPerVoteMin int = 3072
@@ -169,11 +169,12 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
 
         { name: 'Auth__Enabled', value: string(authEnabled) }
         { name: 'Startup__FailFastOnDbCheck', value: string(failFastOnDbCheck) }
-        { name: 'Cache__Enabled', value: string(cacheEnabled) }
         { name: 'Cache__SlidingExpirationMinutes', value: string(cacheSlidingExpirationMinutes) }
 
         { name: 'Load__ConfigRefresh__Min', value: string(loadConfigRefreshMinSeconds) }
         { name: 'Load__ConfigRefresh__Max', value: string(loadConfigRefreshMaxSeconds) }
+        { name: 'Load__CacheEnabled__Min', value: string(loadCacheEnabled ? 1 : 0) }
+        { name: 'Load__CacheEnabled__Max', value: string(loadCacheEnabled ? 1 : 0) }
         { name: 'Load__CpuIterationsPerVote__Min', value: string(loadCpuIterationsPerVoteMin) }
         { name: 'Load__CpuIterationsPerVote__Max', value: string(loadCpuIterationsPerVoteMax) }
         { name: 'Load__MemoryKilobytesPerVote__Min', value: string(loadMemoryKilobytesPerVoteMin) }

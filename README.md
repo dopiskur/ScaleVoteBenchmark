@@ -26,6 +26,7 @@ Every `POST /api/vote/add` call picks a fresh random value, per load type, from 
 - `PayloadBytesPerVote`: optional extra random bytes written into a `Payload` table row (off by default, since unlike the others this permanently grows the database; opt in for write-throughput benchmarking)
 - `DbCpuIterationsPerVote`: CPU burn that runs inside the database engine itself (a `DbCpuBurn` stored procedure/function), not the app; add `&dbCpuBurnOnly=true` to `POST /api/vote/add` to isolate it from the `Vote`/`Payload` insert entirely
 - `ConfigRefresh`: not a vote-time load setting; it's how often (in seconds) the app re-polls `LoadConfig` for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
+- `CacheEnabled`: also not a per-vote load setting; `0`/`1` toggle for whether `GET /api/vote/report` is cached in memory. Unlike `Cache:SlidingExpirationMinutes` (a one-time Application Setting), this lives in the database like everything else in this section, so every node picks up the same value on a scale-out instead of each starting from its own `appsettings.json`
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite, see "Database providers").
 
@@ -84,9 +85,10 @@ Key settings:
 | `UseManagedIdentity` | MSSQL only. `true` authenticates via Azure Managed Identity instead of a plain-text password (see below) |
 | `Auth:Enabled` | `false` (default): `POST /api/vote/add` and other admin actions need no token. `true`: they require a JWT from `POST /api/auth/login` |
 | `Startup:FailFastOnDbCheck` | `false` (default): log a critical error and keep running if the database is unreachable. `true`: refuse to start |
-| `Cache:Enabled` / `Cache:SlidingExpirationMinutes` | Caches `GET /api/vote/report` in memory; disable to benchmark database read load in isolation |
+| `Cache:SlidingExpirationMinutes` | Sliding expiration for the `GET /api/vote/report` cache entry, in minutes |
 | `Load:*` | Seeds the initial `LoadConfig` values (see "How it works" above); after the first run, edit these live instead |
 | `Load:ConfigRefresh` | How often (seconds) a live edit to `Load:*` takes effect |
+| `Load:CacheEnabled` | `0`/`1`: whether `GET /api/vote/report` is cached in memory; disable to benchmark database read load in isolation. Live, like the rest of `Load:*` |
 | `NodeBenchmark:*` | Duration/size/repetitions for the on-demand CPU/memory/disk saturation test (`POST /api/nodebenchmark/run`), unrelated to per-vote load |
 | `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` / `Jwt:ExpirationMinutes` | JWT signing config. The default key is a placeholder; replace it if `Auth:Enabled` is ever `true` outside a throwaway environment |
 | `AdminUser:Username` / `AdminUser:Password` | Login credentials for `POST /api/auth/login` (default `admin`/`admin`; this is a stress-test tool, not a production auth system, so don't reuse real credentials here) |

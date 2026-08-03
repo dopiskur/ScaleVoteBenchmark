@@ -34,8 +34,9 @@ services:
       Jwt__ExpirationMinutes: "60"
       AdminUser__Username: "admin"
       AdminUser__Password: "admin"
-      Cache__Enabled: "true"
       Cache__SlidingExpirationMinutes: "5"
+      Load__CacheEnabled__Min: "1"
+      Load__CacheEnabled__Max: "1"
 
 volumes:
   postgres-data:

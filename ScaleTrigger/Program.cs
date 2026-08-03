@@ -13,21 +13,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-bool cacheEnabled = !bool.TryParse(builder.Configuration["Cache:Enabled"], out bool ce) || ce;
-if (cacheEnabled)
-{
-    builder.Services.AddMemoryCache();
-    builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
-}
-else
-{
-    builder.Services.AddSingleton<ICache, NullCacheRepository>();
-}
-
-builder.Services.AddScoped<RepoFactory>();
-
 builder.Services.AddSingleton<LoadConfigCache>();
 builder.Services.AddHostedService<LoadConfigRefreshService>();
+
+// Enabled/disabled live via the "CacheEnabled" LoadConfig setting - always registered,
+// MemoryCacheRepository itself checks LoadConfigCache before actually caching anything.
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
+
+builder.Services.AddScoped<RepoFactory>();
 
 string? jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey))
