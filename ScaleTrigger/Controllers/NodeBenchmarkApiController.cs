@@ -22,14 +22,7 @@ namespace ScaleTrigger.Controllers
             return Ok(await NodeBenchmark.GetHardwareInfoAsync());
         }
 
-        /// <summary>
-        /// Runs CPU, then memory, then disk, in that order, and blocks
-        /// until all three finish (~NodeBenchmark:CpuDurationSeconds
-        /// alone, 20s by default) - offloaded to a background thread so
-        /// the CPU-bound work doesn't run directly on an async
-        /// continuation. Requires a JWT only when "Auth:Enabled" is true,
-        /// same as the other admin actions.
-        /// </summary>
+        /// <summary>Runs CPU, memory, then disk in sequence, offloaded to a background thread so the CPU-bound work doesn't run on an async continuation.</summary>
         [HttpPost("run")]
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult<NodeBenchmarkResult>> Run()

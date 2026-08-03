@@ -5,32 +5,16 @@ using ScaleTrigger.Models;
 
 namespace ScaleTrigger
 {
-    /// <summary>
-    /// Hardware detection and one-off CPU/memory/disk benchmarks for the
-    /// machine ScaleTrigger is running on, triggered manually from the
-    /// dashboard - unrelated to the per-vote Load:* simulation.
-    /// </summary>
+    /// <summary>Hardware detection and one-off CPU/memory/disk benchmarks, triggered manually from the dashboard; unrelated to the per-vote Load:* simulation.</summary>
     public static class NodeBenchmark
     {
         private static NodeHardwareInfo? cachedHardwareInfo;
 
         /// <summary>
-        /// Cached after the first call, since none of this changes while
-        /// the process is running. Checked in order from most to least
-        /// specific, each cheap/synchronous signal (env vars set by the
-        /// hosting platform) before any network call, and orchestrator
-        /// signals (Kubernetes, ECS) before the underlying VM's own
-        /// metadata service, since AKS/EKS nodes and EC2-backed ECS tasks
-        /// would otherwise be misidentified as a bare VM:
-        /// - Azure Container Apps: CONTAINER_APP_NAME env var
-        /// - Azure Functions / App Service: WEBSITE_SKU env var (the plan/tier name)
-        /// - AWS ECS/Fargate: ECS_CONTAINER_METADATA_URI_V4 env var (task metadata endpoint)
-        /// - Kubernetes (AKS, EKS, GKE, on-prem, ...): KUBERNETES_SERVICE_HOST env var
-        /// - AWS EC2: instance type via IMDSv2 (only responds inside AWS)
-        /// - Azure VM: vmSize via Azure's IMDS (only responds inside Azure)
-        /// - plain Docker (no orchestrator): DOTNET_RUNNING_IN_CONTAINER env var / /.dockerenv
-        /// - Generic: just the processor count (bare metal/Hyper-V/ESXi/KVM/unrecognized)
-        /// Metadata-service calls use a short timeout so a non-matching environment doesn't stall this.
+        /// Cached after the first call. Checked env vars before any network
+        /// call, and orchestrator signals (Kubernetes, ECS) before the VM's
+        /// own metadata service, since AKS/EKS nodes and EC2-backed ECS
+        /// tasks would otherwise be misidentified as a bare VM.
         /// </summary>
         public static async Task<NodeHardwareInfo> GetHardwareInfoAsync()
         {
@@ -122,7 +106,7 @@ namespace ScaleTrigger
             return cachedHardwareInfo;
         }
 
-        /// <summary>Opens an HttpClient with a 500ms timeout and runs fetch against it, swallowing any exception (timeout, DNS, connection refused) into a null result - the shared shape behind every metadata-service probe below, none of which should ever throw out to GetHardwareInfoAsync.</summary>
+        /// <summary>500ms-timeout HttpClient wrapper that swallows any exception into null; shared by every metadata probe below.</summary>
         private static async Task<string?> TryFetchAsync(Func<HttpClient, Task<string?>> fetch)
         {
             try
@@ -211,14 +195,9 @@ namespace ScaleTrigger
         }
 
         /// <summary>
-        /// Chained SHA-512 (see LoadSimulator.SimulateCpuLoad), run on every
-        /// logical processor at once, each in continuous 1-second ticks for
-        /// durationSeconds - this is a full-node saturation test
-        /// (ScaleTrigger's purpose is verifying autoscale triggers, which
-        /// react to total instance CPU%, not one core), not a single-thread
-        /// hardware comparison score. Each thread's score is the median
-        /// hashes-per-tick, smoothing out one-off scheduling/GC noise; the
-        /// overall score is the sum across threads.
+        /// Chained SHA-512 on every logical processor at once for durationSeconds
+        /// - a full-node saturation test, not a single-thread score. Each thread's
+        /// score is the median hashes-per-tick; overall is the sum across threads.
         /// </summary>
         public static double RunCpuBenchmark(int durationSeconds)
         {
@@ -271,13 +250,10 @@ namespace ScaleTrigger
         }
 
         /// <summary>
-        /// Repeatedly writes a fresh sizeMegabytes file (WriteThrough +
-        /// flush, so it's real disk I/O, not just page cache) and deletes
-        /// it immediately; the score is sizeMegabytes / median write time.
-        /// environment comes from the GetHardwareInfoAsync call the caller
-        /// already made - see LoadSimulator.ResolveDiskLoadDirectoryAsync
-        /// for why Kubernetes gets its own working-directory path instead
-        /// of the temp-path default.
+        /// Repeatedly writes a fresh sizeMegabytes file (WriteThrough + flush, so
+        /// it's real disk I/O) and deletes it immediately; the score is
+        /// sizeMegabytes / median write time. Kubernetes gets its own
+        /// working-directory path instead of the temp-path default (see LoadSimulator).
         /// </summary>
         public static double RunDiskBenchmark(int sizeMegabytes, int repetitions, string environment)
         {

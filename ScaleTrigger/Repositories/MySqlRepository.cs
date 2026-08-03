@@ -40,7 +40,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Calls DbCpuBurn directly - chained SHA-512 CPU burn, no INSERT into Vote/Payload at all.</summary>
+        /// <summary>Calls DbCpuBurn directly; no INSERT into Vote/Payload.</summary>
         public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
@@ -51,11 +51,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// MySQL has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
-        /// InnoDB's plain SELECT is a non-locking consistent (MVCC) read, so
-        /// it never waits on a concurrent VoteAdd insert's row lock.
-        /// </summary>
+        /// <summary>No NOLOCK hint needed: InnoDB's plain SELECT is already a non-locking MVCC read.</summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -102,15 +98,8 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
-            // Best-effort: kill every other connection to this database -
-            // which rolls back any transaction it's holding immediately,
-            // not waiting on whatever lock it's holding - before dropping
-            // anything, so a reset can't hang behind someone else's
-            // transaction. Needs the PROCESS privilege to see other
-            // connections and CONNECTION_ADMIN/SUPER to kill them; silently
-            // skipped (per-connection, or entirely if listing them fails)
-            // if the configured account doesn't have them, in which case
-            // the DROPs below just run normally and may themselves block.
+            // Best-effort: kills other connections so DROPs can't hang behind their
+            // transactions. Needs PROCESS + CONNECTION_ADMIN/SUPER; skipped otherwise.
             try
             {
                 var connectionIdsToKill = new List<long>();
@@ -136,29 +125,22 @@ namespace ScaleTrigger.Repositories
                     }
                     catch
                     {
-                        // Already closed, or not ours to kill - move on to the next one.
+                        // Already closed, or not ours to kill.
                     }
                 }
 
                 if (connectionIdsToKill.Count > 0)
                 {
-                    // Those KILLs just killed every other session against this
-                    // database server-side, including whatever idle connections
-                    // this process's own pool was holding for reuse - the pool
-                    // has no way to know that. Without clearing it, the next
-                    // CreateConnectionAsync() anywhere in the app (even in a
-                    // different request) can be handed one of those now-dead
-                    // connections and hang or fail on it.
+                    // The pool doesn't know those KILLs took its idle connections too.
                     await MySqlConnection.ClearPoolAsync(connection);
                 }
             }
             catch
             {
-                // No PROCESS permission to even list other connections - proceed without forcing them out.
+                // No PROCESS permission to list other connections.
             }
 
-            // No separate shrink step: InnoDB's file-per-table storage
-            // frees each table's .ibd file as part of DROP TABLE itself.
+            // InnoDB frees each table's .ibd file as part of DROP TABLE itself; no separate shrink step.
             foreach (var batch in SchemaScripts.MySqlDrop)
             {
                 using var cmd = connection.CreateCommand();

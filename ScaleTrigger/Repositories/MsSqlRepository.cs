@@ -22,9 +22,7 @@ namespace ScaleTrigger.Repositories
         {
             var connection = new SqlConnection(connectionString);
 
-            // Default (false) uses the connection string's plain-text
-            // password - simpler for local dev, but less secure than
-            // Managed Identity, which is recommended in Azure.
+            // Managed Identity is recommended in Azure over a plain-text password.
             if (useManagedIdentity)
             {
                 connection.AccessToken = await AzureSqlAuthProvider.GetAccessTokenAsync();
@@ -53,7 +51,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Calls DbCpuBurn directly - chained SHA-512 CPU burn, no INSERT into Vote/Payload at all.</summary>
+        /// <summary>Calls DbCpuBurn directly; no INSERT into Vote/Payload.</summary>
         public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
@@ -64,11 +62,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// dbo.VoteReportGet reads with WITH (NOLOCK), so this doesn't wait
-        /// behind a concurrent VoteAdd insert's lock under SQL Server's
-        /// default READ COMMITTED (locking, not snapshot) isolation.
-        /// </summary>
+        /// <summary>VoteReportGet reads with WITH (NOLOCK), so it doesn't wait behind a concurrent VoteAdd's lock under READ COMMITTED.</summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -112,14 +106,8 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
-            // Best-effort: force out every other connection and roll back
-            // their transactions immediately - not waiting on whatever lock
-            // they're holding - before dropping anything, so a reset can't
-            // hang behind someone else's open transaction. Needs ALTER
-            // DATABASE rights; silently skipped if the configured account
-            // doesn't have them (e.g. a restricted shared/managed
-            // database), in which case the DROPs below just run normally
-            // and may themselves block on any existing lock.
+            // Best-effort: forces out other connections so DROPs can't hang behind an
+            // open transaction. Needs ALTER DATABASE rights; skipped otherwise.
             bool forcedSingleUser = false;
             try
             {
@@ -128,17 +116,12 @@ namespace ScaleTrigger.Repositories
                 await singleUserCmd.ExecuteNonQueryAsync();
                 forcedSingleUser = true;
 
-                // ROLLBACK IMMEDIATE just killed every other session against this
-                // database server-side, including whatever idle connections this
-                // process's own pool was holding for reuse - the pool has no way
-                // to know that. Without clearing it, the next CreateConnectionAsync()
-                // anywhere in the app (even in a different request) can be handed
-                // one of those now-dead connections and hang or fail on it.
+                // The pool doesn't know ROLLBACK IMMEDIATE just killed its idle connections too.
                 SqlConnection.ClearPool(connection);
             }
             catch
             {
-                // No ALTER DATABASE permission - proceed without forcing other connections out.
+                // No ALTER DATABASE permission.
             }
 
             try
@@ -150,8 +133,6 @@ namespace ScaleTrigger.Repositories
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // Best-effort: reclaims data + log file space; may fail on a
-                // shared/managed instance without sufficient permission.
                 try
                 {
                     using var shrinkCmd = connection.CreateCommand();
@@ -165,9 +146,7 @@ namespace ScaleTrigger.Repositories
             }
             finally
             {
-                // Always undo SINGLE_USER if we set it, even if the DROPs
-                // above failed, so the database isn't left refusing every
-                // other connection.
+                // Undo SINGLE_USER even if the DROPs above failed.
                 if (forcedSingleUser)
                 {
                     try

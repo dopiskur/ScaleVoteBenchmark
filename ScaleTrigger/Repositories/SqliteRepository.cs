@@ -5,11 +5,7 @@ using ScaleTrigger.Schema;
 
 namespace ScaleTrigger.Repositories
 {
-    /// <summary>
-    /// SQLite has no stored procedure/function support, so unlike the
-    /// other three repositories this one runs plain parameterized SQL
-    /// directly instead of calling stored routines.
-    /// </summary>
+    /// <summary>SQLite has no stored procedure/function support, so this runs plain parameterized SQL directly.</summary>
     public class SqliteRepository : IRepository
     {
         private readonly string connectionString;
@@ -19,13 +15,7 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        /// <summary>
-        /// busy_timeout avoids "database is locked" (Error 5) under
-        /// concurrent writers; WAL mode lets readers and writers avoid
-        /// blocking each other. Set on every connection since re-applying
-        /// is a cheap no-op and covers databases created before this was
-        /// added.
-        /// </summary>
+        /// <summary>busy_timeout avoids "database is locked" under concurrent writers; WAL mode keeps readers and writers from blocking each other.</summary>
         private async Task<SqliteConnection> CreateConnectionAsync()
         {
             var connection = new SqliteConnection(connectionString);
@@ -46,12 +36,7 @@ namespace ScaleTrigger.Repositories
             return connection;
         }
 
-        /// <summary>
-        /// SQLite has no stored procedures, so this registers the chained
-        /// SHA-512 CPU burn (see LoadSimulator.HashIterations) as a scalar
-        /// function and calls it from SQL - dispatched by the SQL engine,
-        /// matching the other three providers' VoteAdd/DbCpuBurn.
-        /// </summary>
+        /// <summary>Registers LoadSimulator.HashIterations as a scalar function and calls it from SQL, so the burn is dispatched by the SQL engine like the other providers' VoteAdd/DbCpuBurn.</summary>
         private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int hashIterations)
         {
             connection.CreateFunction("sysbench_cpu", (long iterations) => LoadSimulator.HashIterations(iterations));
@@ -100,11 +85,7 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        /// <summary>
-        /// SQLite has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
-        /// WAL mode (see CreateConnectionAsync) already lets this read run
-        /// against a snapshot without waiting on a concurrent VoteAdd writer.
-        /// </summary>
+        /// <summary>No NOLOCK hint needed: WAL mode already lets this read run against a snapshot without waiting on a concurrent VoteAdd writer.</summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -152,13 +133,8 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
-            // SQLite has no server-side connections to kill - a lock here
-            // is another process/handle holding the same file, which
-            // nothing in this process can forcibly evict. The closest
-            // equivalent to "don't wait, ignore the lock" is to stop
-            // CreateConnectionAsync's normal 5s busy_timeout from waiting
-            // at all: fail fast with SQLITE_BUSY instead of blocking, so a
-            // reset can't hang behind someone else's write lock.
+            // No server-side connections to kill here; instead disable busy_timeout so a
+            // lock held by another process fails fast (SQLITE_BUSY) instead of blocking.
             using (var busyTimeoutCmd = connection.CreateCommand())
             {
                 busyTimeoutCmd.CommandText = "PRAGMA busy_timeout = 0;";

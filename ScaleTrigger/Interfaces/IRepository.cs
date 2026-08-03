@@ -4,55 +4,30 @@ namespace ScaleTrigger.Interfaces
 {
     public interface IRepository
     {
-        /// <summary>
-        /// Pass null, not an empty array, to skip the payload insert.
-        /// hashIterations &gt; 0 runs a chained SHA-512 CPU burn (see
-        /// LoadSimulator.HashIterations) inside the database engine itself
-        /// before the insert (0 skips it) - the same algorithm as
-        /// LoadSimulator.SimulateCpuLoad on Sqlite (which calls the exact
-        /// same .NET code via a scalar function), a set-based/native-hash
-        /// equivalent on MsSql/MySql/PostgreSql.
-        /// </summary>
+        /// <summary>Pass null, not an empty array, to skip the payload insert. hashIterations &gt; 0 runs a chained SHA-512 burn inside the database before the insert.</summary>
         Task VoteAddAsync(string option, byte[]? payload, int hashIterations);
 
         Task<VoteReport> VoteReportGetAsync();
 
-        /// <summary>
-        /// Runs the same database-side CPU burn VoteAdd uses (DbCpuBurn /
-        /// db_cpu_burn - a chained native-hash loop) without touching
-        /// Vote/Payload at all. 0 is a no-op.
-        /// </summary>
+        /// <summary>Same CPU burn as VoteAdd, without touching Vote/Payload. 0 is a no-op.</summary>
         Task DbCpuBurnAsync(int hashIterations);
 
-        /// <summary>
-        /// Opens and closes a connection without querying, so a bad
-        /// config surfaces at startup instead of on the first vote.
-        /// </summary>
+        /// <summary>Opens and closes a connection without querying, so a bad config surfaces at startup, not on the first vote.</summary>
         Task TestConnectionAsync();
 
         /// <summary>No-op if the schema already exists.</summary>
         Task EnsureSchemaAsync();
 
         /// <summary>
-        /// Drops Vote, Payload and LoadConfig and shrinks the freed
-        /// space. Destructive and irreversible - callers must follow up
+        /// Drops Vote, Payload and LoadConfig and shrinks the freed space.
+        /// Best-effort force-disconnects other connections first so this
+        /// can't hang behind an open transaction. Callers must follow up
         /// with EnsureSchemaAsync() and LoadConfigEnsureSeededAsync() to
-        /// get a working schema back (see VoteApiController.Reset()).
-        /// First makes a best-effort attempt to force out every other
-        /// connection/transaction against the database (rolling them back
-        /// immediately rather than waiting on whatever lock they hold),
-        /// so a reset can't hang behind someone else's open transaction -
-        /// silently skipped if the configured account lacks the
-        /// permission to do so, in which case the drop proceeds normally
-        /// and may itself block on an existing lock.
+        /// get a working schema back.
         /// </summary>
         Task DropSchemaAsync();
 
-        /// <summary>
-        /// Creates LoadConfig if missing and seeds <paramref name="defaults"/>
-        /// only if the table is still empty, so dashboard edits are never
-        /// overwritten by appsettings.json on a later startup.
-        /// </summary>
+        /// <summary>Creates LoadConfig if missing and seeds <paramref name="defaults"/> only if the table is still empty, so dashboard edits survive a later startup.</summary>
         Task LoadConfigEnsureSeededAsync(IEnumerable<LoadConfigSetting> defaults);
 
         Task<List<LoadConfigSetting>> LoadConfigGetAsync();

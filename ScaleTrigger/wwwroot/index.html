@@ -348,9 +348,7 @@
     const loadConfigStatusEl = document.getElementById('loadconfig-status');
     const dbUnavailableEl = document.getElementById('db-unavailable-indicator');
 
-    // The single "Database unavailable" indicator - shown next to the Reset
-    // database button, regardless of whether it was the report poll or the
-    // one-shot LoadConfig fetch that noticed the outage.
+    // Shared indicator: shown regardless of whether the report poll or the LoadConfig fetch noticed the outage.
     function setDbUnavailable() {
       dbUnavailableEl.textContent = 'Database unavailable';
       dbUnavailableEl.classList.add('status--error');
@@ -377,13 +375,9 @@
 
     let loadConfigNeedsRetry = false;
 
-    // fetch() has no built-in timeout and setInterval doesn't wait for the
-    // previous call to finish, so without this a slow/hung request (the
-    // database taking many seconds to time out) can resolve *after* a
-    // later, faster call already succeeded - overwriting a fresh "back
-    // online" state with a stale "unavailable" one. AbortController caps
-    // how long any single attempt can hang; the call-id guard makes sure
-    // only the most recently *started* call is allowed to touch the DOM.
+    // A hung earlier call could otherwise resolve after a later, faster one and
+    // overwrite fresh state with stale. AbortController caps how long a call can hang;
+    // the call-id guard ensures only the most recently started call touches the DOM.
     async function fetchWithTimeout(url, options, timeoutMs) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -417,9 +411,7 @@
         statusEl.textContent = (report.total ?? 0) === 0 ? 'No records found.' : '';
         clearDbUnavailableIfShown();
 
-        // Configuration only loads once (so it doesn't clobber in-progress
-        // edits every refresh) - but if it failed, retry opportunistically
-        // now that the database is confirmed reachable again.
+        // LoadConfig only loads once so it doesn't clobber in-progress edits; retry if it failed.
         if (loadConfigNeedsRetry) {
           loadLoadConfig();
         }
@@ -484,8 +476,7 @@
       }
     });
 
-    // Paused while the tab is hidden so background/minimized dashboards don't
-    // keep generating request traffic of their own alongside the intended load.
+    // Paused while the tab is hidden so idle dashboards don't add their own request traffic.
     let refreshTimer = null;
 
     function startRefreshPolling() {
@@ -670,18 +661,15 @@
     const recommendMaxEl = document.getElementById('recommend-max');
     const recommendMinEl = document.getElementById('recommend-min');
 
-    // R_total (aggregate numbers/s from the CPU benchmark), c (logical
-    // processors) and S_other (measured network+DB overhead per vote, in
-    // seconds) - all three are needed before a recommendation can be shown;
-    // null until "Run benchmark" (which measures all three in one go - see
-    // its click handler below) has actually run at least once.
+    // R_total, c (logical processors) and S_other (measured network+DB overhead per
+    // vote) are all needed before a recommendation can be shown; null until "Run
+    // benchmark" has run at least once.
     let cpuNumbersPerSecondValue = null;
     let processorCountValue = null;
     let sOtherSecondsValue = null;
 
-    // Unrounded ceiling/floor from the last successful recomputeRecommendation()
-    // call - what "Set recommended" actually writes into the CPU Min/Max
-    // fields, kept separate from the rounded, formatted text shown to the user.
+    // Unrounded ceiling/floor from the last recomputeRecommendation() call - what
+    // "Set recommended" writes, kept separate from the rounded text shown to the user.
     let recommendedMaxValue = null;
     let recommendedMinValue = null;
 
@@ -691,12 +679,9 @@
       return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
-    // iterations_ceiling = R_total * S_other / (N - c); iterations_floor = 0.5 * ceiling.
-    // Assumes CPU cost scales linearly with the CpuIterationsPerVote value -
-    // true for chained SHA-512 (measured ~constant per-iteration cost), so
-    // R_total (hashes/s from the benchmark) directly predicts how many
-    // iterations fit in a given time budget.
-    // Recomputed client-side only - never re-runs the benchmark or calibration.
+    // iterations_ceiling = R_total * S_other / (N - c); floor = 0.5 * ceiling.
+    // Assumes CPU cost scales linearly with CpuIterationsPerVote (true for chained
+    // SHA-512). Recomputed client-side only - never re-runs the benchmark or calibration.
     function recomputeRecommendation() {
       if (cpuNumbersPerSecondValue == null || processorCountValue == null || sOtherSecondsValue == null) {
         recommendMaxEl.textContent = '—';
@@ -781,20 +766,11 @@
       }
     }
 
-    // Run benchmark does two things back to back: the CPU/memory/disk
-    // hardware benchmark, then an automatic S_other measurement (network+DB
-    // overhead per vote, excluding CPU work) - briefly forcing
-    // CpuIterationsPerVote AND DbCpuIterationsPerVote down to near-zero
-    // values, timing a handful of real votes client-side, then restoring
-    // both original settings, always, even if something above fails, so a
-    // broken run can't leave live load-testing traffic stuck at the
-    // near-zero values. DbCpuIterationsPerVote is zeroed too (not just
-    // measured around) because this measurement is scoped to CPU overhead
-    // only - the database's own artificial CPU load must not be baked into
-    // S_other, or the CpuIterationsPerVote recommendation would be skewed by
-    // an unrelated database setting. Folding both steps into one click means
-    // a recommendation is ready the moment the benchmark finishes, with no
-    // separate manual calibration step.
+    // Runs the hardware benchmark, then measures S_other (network+DB overhead per
+    // vote) by zeroing CpuIterationsPerVote AND DbCpuIterationsPerVote - the DB's
+    // own CPU load must not leak into S_other either - and timing real votes.
+    // Original settings are always restored, even on failure, so a broken run
+    // can't leave live load-testing traffic stuck at near-zero.
     benchmarkBtn.addEventListener('click', async () => {
       const CALIBRATION_VOTES = 8;
       const CALIBRATION_NEAR_ZERO_ITERATIONS = 500;
@@ -808,9 +784,7 @@
       sOtherSecondsValue = null;
       recomputeRecommendation();
 
-      // Scoped to this run: obtained on the first 401 (if Auth:Enabled),
-      // then reused for every remaining call so the login prompt only
-      // appears once instead of once per request.
+      // Scoped to this run: obtained on the first 401 and reused so the login prompt appears once.
       let authToken = null;
       let authAttempted = false;
 

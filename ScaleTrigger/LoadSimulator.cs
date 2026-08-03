@@ -6,16 +6,7 @@ namespace ScaleTrigger
     {
         private static readonly Lazy<Task<string>> DiskLoadDirectory = new(ResolveDiskLoadDirectoryAsync);
 
-        /// <summary>
-        /// Kubernetes commonly mounts /tmp as an emptyDir with medium: Memory
-        /// (especially alongside readOnlyRootFilesystem: true), making
-        /// Path.GetTempPath() tmpfs rather than real disk there - so disk
-        /// load on Kubernetes instead targets the app's own working
-        /// directory, which normally sits on the container's writable layer.
-        /// Every other detected environment (Azure App Service/Functions/
-        /// Container Apps, AWS ECS/EC2, Azure VM, plain Container, Generic)
-        /// keeps the temp-path default.
-        /// </summary>
+        /// <summary>Kubernetes commonly mounts /tmp as a memory-backed emptyDir, so disk load there targets the app's working directory instead of Path.GetTempPath().</summary>
         private static async Task<string> ResolveDiskLoadDirectoryAsync()
         {
             var hardware = await NodeBenchmark.GetHardwareInfoAsync();
@@ -28,13 +19,7 @@ namespace ScaleTrigger
             return path;
         }
 
-        /// <summary>
-        /// Chained SHA-512: each hash's output becomes the next hash's
-        /// input, so the JIT can't fold the loop away or skip iterations -
-        /// unlike the old trial-division prime count, this doesn't get any
-        /// help from wide hardware SHA acceleration on most CPUs, so it's a
-        /// heavier, steadier per-iteration cost.
-        /// </summary>
+        /// <summary>Chained SHA-512: each hash's output feeds the next, so the JIT can't fold the loop away.</summary>
         public static void SimulateCpuLoad(int iterations)
         {
             if (iterations <= 0)

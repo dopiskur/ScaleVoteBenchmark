@@ -30,8 +30,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Chained SHA-512: each hash's output feeds the next hash's input, so
-    -- the loop can't be folded away - no touch of Vote/Payload at all.
+    -- Chained SHA-512: each hash feeds the next, so the loop can't be optimized away.
     IF @Iterations > 0
     BEGIN
         DECLARE @buf VARBINARY(64) = HASHBYTES('SHA2_512', CONVERT(VARBINARY(8), NEWID()));
@@ -69,12 +68,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- COUNT_BIG (rather than COUNT/plain int, which caps at ~2.1 billion)
-    -- since this is a load-testing tool expected to accumulate a very large
-    -- number of rows. WITH (NOLOCK) so this read-only report doesn't wait
-    -- behind whatever row/page lock a concurrent VoteAdd insert is holding
-    -- under the default READ COMMITTED isolation level - a stale-by-a-row
-    -- count is fine here, blocking on every insert isn't.
+    -- COUNT_BIG avoids the ~2.1 billion cap on plain COUNT. WITH (NOLOCK):
+    -- a stale-by-a-row count is fine here, blocking on every insert isn't.
     SELECT
         COUNT_BIG(*) AS [Total],
         (SELECT COUNT_BIG(*) FROM dbo.Payload WITH (NOLOCK)) AS [PayloadCount],
@@ -108,10 +103,8 @@ END",
     IN pIterations INT
 )
 BEGIN
-    -- Chained SHA-512: each hash's output feeds the next hash's input, so
-    -- the loop can't be folded away - no touch of Vote/Payload at all.
-    -- SHA2() returns a hex string, so UNHEX() keeps buf raw binary across
-    -- iterations instead of re-hashing an ever-stringified hex value.
+    -- Chained SHA-512; UNHEX keeps buf raw binary across iterations
+    -- instead of re-hashing SHA2()'s stringified hex output.
     DECLARE buf BINARY(64);
     DECLARE i INT DEFAULT 0;
 
@@ -144,8 +137,7 @@ END",
 
             @"CREATE PROCEDURE `VoteReportGet`()
 BEGIN
-    -- InnoDB's plain SELECT is a non-locking consistent (MVCC) read, so this
-    -- never waits behind a concurrent VoteAdd insert regardless of isolation level.
+    -- InnoDB's plain SELECT is already a non-locking MVCC read.
     SELECT
         COUNT(*) AS `Total`,
         (SELECT COUNT(*) FROM `Payload`) AS `PayloadCount`,
@@ -180,9 +172,7 @@ DECLARE
     buf BYTEA;
     i   INT := 0;
 BEGIN
-    -- Chained SHA-512 via pgcrypto's digest(): each hash's output feeds the
-    -- next hash's input, so the loop can't be folded away - no touch of
-    -- vote/payload at all.
+    -- Chained SHA-512 via pgcrypto's digest().
     IF p_iterations > 0 THEN
         buf := digest(gen_random_uuid()::TEXT, 'sha512');
 
@@ -218,9 +208,7 @@ RETURNS TABLE(total BIGINT, payload_count BIGINT, payload_total_bytes BIGINT)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- COUNT(*) is BIGINT natively in Postgres. Plain SELECT is an MVCC
-    -- snapshot read here too, so it never waits behind a concurrent
-    -- vote_add insert regardless of isolation level.
+    -- COUNT(*) is BIGINT natively; plain SELECT is already an MVCC snapshot read.
     RETURN QUERY
     SELECT
         COUNT(*) AS total,
@@ -231,7 +219,7 @@ END;
 $$;",
         };
 
-        // No stored routines - SqliteRepository runs plain SQL directly.
+        // SQLite has no stored routines.
         public static readonly string[] Sqlite =
         {
             @"CREATE TABLE Vote
@@ -250,8 +238,7 @@ $$;",
 );",
         };
 
-        // LoadConfig: live, editable Min/Max ranges, seeded once from
-        // appsettings.json's "Load" section (see LoadConfigEnsureSeededAsync).
+        // Seeded once from appsettings.json's "Load" section; see LoadConfigEnsureSeededAsync.
         public static readonly string[] MsSqlLoadConfig =
         {
             @"CREATE TABLE dbo.LoadConfig
@@ -359,8 +346,7 @@ $$;",
 );",
         };
 
-        // Used by DropSchemaAsync(); IF EXISTS makes each statement safe
-        // to rerun even if a prior reset already removed some of these.
+        // IF EXISTS makes each statement safe to rerun.
         public static readonly string[] MsSqlDrop =
         {
             @"IF OBJECT_ID('dbo.LoadConfigSet', 'P') IS NOT NULL DROP PROCEDURE dbo.LoadConfigSet;",

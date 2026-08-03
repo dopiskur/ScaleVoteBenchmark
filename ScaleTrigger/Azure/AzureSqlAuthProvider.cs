@@ -7,11 +7,8 @@ namespace ScaleTrigger.Azure
     {
         private const string SqlResourceScope = "https://database.windows.net/.default";
 
-        // DefaultAzureCredential probes multiple credential sources on
-        // construction, and token acquisition is itself a network round
-        // trip - both too expensive to redo on every connection open, so
-        // the credential and its token are shared and refreshed only when
-        // close to expiry.
+        // Credential construction and token acquisition are both too expensive to
+        // redo per connection, so both are shared and refreshed only near expiry.
         private static readonly DefaultAzureCredential Credential = new();
         private static readonly SemaphoreSlim RefreshLock = new(1, 1);
         private static AccessToken? cachedToken;

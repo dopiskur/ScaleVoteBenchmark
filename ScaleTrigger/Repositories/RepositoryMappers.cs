@@ -3,12 +3,7 @@ using ScaleTrigger.Models;
 
 namespace ScaleTrigger.Repositories
 {
-    /// <summary>
-    /// Shared DBNull-safe column mapping for all four repositories. Callers
-    /// alias their result set's columns to these exact names (PostgreSql's
-    /// snake_case columns get an `AS "Total"`-style quoted alias in its own
-    /// query text) so one mapper works across every provider.
-    /// </summary>
+    /// <summary>Shared DBNull-safe column mapping for all four repositories; callers alias their columns to these exact names.</summary>
     public static class RepositoryMappers
     {
         public static VoteReport MapVoteReport(IDataRecord dr)

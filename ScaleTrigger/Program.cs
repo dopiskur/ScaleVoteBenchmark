@@ -58,8 +58,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddSingleton<IAuthorizationHandler, OptionalAuthorizationHandler>();
 
-// Per-IP throttle on the login endpoint so credential-stuffing/brute-force attempts against
-// the single admin account get throttled without locking out other clients.
+// Per-IP throttle so credential-stuffing attempts against the single admin account don't lock out other clients.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

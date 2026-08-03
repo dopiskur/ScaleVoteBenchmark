@@ -14,9 +14,8 @@ namespace ScaleTrigger.Controllers
 
         private const string ReportCacheKey = "VoteReportCache";
 
-        // Guards against a cache stampede: without it, every concurrent request
-        // that misses the cache at the same time (e.g. right after it expires)
-        // would hit the database independently instead of piggy-backing on one fetch.
+        // Prevents a cache stampede: concurrent requests that miss at the same time
+        // piggy-back on one fetch instead of each hitting the database.
         private static readonly SemaphoreSlim ReportFetchLock = new(1, 1);
 
         public VoteApiController(RepoFactory repoFactory, IConfiguration configuration, LoadConfigCache loadConfigCache)
@@ -27,15 +26,9 @@ namespace ScaleTrigger.Controllers
         }
 
         /// <summary>
-        /// CPU/memory/disk/network load runs here, in the application.
-        /// PayloadBytesPerVote and DbCpuIterationsPerVote instead
-        /// simulate load inside the database itself - see
-        /// IRepository.VoteAddAsync.
-        /// </summary>
-        /// <summary>
-        /// dbCpuBurnOnly=true isolates the database-side CPU cost (DbCpuBurn)
-        /// from the Vote/Payload insert, for benchmarking DB CPU capacity
-        /// under concurrency without growing the table on every call.
+        /// CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote and
+        /// DbCpuIterationsPerVote run inside the database instead (see IRepository.VoteAddAsync).
+        /// dbCpuBurnOnly=true isolates the database-side CPU cost without inserting a row.
         /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
@@ -52,8 +45,7 @@ namespace ScaleTrigger.Controllers
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
             int dbHashIterations = RandomizedLoadValue("DbCpuIterationsPerVote");
 
-            // Offloaded to a background thread so this CPU/disk-bound work doesn't
-            // run directly on the async continuation and starve the thread pool
+            // Offloaded so this CPU/disk-bound work doesn't starve the thread pool
             // under concurrent load - same reasoning as NodeBenchmarkApiController.Run.
             await Task.Run(async () =>
             {

@@ -2,11 +2,7 @@ using ScaleTrigger.Models;
 
 namespace ScaleTrigger
 {
-    /// <summary>
-    /// Reads LoadConfig's seed values from appsettings.json's "Load"
-    /// section. Shared by Program.cs (startup) and VoteApiController.Reset() -
-    /// keep in sync with LoadConfigApiController.KnownSettingNames.
-    /// </summary>
+    /// <summary>Reads LoadConfig's seed values from appsettings.json's "Load" section; keep in sync with LoadConfigApiController.KnownSettingNames.</summary>
     public static class LoadConfigDefaults
     {
         private static readonly string[] SettingNames =

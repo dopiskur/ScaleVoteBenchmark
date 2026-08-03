@@ -40,7 +40,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>Calls db_cpu_burn directly - chained SHA-512 CPU burn, no INSERT into vote/payload at all.</summary>
+        /// <summary>Calls db_cpu_burn directly; no INSERT into vote/payload.</summary>
         public async Task DbCpuBurnAsync(int hashIterations)
         {
             using var connection = await CreateConnectionAsync();
@@ -50,13 +50,7 @@ namespace ScaleTrigger.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// Postgres has no NOLOCK/READ UNCOMMITTED hint, but none is needed:
-        /// a plain SELECT is always an MVCC snapshot read here, so it never
-        /// waits on a concurrent vote_add insert's row lock. Columns are
-        /// aliased to PascalCase here so RepositoryMappers.MapVoteReport can
-        /// use the exact same column names as the other three providers.
-        /// </summary>
+        /// <summary>No NOLOCK hint needed: a plain SELECT is always an MVCC snapshot read here. Columns aliased to PascalCase for RepositoryMappers.MapVoteReport.</summary>
         public async Task<VoteReport> VoteReportGetAsync()
         {
             using var connection = await CreateConnectionAsync();
@@ -101,14 +95,8 @@ namespace ScaleTrigger.Repositories
         {
             using var connection = await CreateConnectionAsync();
 
-            // Best-effort: terminate every other backend connected to this
-            // database - which rolls back any transaction it's holding
-            // immediately, not waiting on whatever lock it's holding -
-            // before dropping anything, so a reset can't hang behind
-            // someone else's transaction. Needs superuser or the
-            // pg_signal_backend role; silently skipped if the configured
-            // role doesn't have it, in which case the DROPs below just run
-            // normally and may themselves block on any existing lock.
+            // Best-effort: terminates other backends so DROPs can't hang behind their
+            // transactions. Needs superuser or pg_signal_backend; skipped otherwise.
             try
             {
                 using var terminateCmd = connection.CreateCommand();
@@ -117,21 +105,15 @@ namespace ScaleTrigger.Repositories
                     "WHERE datname = current_database() AND pid != pg_backend_pid();";
                 await terminateCmd.ExecuteNonQueryAsync();
 
-                // pg_terminate_backend just killed every other backend against this
-                // database server-side, including whatever idle connections this
-                // process's own pool was holding for reuse - the pool has no way to
-                // know that. Without clearing it, the next CreateConnectionAsync()
-                // anywhere in the app (even in a different request) can be handed
-                // one of those now-dead connections and hang or fail on it.
+                // The pool doesn't know pg_terminate_backend took its idle connections too.
                 NpgsqlConnection.ClearPool(connection);
             }
             catch
             {
-                // Insufficient privilege to terminate other backends - proceed without forcing them out.
+                // Insufficient privilege to terminate other backends.
             }
 
-            // No separate shrink step: DROP TABLE frees the underlying
-            // file(s) immediately, so there's nothing left for VACUUM.
+            // DROP TABLE frees the file(s) immediately; nothing left for VACUUM.
             foreach (var batch in SchemaScripts.PostgreSqlDrop)
             {
                 using var cmd = connection.CreateCommand();
@@ -179,7 +161,7 @@ namespace ScaleTrigger.Repositories
             }
         }
 
-        /// <summary>Columns aliased to PascalCase so RepositoryMappers.MapLoadConfigSetting can use the exact same column names as the other three providers.</summary>
+        /// <summary>Columns aliased to PascalCase for RepositoryMappers.MapLoadConfigSetting.</summary>
         public async Task<List<LoadConfigSetting>> LoadConfigGetAsync()
         {
             using var connection = await CreateConnectionAsync();
