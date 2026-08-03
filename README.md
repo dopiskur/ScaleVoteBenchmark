@@ -1,7 +1,5 @@
 # ScaleTrigger
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure%2Fmain.json)
-
 A REST API for testing autoscale triggers (Azure App Service, Container Apps, AKS, or anywhere else), built around one distinguishing feature: how much CPU/memory/disk/network each request burns can be turned up or down **live** — from a dashboard or a single API call — while traffic keeps flowing. No redeploy, no restart, and no need to stop the run and repeat the whole experiment just to try a different intensity; scale-up and scale-down thresholds can both be swept in the same run.
 
 ScaleTrigger is not a load generator itself; you point a real load-testing tool at it (see "Generating load" below) while adjusting how expensive each request is on the fly.
@@ -15,33 +13,41 @@ Every `POST /api/vote/add?option=yes|no` call:
 1. Records a vote in the database.
 2. Burns a controllable, randomized amount of CPU, memory, disk I/O, and network latency — the actual point of the benchmark.
 
-The intensity of each load type is a `{ Min, Max }` range, and a fresh random value is picked within it for every vote (`Min == Max` for a fixed value). These ranges live in the database (`LoadConfig` table), editable from the dashboard or via `POST /api/loadconfig` — the live-tuning behavior described above. `appsettings.json`'s `Load:*` section only seeds the table the first time it's created; after that, the database is authoritative, refreshed into memory every `Load:ConfigRefresh` seconds (default: every 1s). Change a value, and the very next vote after the refresh interval uses it.
+### Live-tunable load
+
+Every `POST /api/vote/add` call picks a fresh random value, per load type, from a `Min`/`Max` range — but unlike a value baked into `appsettings.json`, these ranges live in the `LoadConfig` database table and can be changed while the app is running and under test, with no restart or redeploy:
+
+- `CpuIterationsPerVote` — chained SHA-512 hashing in the app process (each hash's output feeds the next, so the JIT can't fold the loop away)
+- `MemoryKilobytesPerVote` — a buffer allocated and touched page-by-page so the OS actually reserves physical memory, not just address space
+- `DiskWriteKilobytesPerVote` — a uniquely-named temp file per call, written with `FileOptions.WriteThrough` + `Flush(true)` (real disk I/O, not page cache) then deleted immediately
+- `NetworkLatencyMillisecondsPerVote` — a non-blocking `Task.Delay`, so it frees the request thread the way a real downstream call would
+- `PayloadBytesPerVote` — optional extra random bytes written into a `Payload` table row (off by default, since unlike the others this permanently grows the database — opt in for write-throughput benchmarking)
+- `DbCpuIterationsPerVote` — CPU burn that runs inside the database engine itself (a `DbCpuBurn` stored procedure/function), not the app; add `&dbCpuBurnOnly=true` to `POST /api/vote/add` to isolate it from the `Vote`/`Payload` insert entirely
+- `ConfigRefresh` — not a vote-time load setting; it's how often (in seconds) the app re-polls `LoadConfig` for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite — see "Database providers").
 
 ## Why not just use Chaos Studio / AWS FIS / Chaos Mesh / stress-ng?
 
-Those are legitimate, more mature tools for the general "put CPU/memory pressure on something" problem, and worth knowing about:
+None of them offer a live dial you can turn while traffic keeps flowing and watch the very next request pick up the new value. That's specifically what ScaleTrigger's `LoadConfig` table + dashboard does. It also means the load is exercised as real HTTP traffic through your actual routing/ingress/load balancer path, not injected directly at the VM/pod level — relevant if what you're validating is a scaler that reacts to request rate or concurrency rather than raw CPU%, which Chaos Studio's agent-based faults don't exercise on their own.
 
-- **Azure Chaos Studio** — agent-based CPU Pressure / Memory Pressure faults directly on a VM/VMSS, no target application needed, can even orchestrate an Azure Load Testing run as part of the same experiment.
-- **AWS Fault Injection Simulator** — the same idea for EC2/ECS/EKS, with direct Chaos Mesh/Litmus integration for Kubernetes.
-- **Chaos Mesh** — `StressChaos`, cloud-agnostic, works on any Kubernetes cluster.
-- **stress-ng** — the simplest option of all: a container that just burns resources on demand.
-
-All of them are managed or well-established, and none of them require writing or maintaining a custom app. But they share a mechanism that's fundamentally different from what ScaleTrigger does: **intensity is a property of the experiment, decided before or between runs, not something you change mid-stream.**
-
+Those are legitimate, more mature tools for the general "put CPU/memory pressure on something" problem, but:
 - Chaos Studio / AWS FIS: change the level → define or launch a new experiment (or a pre-scripted sequence of steps, decided in advance).
 - Chaos Mesh: change the level → edit the CRD and `kubectl apply` it again.
 - stress-ng: change the level → kill the process and restart it with new flags.
 - k6 / Locust / Azure Load Testing: don't control per-request resource cost at all — they control requests per second; what each request costs server-side is entirely up to the target app.
 
-None of them offer a live dial you can turn while traffic keeps flowing and watch the very next request pick up the new value. That's specifically what ScaleTrigger's `LoadConfig` table + dashboard does. It also means the load is exercised as real HTTP traffic through your actual routing/ingress/load balancer path, not injected directly at the VM/pod level — relevant if what you're validating is a scaler that reacts to request rate or concurrency rather than raw CPU%, which Chaos Studio's agent-based faults don't exercise on their own.
-
 None of this makes ScaleTrigger a replacement for those tools — for infrastructure-level fault injection (killing instances, network faults, service failures) it does nothing at all, and for a one-off "just burn 80% CPU for five minutes" test, stress-ng is simpler and needs zero custom code. Use ScaleTrigger specifically when you want to sweep or fine-tune a request-driven load profile live, without interrupting the traffic that's already hitting the trigger you're testing.
 
 ## Quickstart
 
-The fastest way to get something running, no Azure account or manual setup needed:
+**Azure** — one click, provisions and deploys everything:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure%2Fmain.json)
+
+For repeatable deploys afterward or a manual Bicep run instead of the button, see [deploy/azure/README.md](deploy/azure/README.md).
+
+**Docker**, no Azure account or manual setup needed:
 
 ```bash
 docker compose up --build
@@ -79,7 +85,7 @@ Key settings:
 | `Cache:Enabled` / `Cache:SlidingExpirationMinutes` | Caches `GET /api/vote/report` in memory; disable to benchmark database read load in isolation |
 | `Load:*` | Seeds the initial `LoadConfig` values (see "How it works" above) — after the first run, edit these live instead |
 | `Load:ConfigRefresh` | How often (seconds) a live edit to `Load:*` takes effect |
-| `NodeBenchmark:*` | Parameters for the one-off hardware benchmark, unrelated to per-vote load (see below) |
+| `NodeBenchmark:*` | Duration/size/repetitions for the on-demand CPU/memory/disk saturation test (`POST /api/nodebenchmark/run`), unrelated to per-vote load |
 | `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` / `Jwt:ExpirationMinutes` | JWT signing config. The default key is a placeholder — replace it if `Auth:Enabled` is ever `true` outside a throwaway environment |
 | `AdminUser:Username` / `AdminUser:Password` | Login credentials for `POST /api/auth/login` (default `admin`/`admin` — this is a stress-test tool, not a production auth system; don't reuse real credentials here) |
 
