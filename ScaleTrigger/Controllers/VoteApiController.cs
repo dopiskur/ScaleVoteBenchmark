@@ -29,6 +29,9 @@ namespace ScaleTrigger.Controllers
         /// CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote and
         /// DbCpuIterationsPerVote run inside the database instead (see IRepository.VoteAddAsync).
         /// dbCpuBurnOnly=true isolates the database-side CPU cost without inserting a row.
+        /// LoadEnabled=false short-circuits to a no-op before any of that, so the dashboard's
+        /// "Discard backlog" can drain already-queued calls near-instantly instead of each
+        /// running its full configured cost.
         /// </summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
@@ -37,6 +40,11 @@ namespace ScaleTrigger.Controllers
             if (option != "yes" && option != "no")
             {
                 return BadRequest("Allowed values are only 'yes' or 'no'.");
+            }
+
+            if (loadConfigCache.Get("LoadEnabled").Min <= 0)
+            {
+                return Ok();
             }
 
             int cpuIterations = RandomizedLoadValue("CpuIterationsPerVote");

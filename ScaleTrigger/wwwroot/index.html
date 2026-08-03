@@ -289,6 +289,7 @@
 
           <div class="config-actions">
             <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+            <button class="save-btn" id="discard-backlog-btn" type="button">Discard backlog</button>
             <span class="status status--inline" id="db-unavailable-indicator"></span>
           </div>
           <p class="status" id="status">Loading…</p>
@@ -499,6 +500,70 @@
       }
     });
 
+    const discardBacklogBtn = document.getElementById('discard-backlog-btn');
+    const DISCARD_BACKLOG_PAUSE_MS = 3000;
+
+    // Toggles LoadEnabled off then back on: while off, VoteAdd is a fast no-op (no
+    // simulation, no DB write), so whatever's already queued drains near-instantly
+    // instead of running its full configured cost.
+    async function setLoadEnabled(enabled) {
+      const body = JSON.stringify([{ settingName: 'LoadEnabled', min: enabled ? 1 : 0, max: enabled ? 1 : 0 }]);
+      let response = await fetch('/api/loadconfig', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+
+      if (response.status === 401) {
+        const username = prompt('Admin username:');
+        if (username === null) {
+          throw new Error('login cancelled');
+        }
+        const password = prompt('Admin password:');
+        if (password === null) {
+          throw new Error('login cancelled');
+        }
+
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (!loginResponse.ok) {
+          throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+        }
+        const { token } = await loginResponse.json();
+
+        response = await fetch('/api/loadconfig', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+      }
+    }
+
+    discardBacklogBtn.addEventListener('click', async () => {
+      discardBacklogBtn.disabled = true;
+      try {
+        statusEl.textContent = 'Discarding backlog…';
+        await setLoadEnabled(false);
+
+        await new Promise(resolve => setTimeout(resolve, DISCARD_BACKLOG_PAUSE_MS));
+
+        await setLoadEnabled(true);
+        statusEl.textContent = 'Backlog discarded.';
+        await loadLoadConfig();
+      } catch (err) {
+        statusEl.textContent = 'Discard failed (' + err.message + ').';
+      } finally {
+        discardBacklogBtn.disabled = false;
+      }
+    });
+
     // Paused while the tab is hidden so idle dashboards don't add their own request traffic.
     let refreshTimer = null;
 
@@ -532,13 +597,14 @@
 
     const LOAD_CONFIG_LABELS = {
       ConfigRefresh: { label: 'Poll interval', unit: 'seconds', group: 'refresh', single: true, order: 0 },
-      CacheEnabled: { label: 'Cache GET /api/vote/report', group: 'refresh', boolean: true, order: 1 },
-      CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application', order: 2 },
-      MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application', order: 3 },
-      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application', order: 4 },
-      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application', order: 5 },
-      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database', order: 6 },
-      DbCpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'database', order: 7 }
+      LoadEnabled: { label: 'Load generation', group: 'refresh', boolean: true, order: 1 },
+      CacheEnabled: { label: 'Cache GET /api/vote/report', group: 'refresh', boolean: true, order: 2 },
+      CpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'application', order: 3 },
+      MemoryKilobytesPerVote: { label: 'Memory', unit: 'KB', group: 'application', order: 4 },
+      DiskWriteKilobytesPerVote: { label: 'Disk write', unit: 'KB', group: 'application', order: 5 },
+      NetworkLatencyMillisecondsPerVote: { label: 'Network latency', unit: 'ms', group: 'application', order: 6 },
+      PayloadBytesPerVote: { label: 'Payload', unit: 'bytes', group: 'database', order: 7 },
+      DbCpuIterationsPerVote: { label: 'CPU', unit: 'SHA-512 iterations', group: 'database', order: 8 }
     };
 
     const loadConfigRowsEls = {

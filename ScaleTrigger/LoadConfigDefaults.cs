@@ -14,7 +14,8 @@ namespace ScaleTrigger
             "PayloadBytesPerVote",
             "DbCpuIterationsPerVote",
             "ConfigRefresh",
-            "CacheEnabled"
+            "CacheEnabled",
+            "LoadEnabled"
         };
 
         public static List<LoadConfigSetting> ReadFrom(IConfiguration configuration)

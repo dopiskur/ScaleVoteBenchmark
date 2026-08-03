@@ -26,6 +26,7 @@ Every `POST /api/vote/add` call picks a fresh random value, per load type, from 
 - `PayloadBytesPerVote`: optional extra random bytes written into a `Payload` table row (off by default, since unlike the others this permanently grows the database; opt in for write-throughput benchmarking)
 - `DbCpuIterationsPerVote`: CPU burn that runs inside the database engine itself (a `DbCpuBurn` stored procedure/function), not the app; add `&dbCpuBurnOnly=true` to `POST /api/vote/add` to isolate it from the `Vote`/`Payload` insert entirely
 - `ConfigRefresh`: not a vote-time load setting; it's how often (in seconds) the app re-polls `LoadConfig` for changes made via the dashboard/API, so it controls how fast an edit to any of the above takes effect
+- `LoadEnabled`: also not a per-vote load setting; `0`/`1` master switch for per-vote load *and* the `Vote`/`Payload` write. While `0`, `POST /api/vote/add` is a fast no-op - the dashboard's "Discard backlog" button flips this off, waits a few seconds, then flips it back on, so requests already queued behind a heavy load config drain near-instantly instead of each running its full configured cost
 - `CacheEnabled`: also not a per-vote load setting; `0`/`1` toggle for whether `GET /api/vote/report` is cached in memory. Unlike `Cache:SlidingExpirationMinutes` (a one-time Application Setting), this lives in the database like everything else in this section, so every node picks up the same value on a scale-out instead of each starting from its own `appsettings.json`
 
 Results can be read directly from the `Vote` table or via `GET /api/vote/report`, which returns the total vote count and payload stats, fully computed by the database (a stored procedure/function, or plain SQL on SQLite, see "Database providers").
@@ -88,6 +89,7 @@ Key settings:
 | `Cache:SlidingExpirationMinutes` | Sliding expiration for the `GET /api/vote/report` cache entry, in minutes |
 | `Load:*` | Seeds the initial `LoadConfig` values (see "How it works" above); after the first run, edit these live instead |
 | `Load:ConfigRefresh` | How often (seconds) a live edit to `Load:*` takes effect |
+| `Load:LoadEnabled` | `0`/`1`: master switch for per-vote load and the `Vote`/`Payload` write; see "Discard backlog" in the Dashboard section below |
 | `Load:CacheEnabled` | `0`/`1`: whether `GET /api/vote/report` is cached in memory; disable to benchmark database read load in isolation. Live, like the rest of `Load:*` |
 | `NodeBenchmark:*` | Duration/size/repetitions for the on-demand CPU/memory/disk saturation test (`POST /api/nodebenchmark/run`), unrelated to per-vote load |
 | `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` / `Jwt:ExpirationMinutes` | JWT signing config. The default key is a placeholder; replace it if `Auth:Enabled` is ever `true` outside a throwaway environment |
@@ -136,6 +138,8 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
 
 **CPU calibration:** "Run benchmark" measures the node's raw CPU throughput (`R_total`), then suggests a `CpuIterationsPerVote` range for a target vote count `N` you set (default 100): Max = `0.8 * (R_total / N)` - 80% of the per-vote fair share of total capacity - Min = 50% of Max. "Set recommended" fills in the Min/Max fields above (still needs "Save changes" to persist).
+
+**Discard backlog:** if `CpuIterationsPerVote` (or any other `Load:*` range) is set high enough that already-accepted `POST /api/vote/add` calls queue up faster than they can be processed, stopping the load-test script doesn't stop that backlog - the server keeps working through everything it already accepted, at full configured cost per call, until it's drained. This button flips `LoadEnabled` off, waits a few seconds, then flips it back on: while off, `POST /api/vote/add` is a fast no-op, so the queued backlog clears near-instantly instead of running its full cost. `Total votes` legitimately undercounts whatever arrived during that window - that's expected, since it's a deliberate, visible action, not silent data loss.
 
 ## Generating load
 

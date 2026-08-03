@@ -35,6 +35,8 @@ services:
       AdminUser__Username: "admin"
       AdminUser__Password: "admin"
       Cache__SlidingExpirationMinutes: "5"
+      Load__LoadEnabled__Min: "1"
+      Load__LoadEnabled__Max: "1"
       Load__CacheEnabled__Min: "1"
       Load__CacheEnabled__Max: "1"
 

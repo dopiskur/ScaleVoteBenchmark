@@ -17,7 +17,8 @@ namespace ScaleTrigger.Controllers
             "PayloadBytesPerVote",
             "DbCpuIterationsPerVote",
             "ConfigRefresh",
-            "CacheEnabled"
+            "CacheEnabled",
+            "LoadEnabled"
         };
 
         /// <summary>Per-setting ceiling on Max, scaled to what each unit can safely allocate/block on per vote (memory/disk bytes, latency ms), not just an arbitrary shared number.</summary>
@@ -30,7 +31,8 @@ namespace ScaleTrigger.Controllers
             ["PayloadBytesPerVote"] = 10_485_760,
             ["DbCpuIterationsPerVote"] = 100_000_000,
             ["ConfigRefresh"] = 3600,
-            ["CacheEnabled"] = 1
+            ["CacheEnabled"] = 1,
+            ["LoadEnabled"] = 1
         };
 
         private readonly RepoFactory repoFactory;

@@ -81,6 +81,9 @@ param cacheSlidingExpirationMinutes int = 5
 param loadConfigRefreshMinSeconds int = 1
 param loadConfigRefreshMaxSeconds int = 1
 
+@description('true = per-vote load and the Vote/Payload write run normally; false = POST /api/vote/add is a fast no-op. Live via LoadConfig, shared by every node.')
+param loadEnabled bool = true
+
 @description('true = cache GET /api/vote/report in memory; false = every read goes straight to the database. Live via LoadConfig, shared by every node - not a one-time Application Setting like the other params above.')
 param loadCacheEnabled bool = true
 param loadCpuIterationsPerVoteMin int = 5000
@@ -173,6 +176,8 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
 
         { name: 'Load__ConfigRefresh__Min', value: string(loadConfigRefreshMinSeconds) }
         { name: 'Load__ConfigRefresh__Max', value: string(loadConfigRefreshMaxSeconds) }
+        { name: 'Load__LoadEnabled__Min', value: string(loadEnabled ? 1 : 0) }
+        { name: 'Load__LoadEnabled__Max', value: string(loadEnabled ? 1 : 0) }
         { name: 'Load__CacheEnabled__Min', value: string(loadCacheEnabled ? 1 : 0) }
         { name: 'Load__CacheEnabled__Max', value: string(loadCacheEnabled ? 1 : 0) }
         { name: 'Load__CpuIterationsPerVote__Min', value: string(loadCpuIterationsPerVoteMin) }
