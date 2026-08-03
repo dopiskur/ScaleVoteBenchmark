@@ -39,7 +39,7 @@
     "// Note": "Seeds LoadConfig only the first time it's created; edit live values from the dashboard afterward. Each vote picks fresh, at random, between Min and Max (Min == Max for a fixed value).",
     "// ConfigRefresh": "Seconds between polls of LoadConfig for dashboard edits; controls how fast a change to any setting below takes effect.",
     "ConfigRefresh": { "Min": 1, "Max": 1 },
-    "// LoadEnabled": "0 = disabled, 1 = enabled - master switch for per-vote load AND the Vote/Payload write. While disabled, POST /api/vote/add is a fast no-op; used by the dashboard's 'Discard backlog' button to drain already-queued calls without each running its full configured cost.",
+    "// LoadEnabled": "0 = disabled, 1 = enabled - master switch for per-vote load and the Vote/Payload write. While disabled, POST /api/vote/add is a fast no-op; used by the dashboard's 'Discard backlog' button.",
     "LoadEnabled": { "Min": 1, "Max": 1 },
     "// CacheEnabled": "0 = disabled, 1 = enabled - whether GET /api/vote/report is cached in memory. Unlike Cache:SlidingExpirationMinutes, this is live and shared across every node, so a scale-out node picks up the current value from the database instead of appsettings.json.",
     "CacheEnabled": { "Min": 1, "Max": 1 },
