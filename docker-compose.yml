@@ -39,6 +39,19 @@ services:
       Load__LoadEnabled__Max: "1"
       Load__CacheEnabled__Min: "1"
       Load__CacheEnabled__Max: "1"
+      # Mirrors appsettings.json.example - without these, every Load:* value falls back
+      # to 0 (LoadConfigDefaults.ReadFrom's default for a missing key), so a vote would
+      # simulate zero load and this quickstart would demonstrate nothing.
+      Load__ConfigRefresh__Min: "1"
+      Load__ConfigRefresh__Max: "1"
+      Load__CpuIterationsPerVote__Min: "100000"
+      Load__CpuIterationsPerVote__Max: "500000"
+      Load__MemoryKilobytesPerVote__Min: "3072"
+      Load__MemoryKilobytesPerVote__Max: "8192"
+      Load__DiskWriteKilobytesPerVote__Min: "32"
+      Load__DiskWriteKilobytesPerVote__Max: "96"
+      Load__NetworkLatencyMillisecondsPerVote__Min: "10"
+      Load__NetworkLatencyMillisecondsPerVote__Max: "30"
 
 volumes:
   postgres-data:
