@@ -198,5 +198,16 @@ namespace ScaleTrigger.Repositories
 
             await transaction.CommitAsync();
         }
+
+        /// <summary>42P01 = undefined_table, 42883 = undefined_function - reads/writes go through functions/procedures, so a missing schema surfaces as either depending on which is hit first.</summary>
+        public DbFailureKind ClassifyException(Exception ex)
+        {
+            if (ex is PostgresException pgEx && (pgEx.SqlState == "42P01" || pgEx.SqlState == "42883"))
+            {
+                return DbFailureKind.SchemaMissing;
+            }
+
+            return DbFailureKind.ConnectionFailure;
+        }
     }
 }

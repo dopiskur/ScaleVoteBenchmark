@@ -53,7 +53,7 @@
   .dashboard-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    align-items: start;
+    align-items: stretch;
     gap: 32px;
   }
 
@@ -360,16 +360,32 @@
     const dbUnavailableEl = document.getElementById('db-unavailable-indicator');
 
     // Shared indicator: shown regardless of whether the report poll or the LoadConfig fetch noticed the outage.
-    function setDbUnavailable() {
-      dbUnavailableEl.textContent = 'Database unavailable';
+    function setDbUnavailable(message) {
+      dbUnavailableEl.textContent = message;
       dbUnavailableEl.classList.add('status--error');
     }
 
     function clearDbUnavailableIfShown() {
-      if (dbUnavailableEl.textContent === 'Database unavailable') {
+      if (dbUnavailableEl.classList.contains('status--error')) {
         dbUnavailableEl.textContent = '';
         dbUnavailableEl.classList.remove('status--error');
       }
+    }
+
+    // Thrown for a non-OK HTTP response carrying a server-provided message (e.g. "schema
+    // missing" vs "unavailable"), as opposed to a network/timeout failure with no such body.
+    class DbError extends Error {}
+
+    async function dbErrorMessageFrom(response) {
+      try {
+        const body = await response.json();
+        if (body && typeof body.message === 'string' && body.message) {
+          return body.message;
+        }
+      } catch {
+        // Not a JSON body - fall through to the generic message.
+      }
+      return 'Database unavailable.';
     }
 
     function formatPayloadSize(bytes) {
@@ -399,6 +415,45 @@
       }
     }
 
+    // Shared across all admin actions so one login covers the rest of the session
+    // instead of re-prompting on every button.
+    let authToken = null;
+
+    function withAuthHeader(options) {
+      return authToken
+        ? { ...options, headers: { ...options.headers, Authorization: 'Bearer ' + authToken } }
+        : options;
+    }
+
+    // Retries once with a freshly prompted login if the server responds 401.
+    async function fetchWithAuth(url, options = {}) {
+      const response = await fetch(url, withAuthHeader(options));
+      if (response.status !== 401) {
+        return response;
+      }
+
+      const username = prompt('Admin username:');
+      if (username === null) {
+        throw new Error('login cancelled');
+      }
+      const password = prompt('Admin password:');
+      if (password === null) {
+        throw new Error('login cancelled');
+      }
+
+      const loginResponse = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!loginResponse.ok) {
+        throw new Error('login failed (HTTP ' + loginResponse.status + ')');
+      }
+      ({ token: authToken } = await loginResponse.json());
+
+      return fetch(url, withAuthHeader(options));
+    }
+
     let refreshCallId = 0;
 
     async function refresh() {
@@ -406,7 +461,7 @@
       try {
         const response = await fetchWithTimeout('/api/vote/report', { cache: 'no-store' }, 5000);
         if (!response.ok) {
-          throw new Error('unavailable');
+          throw new DbError(await dbErrorMessageFrom(response));
         }
         const report = await response.json();
         if (callId !== refreshCallId) {
@@ -431,7 +486,7 @@
           return;
         }
         statusEl.textContent = '';
-        setDbUnavailable();
+        setDbUnavailable(err instanceof DbError ? err.message : 'Database unavailable.');
       }
     }
 
@@ -443,37 +498,7 @@
       try {
         // Only prompts for login if the API comes back 401.
         statusEl.textContent = 'Resetting database…';
-        let resetResponse = await fetch('/api/vote/reset', { method: 'POST' });
-
-        if (resetResponse.status === 401) {
-          const username = prompt('Admin username:');
-          if (username === null) {
-            statusEl.textContent = '';
-            return;
-          }
-          const password = prompt('Admin password:');
-          if (password === null) {
-            statusEl.textContent = '';
-            return;
-          }
-
-          statusEl.textContent = 'Logging in…';
-          const loginResponse = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          if (!loginResponse.ok) {
-            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-          }
-          const { token } = await loginResponse.json();
-
-          statusEl.textContent = 'Resetting database…';
-          resetResponse = await fetch('/api/vote/reset', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
-        }
+        const resetResponse = await fetchWithAuth('/api/vote/reset', { method: 'POST' });
 
         if (!resetResponse.ok) {
           throw new Error('reset failed (HTTP ' + resetResponse.status + ')');
@@ -495,38 +520,11 @@
     // instead of running its full configured cost.
     async function setLoadEnabled(enabled) {
       const body = JSON.stringify([{ settingName: 'LoadEnabled', min: enabled ? 1 : 0, max: enabled ? 1 : 0 }]);
-      let response = await fetch('/api/loadconfig', {
+      const response = await fetchWithAuth('/api/loadconfig', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
       });
-
-      if (response.status === 401) {
-        const username = prompt('Admin username:');
-        if (username === null) {
-          throw new Error('login cancelled');
-        }
-        const password = prompt('Admin password:');
-        if (password === null) {
-          throw new Error('login cancelled');
-        }
-
-        const loginResponse = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        if (!loginResponse.ok) {
-          throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-        }
-        const { token } = await loginResponse.json();
-
-        response = await fetch('/api/loadconfig', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body
-        });
-      }
 
       if (!response.ok) {
         throw new Error('HTTP ' + response.status);
@@ -688,7 +686,7 @@
       try {
         const response = await fetchWithTimeout('/api/loadconfig', { cache: 'no-store' }, 5000);
         if (!response.ok) {
-          throw new Error('unavailable');
+          throw new DbError(await dbErrorMessageFrom(response));
         }
         const settings = await response.json();
         if (callId !== loadConfigCallId) {
@@ -701,7 +699,7 @@
         if (callId !== loadConfigCallId) {
           return;
         }
-        setDbUnavailable();
+        setDbUnavailable(err instanceof DbError ? err.message : 'Database unavailable.');
         loadConfigNeedsRetry = true;
       }
     }
@@ -738,7 +736,7 @@
 
       try {
         loadConfigStatusEl.textContent = 'Saving…';
-        const saveResponse = await fetch('/api/loadconfig', {
+        const saveResponse = await fetchWithAuth('/api/loadconfig', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings)
@@ -861,32 +859,7 @@
 
       try {
         benchmarkStatusEl.textContent = 'Running benchmark… this takes about 25 seconds.';
-        let response = await fetch('/api/nodebenchmark/run', { method: 'POST' });
-
-        if (response.status === 401) {
-          const username = prompt('Admin username:');
-          if (username === null) {
-            throw new Error('login cancelled');
-          }
-          const password = prompt('Admin password:');
-          if (password === null) {
-            throw new Error('login cancelled');
-          }
-
-          const loginResponse = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          if (!loginResponse.ok) {
-            throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-          }
-          const { token } = await loginResponse.json();
-          response = await fetch('/api/nodebenchmark/run', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token }
-          });
-        }
+        const response = await fetchWithAuth('/api/nodebenchmark/run', { method: 'POST' });
 
         if (!response.ok) {
           throw new Error('HTTP ' + response.status);

@@ -238,5 +238,18 @@ namespace ScaleTrigger.Repositories
 
             transaction.Commit();
         }
+
+        /// <summary>SQLite has no dedicated "no such table" error code - SQLITE_ERROR (1) covers many unrelated failures too, so this matches on the message text.</summary>
+        public DbFailureKind ClassifyException(Exception ex)
+        {
+            if (ex is SqliteException sqliteEx &&
+                sqliteEx.SqliteErrorCode == 1 &&
+                sqliteEx.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                return DbFailureKind.SchemaMissing;
+            }
+
+            return DbFailureKind.ConnectionFailure;
+        }
     }
 }

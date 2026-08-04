@@ -227,5 +227,16 @@ namespace ScaleTrigger.Repositories
 
             await transaction.CommitAsync();
         }
+
+        /// <summary>1146 = ER_NO_SUCH_TABLE, 1305 = ER_SP_DOES_NOT_EXIST - reads/writes go through stored procedures, so a missing schema surfaces as either depending on which is hit first.</summary>
+        public DbFailureKind ClassifyException(Exception ex)
+        {
+            if (ex is MySqlException mysqlEx && (mysqlEx.Number == 1146 || mysqlEx.Number == 1305))
+            {
+                return DbFailureKind.SchemaMissing;
+            }
+
+            return DbFailureKind.ConnectionFailure;
+        }
     }
 }

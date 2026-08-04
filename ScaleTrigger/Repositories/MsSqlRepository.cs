@@ -238,5 +238,16 @@ namespace ScaleTrigger.Repositories
 
             transaction.Commit();
         }
+
+        /// <summary>208 = Invalid object name, 2812 = Could not find stored procedure - reads/writes go through stored procedures, so a missing schema surfaces as either depending on which is hit first.</summary>
+        public DbFailureKind ClassifyException(Exception ex)
+        {
+            if (ex is SqlException sqlEx && (sqlEx.Number == 208 || sqlEx.Number == 2812))
+            {
+                return DbFailureKind.SchemaMissing;
+            }
+
+            return DbFailureKind.ConnectionFailure;
+        }
     }
 }

@@ -103,14 +103,15 @@ namespace ScaleTrigger.Controllers
 
                 int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
 
+                var repo = repoFactory.GetRepo();
                 VoteReport report;
                 try
                 {
-                    report = await repoFactory.GetRepo().VoteReportGetAsync();
+                    report = await repo.VoteReportGetAsync();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return StatusCode(StatusCodes.Status503ServiceUnavailable, "Database unavailable.");
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(repo.ClassifyException(ex)));
                 }
 
                 repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);

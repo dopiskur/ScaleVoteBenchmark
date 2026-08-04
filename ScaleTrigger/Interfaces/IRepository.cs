@@ -34,5 +34,8 @@ namespace ScaleTrigger.Interfaces
 
         /// <summary>Settings not already in the table are silently ignored.</summary>
         Task LoadConfigUpdateAsync(IEnumerable<LoadConfigSetting> settings);
+
+        /// <summary>Inspects an exception caught from one of the methods above and says whether it looks like a missing schema (provider-specific "no such table/procedure" error) versus anything else (connection refused, auth failure, timeout, ...).</summary>
+        DbFailureKind ClassifyException(Exception ex);
     }
 }

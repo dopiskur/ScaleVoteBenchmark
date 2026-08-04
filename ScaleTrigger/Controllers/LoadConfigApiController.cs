@@ -49,13 +49,14 @@ namespace ScaleTrigger.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<List<LoadConfigSetting>>> Get()
         {
+            var repo = repoFactory.GetRepo();
             try
             {
-                return Ok(await repoFactory.GetRepo().LoadConfigGetAsync());
+                return Ok(await repo.LoadConfigGetAsync());
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Database unavailable.");
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(repo.ClassifyException(ex)));
             }
         }
 
