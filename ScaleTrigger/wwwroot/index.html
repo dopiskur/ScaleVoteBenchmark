@@ -258,6 +258,62 @@
     margin-top: 8px;
     min-height: 0;
   }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal-overlay[hidden] {
+    display: none;
+  }
+
+  .modal-box {
+    width: 100%;
+    max-width: 320px;
+    margin: 20px;
+  }
+
+  .modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+  }
+
+  .modal-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .cancel-btn {
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .cancel-btn:hover {
+    background: var(--page-plane);
+  }
 </style>
 </head>
 <body>
@@ -350,6 +406,25 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="login-overlay" hidden>
+    <form class="card modal-box" id="login-form">
+      <p class="section-title">Admin login</p>
+      <div class="modal-field">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" class="loadconfig-input" autocomplete="username" required>
+      </div>
+      <div class="modal-field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" class="loadconfig-input" autocomplete="current-password" required>
+      </div>
+      <p class="status status--inline" id="login-status"></p>
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" id="login-cancel-btn">Cancel</button>
+        <button type="submit" class="save-btn" id="login-submit-btn">Log in</button>
+      </div>
+    </form>
+  </div>
+
   <script>
     const totalEl = document.getElementById('total');
     const updatedEl = document.getElementById('updated');
@@ -425,33 +500,76 @@
         : options;
     }
 
-    // Retries once with a freshly prompted login if the server responds 401.
+    const loginOverlay = document.getElementById('login-overlay');
+    const loginForm = document.getElementById('login-form');
+    const loginUsernameEl = document.getElementById('login-username');
+    const loginPasswordEl = document.getElementById('login-password');
+    const loginStatusEl = document.getElementById('login-status');
+    const loginCancelBtn = document.getElementById('login-cancel-btn');
+
+    // Shows the login modal and resolves with { username, password }, or null if
+    // cancelled. errorMessage (if given) is shown so a failed attempt can be retried
+    // without losing context on why.
+    function promptLogin(errorMessage) {
+      return new Promise((resolve) => {
+        loginStatusEl.textContent = errorMessage || '';
+        loginStatusEl.classList.toggle('status--error', !!errorMessage);
+        loginUsernameEl.value = '';
+        loginPasswordEl.value = '';
+        loginOverlay.hidden = false;
+        loginUsernameEl.focus();
+
+        function cleanup() {
+          loginOverlay.hidden = true;
+          loginForm.removeEventListener('submit', onSubmit);
+          loginCancelBtn.removeEventListener('click', onCancel);
+        }
+
+        function onSubmit(event) {
+          event.preventDefault();
+          const username = loginUsernameEl.value;
+          const password = loginPasswordEl.value;
+          cleanup();
+          resolve({ username, password });
+        }
+
+        function onCancel() {
+          cleanup();
+          resolve(null);
+        }
+
+        loginForm.addEventListener('submit', onSubmit);
+        loginCancelBtn.addEventListener('click', onCancel);
+      });
+    }
+
+    // Retries once with a freshly prompted login if the server responds 401; loops
+    // the login modal on a failed attempt instead of failing the whole action.
     async function fetchWithAuth(url, options = {}) {
       const response = await fetch(url, withAuthHeader(options));
       if (response.status !== 401) {
         return response;
       }
 
-      const username = prompt('Admin username:');
-      if (username === null) {
-        throw new Error('login cancelled');
-      }
-      const password = prompt('Admin password:');
-      if (password === null) {
-        throw new Error('login cancelled');
-      }
+      let error;
+      while (true) {
+        const credentials = await promptLogin(error);
+        if (!credentials) {
+          throw new Error('login cancelled');
+        }
 
-      const loginResponse = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (!loginResponse.ok) {
-        throw new Error('login failed (HTTP ' + loginResponse.status + ')');
-      }
-      ({ token: authToken } = await loginResponse.json());
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials)
+        });
+        if (loginResponse.ok) {
+          ({ token: authToken } = await loginResponse.json());
+          return fetch(url, withAuthHeader(options));
+        }
 
-      return fetch(url, withAuthHeader(options));
+        error = 'Login failed (HTTP ' + loginResponse.status + ').';
+      }
     }
 
     let refreshCallId = 0;
