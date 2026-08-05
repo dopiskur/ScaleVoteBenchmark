@@ -5,12 +5,15 @@ param resourcePrefix string = 'ScaleTrigger'
 param location string = 'eastus'
 param singleVmResourceGroupPrefix string = 'ScaleTriggerDemo'
 param servicePlanResourceGroupPrefix string = 'ScaleTriggerDemo'
+param logAnalyticsResourceGroupPrefix string = 'ScaleTriggerDemo'
 param approvalNotificationUpn string = 'dummy@somemail.com'
 param autoShutdownEnabled bool = true
 
 var resourceGroupName = '${resourceGroupPrefix}-Automation'
 var singleVmResourceGroup = '${singleVmResourceGroupPrefix}-SingleVM'
 var servicePlanResourceGroup = '${servicePlanResourceGroupPrefix}-ServicePlan'
+var logAnalyticsResourceGroupName = '${logAnalyticsResourceGroupPrefix}-Logs'
+var logAnalyticsWorkspaceId = resourceId(subscription().subscriptionId, logAnalyticsResourceGroupName, 'Microsoft.OperationalInsights/workspaces', '${resourcePrefix}-logs')
 
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
@@ -27,6 +30,7 @@ module automation 'modules/automation.bicep' = {
     servicePlanResourceGroup: servicePlanResourceGroup
     approvalNotificationUpn: approvalNotificationUpn
     autoShutdownEnabled: autoShutdownEnabled
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }
 

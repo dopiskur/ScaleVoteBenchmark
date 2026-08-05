@@ -87,7 +87,7 @@ App), since Azure requires this regardless of which subscription deploys them.
 | 04 | `{prefix}-ServicePlan` | App Service, horizontal scaling via native Autoscale, plus vertical scaling (P0v3 → P1v3) gated behind a manual approval |
 | 05 | `{prefix}-Database` | Azure SQL Database, Serverless tier, vertical scaling built into the platform |
 | 06 | `{prefix}-Automation` | Logic Apps, alerts, and an Automation Account with teardown/shutdown runbooks |
-| 07 | `{prefix}-Logs` | Azure Workbook: CPU/memory/disk/network and instance counts for all four scaling scenarios |
+| 07 | `{prefix}-Logs` | Azure Workbook: CPU/memory/disk, current size/SKU, and instance counts for all four scaling scenarios |
 
 Both the VM and the VMSS install and configure the ScaleTrigger app automatically via
 cloud-init: .NET 10, the app itself, a systemd service, and Nginx as a reverse proxy on
@@ -97,44 +97,87 @@ from the public GitHub repository.
 ## Monitoring dashboard (module 07)
 
 Deploys an Azure Workbook (`{prefix} Scaling Dashboard`, in the Azure Portal under
-Monitor → Workbooks) with one section per scaling scenario:
+Monitor → Workbooks) with one section per scaling scenario. Every scenario that can
+scale vertically gets a live "current size/SKU" tile, and every scenario that can also
+scale horizontally additionally gets a live instance-count tile:
 
-| Scenario | CPU | Memory | Disk | Network | Instance count |
+| Scenario | Vertical (current size/SKU) | Horizontal (instance count) | CPU | Memory | Disk |
 |---|---|---|---|---|---|
-| VM | ✓ | ✓ | ✓ (read/write bytes) | ✓ (in/out bytes) | n/a — single VM, vertical scaling only |
-| VM Scale Set | ✓ average **and** per-instance | ✓ average **and** per-instance | ✓ (aggregate) | ✓ (aggregate) | ✓ (live, current `sku.capacity`) |
-| App Service | ✓ | ✓ | approximated via disk queue length | ✓ (bytes sent/received) | ✓ (live, current worker count) |
-| Azure SQL Database | ✓ | ✓ (`app_memory_percent`) | ✓ (storage %) | not exposed by the platform | n/a — single serverless database, scales vCores, not instances |
+| VM | ✓ (`hardwareProfile.vmSize`) | n/a — single VM only | ✓ (+ threshold line) | ✓ | ✓ (read/write bytes) |
+| VM Scale Set | ✓ (`sku.name`) | ✓ (`sku.capacity`) | ✓ average **and** per-instance (+ threshold lines) | ✓ average **and** per-instance | ✓ (aggregate) |
+| App Service | ✓ (`sku.name`) | ✓ (`numberOfWorkers`) | ✓ (+ threshold lines) | ✓ | approximated via disk queue length |
+| Azure SQL Database | ✓ (configured vCore min/max) | n/a — single serverless database, scales vCores, not instances | ✓ | — (see note below) | ✓ (storage %) |
+
+Network is intentionally not shown — the size/SKU and instance-count tiles are the
+signal that actually matters for a scaling demo (did it scale, and to what), and
+Azure SQL Database doesn't expose a network metric in the first place.
+
+Each scaling scenario that has automation behind it (everything except SQL, which
+scales itself) also gets an event-history table, so you can see *when* and *why* a
+scaling decision fired, not just infer it from a tile changing value on refresh:
+
+| Scenario | Event-history tile | Source |
+|---|---|---|
+| VM | "Resize Logic App - recent runs" | Logic App run log (`WorkflowRuntime` diagnostic category) |
+| VM Scale Set | "Autoscale - recent scale actions" | Autoscale diagnostic log (`AutoscaleScaleActions` category) |
+| App Service | "Autoscale - recent scale actions" **and** "Approval-gated resize Logic App - recent runs" | Same two sources, since App Service has both an autoscale rule and the approval-gated vertical Logic App |
 
 How it's wired:
 
-- CPU/disk/network for every resource, and CPU/memory for the App Service and SQL
-  Database, come from the platform metrics that modules 02–05 already forward to the
-  shared Log Analytics workspace (`AllMetrics` diagnostic setting on every resource) —
-  no extra agent needed, since Azure exposes those at the host/PaaS level.
+- CPU/disk for every resource, and CPU for the App Service and SQL Database, come from
+  the platform metrics that modules 02–05 already forward to the shared Log Analytics
+  workspace (`AllMetrics` diagnostic setting on every resource) — no extra agent
+  needed, since Azure exposes those at the host/PaaS level.
 - Guest-level memory (and per-instance CPU) for the VM and VMSS is **not** available at
-  the platform level, so modules 02 and 03 now also install the Azure Monitor Agent and
-  a Data Collection Rule that collects `\Processor\PercentProcessorTime` and
+  the platform level, so modules 02 and 03 also install the Azure Monitor Agent and a
+  Data Collection Rule that collects `\Processor\PercentProcessorTime` and
   `\Memory\% Used Memory` into the same workspace.
-- Instance-count tiles (VMSS, App Service) run a live Azure Resource Graph query
-  (`sku.capacity` / `properties.numberOfWorkers`) rather than a metric, so they reflect
-  the current count essentially immediately, not on a metric's ~1-minute delay.
-- Charts default to a 1-hour window (each has its own time-range picker). For a live
-  view while watching a scenario run, use the workbook toolbar's **Auto refresh**
-  control (top-right) — Azure Monitor metrics land roughly once a minute, so a 1–5
-  minute refresh is a reasonable match; there is no sub-minute "live" tier.
+- All "current size/SKU" and instance-count tiles run a live Azure Resource Graph query
+  against the resource's own properties (`hardwareProfile.vmSize`, `sku.name`,
+  `sku.capacity`, `properties.numberOfWorkers`, `properties.minCapacity`) rather than a
+  metric, so they reflect the current state essentially immediately — this is what lets
+  you watch a VM/VMSS/App Service actually change tier or instance count as it happens,
+  rather than waiting on metric latency.
+- Azure SQL Database Serverless has no metric for "vCores in use right now" — only
+  `cpu_percent`, which is relative to the configured maximum. The vCore tile instead
+  shows the configured min/max envelope the database can scale within (`sku.capacity`
+  / `properties.minCapacity`), which is why SQL has no separate memory tile.
+- The CPU charts for the VM, VMSS, and App Service now plot the actual autoscale/alert
+  threshold(s) as extra series alongside the real CPU line (a KQL `extend` adding
+  constant columns), so a scale event's cause is visible on the same chart instead of
+  needing to be looked up separately.
+- The event-history tables read from two new diagnostic-setting sources that module 06
+  now also creates: `AutoscaleEvaluations`/`AutoscaleScaleActions` logs on each
+  `Microsoft.Insights/autoscalesettings` resource (modules 03 and 04), and
+  `WorkflowRuntime` logs on both Logic Apps (module 06) — none of these were being
+  captured before, so this is new telemetry, not just a new view on existing data.
+  Module 06 now also takes a `logAnalyticsResourceGroupPrefix` param to resolve the
+  workspace, wired by `Deploy.ps1` from `-ResourceGroupPrefix` exactly like modules 02–05
+  already are.
+
+**Refresh delay — be aware of it before relying on this for a live demo:** Azure Monitor
+metrics land roughly once a minute, and each chart defaults to a 1-hour window (each has
+its own time-range picker to widen or narrow it). The workbook does not auto-refresh by
+itself — use the toolbar's **Auto refresh** control (top-right) and pick 1–5 minutes;
+there is no sub-minute "live" tier, so a metric chart will always lag the actual event by
+up to roughly a minute. The Resource Graph-based size/instance-count tiles are much
+closer to instant (seconds, not a metric's ~1-minute grain) but still only update when
+the workbook itself refreshes — same Auto refresh control.
 
 First-deploy checklist — this workbook is hand-authored JSON, not built through the
-Portal UI, so verify these once after the first deploy and adjust the two affected
-KQL queries in `scripts/modules/dashboard.bicep` if needed:
+Portal UI, so verify these once after the first deploy and adjust the affected KQL
+queries in `scripts/modules/dashboard.bicep` if needed:
 - Open the `InsightsMetrics` table in Log Analytics and confirm the `Namespace`/`Name`
   values for the two custom counters match what the CPU/memory charts filter on
   (`Namespace == "Processor"`/`"Memory"`, `Name == "PercentProcessorTime"`/`"% Used
   Memory"`).
-- Confirm `app_memory_percent` exists in the SQL Database's metric definitions for your
-  subscription (serverless-tier vCore metric; drop the tile if it's missing).
-- Confirm the Resource Graph query resolves `properties.numberOfWorkers` on the App
-  Service Plan resource.
+- Trigger a scale-out on the VMSS or App Service and confirm a row shows up in the
+  `AutoscaleScaleActionsLog` table (used by the "recent scale actions" tiles) — this is
+  the resource-specific table Azure documents for this diagnostic category, but it's
+  new telemetry this deploy just started sending, so worth a first check.
+- Trigger the VM or App Service resize Logic App and confirm a row shows up in
+  `AzureDiagnostics` with `Category == "WorkflowRuntime"` for that resource (used by the
+  "recent runs" tiles).
 
 ## Cost and reliability notes
 

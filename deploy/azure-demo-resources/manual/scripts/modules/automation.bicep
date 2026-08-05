@@ -6,6 +6,7 @@ param approvalNotificationUpn string = 'dummy@somemail.com'
 param vmCpuThreshold int = 80
 param planCpuThreshold int = 80
 param autoShutdownEnabled bool = true
+param logAnalyticsWorkspaceId string
 
 var armEndpoint = environment().resourceManager
 var vmName = '${resourcePrefix}-vm'
@@ -69,6 +70,17 @@ resource logicAppVm 'Microsoft.Logic/workflows@2019-05-01' = {
         }
       }
     }
+  }
+}
+
+resource logicAppVmDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'send-to-log-analytics'
+  scope: logicAppVm
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      { category: 'WorkflowRuntime', enabled: true }
+    ]
   }
 }
 
@@ -155,6 +167,17 @@ resource logicAppPlan 'Microsoft.Logic/workflows@2019-05-01' = {
         }
       }
     }
+  }
+}
+
+resource logicAppPlanDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'send-to-log-analytics'
+  scope: logicAppPlan
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      { category: 'WorkflowRuntime', enabled: true }
+    ]
   }
 }
 

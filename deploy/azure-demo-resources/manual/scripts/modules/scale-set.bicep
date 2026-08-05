@@ -245,6 +245,19 @@ resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' 
   }
 }
 
+resource autoscaleDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'send-to-log-analytics'
+  scope: autoscale
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logAnalyticsDestinationType: 'Dedicated'
+    logs: [
+      { category: 'AutoscaleEvaluations', enabled: true }
+      { category: 'AutoscaleScaleActions', enabled: true }
+    ]
+  }
+}
+
 resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: '${vmssName}-dcr'
   location: location

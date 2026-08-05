@@ -266,6 +266,7 @@ function Deploy-ScaleTriggerModule {
     if ($Id -eq '06') {
         $paramObject['singleVmResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['servicePlanResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['logAnalyticsResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['approvalNotificationUpn'] = $ApprovalNotificationUpn
     }
     if ($Id -eq '07') {
@@ -274,6 +275,7 @@ function Deploy-ScaleTriggerModule {
         $paramObject['servicePlanResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['sqlResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['logAnalyticsResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['automationResourceGroupPrefix'] = $ResourceGroupPrefix
     }
 
     $validationErrors = Test-AzSubscriptionDeployment `
