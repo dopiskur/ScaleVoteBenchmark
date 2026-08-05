@@ -107,6 +107,9 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2024-07-01' = {
   name: vmssName
   location: location
   zones: [zone]
+  identity: {
+    type: 'SystemAssigned'
+  }
   sku: {
     name: vmSize
     tier: 'Standard'
@@ -170,6 +173,19 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2024-07-01' = {
           enabled: enableBootDiagnostics
         }
       }
+      extensionProfile: {
+        extensions: [
+          {
+            name: 'AzureMonitorLinuxAgent'
+            properties: {
+              publisher: 'Microsoft.Azure.Monitor'
+              type: 'AzureMonitorLinuxAgent'
+              typeHandlerVersion: '1.33'
+              autoUpgradeMinorVersion: true
+            }
+          }
+        ]
+      }
     }
   }
   dependsOn: [ lb ]
@@ -226,6 +242,48 @@ resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' 
     metrics: [
       { category: 'AllMetrics', enabled: true }
     ]
+  }
+}
+
+resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
+  name: '${vmssName}-dcr'
+  location: location
+  properties: {
+    dataSources: {
+      performanceCounters: [
+        {
+          name: 'guestCounters'
+          streams: ['Microsoft-InsightsMetrics']
+          samplingFrequencyInSeconds: 60
+          counterSpecifiers: [
+            '\\Processor\\PercentProcessorTime'
+            '\\Memory\\% Used Memory'
+          ]
+        }
+      ]
+    }
+    destinations: {
+      logAnalytics: [
+        {
+          name: 'logAnalyticsDest'
+          workspaceResourceId: logAnalyticsWorkspaceId
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: ['Microsoft-InsightsMetrics']
+        destinations: ['logAnalyticsDest']
+      }
+    ]
+  }
+}
+
+resource dcrAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2023-03-11' = {
+  name: 'dcr-association'
+  scope: vmss
+  properties: {
+    dataCollectionRuleId: dcr.id
   }
 }
 

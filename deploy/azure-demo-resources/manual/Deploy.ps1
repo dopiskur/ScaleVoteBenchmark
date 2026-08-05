@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Deploys the ScaleTrigger demo Azure environment (six independent Bicep templates)
+    Deploys the ScaleTrigger demo Azure environment (seven independent Bicep templates)
     using the Az PowerShell module.
 
 .DESCRIPTION
@@ -8,17 +8,18 @@
     (vertical scaling), a Virtual Machine Scale Set (horizontal scaling), an App Service
     plan (horizontal scaling, plus a vertical scenario requiring manual approval), an
     Azure SQL Database (Serverless, platform-native vertical scaling), a Log Analytics
-    workspace, and an Automation Account with supporting Logic Apps and runbooks.
+    workspace with a monitoring dashboard, and an Automation Account with supporting
+    Logic Apps and runbooks.
 
     Missing Az modules (Az.Accounts, Az.Resources, Az.Automation, Az.Sql) and the Bicep
     CLI are installed automatically on first run.
 
 .PARAMETER Mode
-    'All' deploys all six templates in the required order. 'Single' deploys only one,
+    'All' deploys all seven templates in the required order. 'Single' deploys only one,
     selected via -Module. If omitted, an interactive menu is shown.
 
 .PARAMETER Module
-    Used with -Mode Single. One of '01'..'06'.
+    Used with -Mode Single. One of '01'..'07'.
 
 .PARAMETER AdminUsername
     Administrator username for the VM, VMSS, and SQL Server. Default: demoadmin.
@@ -52,6 +53,26 @@
     This default will not receive anything meaningful; replace it with a real account
     UPN before relying on the approval workflow.
 
+.PARAMETER AutoShutdownHour
+    Hour of the day (0-23, local time zone configured in the Bicep templates) at which
+    the VM and VMSS instances are automatically shut down / stopped to limit cost when
+    idle. Default: 5 (05:00). Applies to module 02's own auto-shutdown schedule and to
+    module 06's daily VMSS-stop runbook schedule.
+
+.PARAMETER DeploymentMaxAttempts
+    How many times to retry a module's deployment when it fails with the known
+    transient "metric not yet available on a freshly created resource" error. Default:
+    5. All other deployment errors are surfaced immediately, without retrying.
+
+.PARAMETER DeploymentRetryDelaySeconds
+    Seconds to wait between deployment retry attempts (see -DeploymentMaxAttempts).
+    Default: 60.
+
+.PARAMETER SqlWarmupRetryDelaySeconds
+    Seconds to wait between connection attempts while waiting for the freshly created
+    Azure SQL Serverless database to become reachable (module 05 only). Default: 15.
+    Retries for up to 10 minutes total before failing.
+
 .EXAMPLE
     .\Deploy.ps1 -AdminPassword (Read-Host -Prompt "Password" -AsSecureString)
 
@@ -67,7 +88,7 @@ param(
     [ValidateSet('All', 'Single')]
     [string]$Mode,
 
-    [ValidateSet('01', '02', '03', '04', '05', '06')]
+    [ValidateSet('01', '02', '03', '04', '05', '06', '07')]
     [string]$Module,
 
     [string]$AdminUsername = 'demoadmin',
@@ -91,6 +112,14 @@ param(
 
     [int]$SqlWarmupRetryDelaySeconds = 15
 )
+
+if ($PSBoundParameters.Count -eq 0) {
+    Write-Host ""
+    Write-Host "Example: .\Deploy.ps1 -AdminPassword (Read-Host -Prompt 'Password' -AsSecureString)" -ForegroundColor Cyan
+    Write-Host ""
+    Get-Help -Full $PSCommandPath
+    return
+}
 
 $ErrorActionPreference = 'Stop'
 
@@ -126,15 +155,16 @@ if ($userPath -notlike "*$bicepDir*") {
 }
 
 $ModuleMap = [ordered]@{
-    '01' = @{ File = '01-log-analytics.bicep'; NeedsCredentials = $false; Description = 'Log Analytics workspace' }
-    '02' = @{ File = '02-single-vm.bicep';      NeedsCredentials = $true;  Description = 'Scenario A - single VM, vertical scaling' }
-    '03' = @{ File = '03-scale-set.bicep';      NeedsCredentials = $true;  Description = 'Horizontal scaling - VMSS' }
-    '04' = @{ File = '04-service-plan.bicep';   NeedsCredentials = $true;  Description = 'Horizontal + approval-gated vertical scaling - App Service' }
-    '05' = @{ File = '05-sql-database.bicep';   NeedsCredentials = $true;  Description = 'Scenario B - Azure SQL Serverless' }
-    '06' = @{ File = '06-automation.bicep';     NeedsCredentials = $false; Description = 'Automation - Logic Apps, alerts, runbooks' }
+    '01' = @{ File = 'scripts/01-log-analytics.bicep'; NeedsCredentials = $false; Description = 'Log Analytics workspace' }
+    '02' = @{ File = 'scripts/02-single-vm.bicep';      NeedsCredentials = $true;  Description = 'Scenario A - single VM, vertical scaling' }
+    '03' = @{ File = 'scripts/03-scale-set.bicep';      NeedsCredentials = $true;  Description = 'Horizontal scaling - VMSS' }
+    '04' = @{ File = 'scripts/04-service-plan.bicep';   NeedsCredentials = $true;  Description = 'Horizontal + approval-gated vertical scaling - App Service' }
+    '05' = @{ File = 'scripts/05-sql-database.bicep';   NeedsCredentials = $true;  Description = 'Scenario B - Azure SQL Serverless' }
+    '06' = @{ File = 'scripts/06-automation.bicep';     NeedsCredentials = $false; Description = 'Automation - Logic Apps, alerts, runbooks' }
+    '07' = @{ File = 'scripts/07-dashboard.bicep';      NeedsCredentials = $false; Description = 'Monitoring dashboard - Azure Workbook (CPU/memory/disk/network, instance counts)' }
 }
 
-$DeployOrder = @('01', '05', '02', '03', '04', '06')
+$DeployOrder = @('01', '05', '02', '03', '04', '06', '07')
 
 $script:SqlServerName = $null
 $script:SqlServerFqdn = $null
@@ -209,7 +239,7 @@ function Deploy-ScaleTriggerModule {
 
     $info = $ModuleMap[$Id]
     if (-not $info) { throw "Unknown module '$Id'." }
-    if (-not (Test-Path $info.File)) { throw "File '$($info.File)' not found - run this script from the deploy\azure-demo-resources directory." }
+    if (-not (Test-Path $info.File)) { throw "File '$($info.File)' not found - run this script from the deploy\azure-demo-resources\manual directory." }
 
     Write-Host ""
     Write-Host "==> [$Id] $($info.Description)" -ForegroundColor Cyan
@@ -237,6 +267,13 @@ function Deploy-ScaleTriggerModule {
         $paramObject['singleVmResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['servicePlanResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['approvalNotificationUpn'] = $ApprovalNotificationUpn
+    }
+    if ($Id -eq '07') {
+        $paramObject['singleVmResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['scaleSetResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['servicePlanResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['sqlResourceGroupPrefix'] = $ResourceGroupPrefix
+        $paramObject['logAnalyticsResourceGroupPrefix'] = $ResourceGroupPrefix
     }
 
     $validationErrors = Test-AzSubscriptionDeployment `
@@ -288,7 +325,7 @@ function Deploy-ScaleTriggerModule {
     }
 
     if ($Id -eq '06') {
-        $runbookPath = Join-Path $PSScriptRoot 'teardown-runbook.ps1'
+        $runbookPath = Join-Path $PSScriptRoot 'scripts/teardown-runbook.ps1'
         Import-AzAutomationRunbook `
             -ResourceGroupName $result.Outputs.resourceGroupName.Value `
             -AutomationAccountName $result.Outputs.automationAccountName.Value `
@@ -303,7 +340,7 @@ function Deploy-ScaleTriggerModule {
 
         $stopVmssRunbookName = $result.Outputs.stopVmssRunbookName.Value
         if ($stopVmssRunbookName) {
-            $stopRunbookPath = Join-Path $PSScriptRoot 'stop-vmss-runbook.ps1'
+            $stopRunbookPath = Join-Path $PSScriptRoot 'scripts/stop-vmss-runbook.ps1'
             Import-AzAutomationRunbook `
                 -ResourceGroupName $result.Outputs.resourceGroupName.Value `
                 -AutomationAccountName $result.Outputs.automationAccountName.Value `

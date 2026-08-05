@@ -64,6 +64,9 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: vmName
   location: location
   zones: [zone]
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     hardwareProfile: { vmSize: vmSize }
     osProfile: {
@@ -118,6 +121,63 @@ resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' 
       { category: 'AllMetrics', enabled: true }
     ]
   }
+}
+
+resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = {
+  parent: vm
+  name: 'AzureMonitorLinuxAgent'
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Monitor'
+    type: 'AzureMonitorLinuxAgent'
+    typeHandlerVersion: '1.33'
+    autoUpgradeMinorVersion: true
+  }
+}
+
+resource dcr 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
+  name: '${vmName}-dcr'
+  location: location
+  properties: {
+    dataSources: {
+      performanceCounters: [
+        {
+          name: 'guestCounters'
+          streams: ['Microsoft-InsightsMetrics']
+          samplingFrequencyInSeconds: 60
+          counterSpecifiers: [
+            '\\Processor\\PercentProcessorTime'
+            '\\Memory\\% Used Memory'
+          ]
+        }
+      ]
+    }
+    destinations: {
+      logAnalytics: [
+        {
+          name: 'logAnalyticsDest'
+          workspaceResourceId: logAnalyticsWorkspaceId
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: ['Microsoft-InsightsMetrics']
+        destinations: ['logAnalyticsDest']
+      }
+    ]
+  }
+}
+
+resource dcrAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2023-03-11' = {
+  name: 'dcr-association'
+  scope: vm
+  properties: {
+    dataCollectionRuleId: dcr.id
+  }
+  dependsOn: [
+    amaExtension
+  ]
 }
 
 output vmResourceId string = vm.id
