@@ -67,6 +67,22 @@ dotnet run
 
 With the example config's default `DatabaseProvider: "Sqlite"`, this needs nothing else, just a local file (`scaletrigger.db`), created automatically on first run.
 
+## Azure demo infrastructure: one click, provisions and deploys everything
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json)
+
+Beyond the single-App-Service Quickstart button above, this provisions the full scaling
+demo environment: five Azure scaling scenarios (VM, VM Scale Set, App Service, Azure SQL
+Serverless) plus a live monitoring dashboard, each running ScaleTrigger and wired to
+autoscale/resize automatically under load. Click it, fill in a password (the only
+required field), and deploy — no PowerShell, no follow-up script.
+
+See [deploy/azure-demo-resources/automatic/README.md](deploy/azure-demo-resources/automatic/README.md)
+for the full walkthrough and cost breakdown, or
+[deploy/azure-demo-resources/manual/README.md](deploy/azure-demo-resources/manual/README.md)
+for a PowerShell-driven alternative with more control (deploy one scenario at a time,
+tune every parameter).
+
 ## Configuration
 
 `appsettings.json` is gitignored (it holds connection strings and secrets); `appsettings.json.example` is the checked-in template. Copy it before running:

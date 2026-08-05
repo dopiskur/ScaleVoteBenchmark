@@ -37,7 +37,6 @@ var sqlDatabaseName = '${resourcePrefix}-sqldb'
 var vmResourceId = resourceId(subscription().subscriptionId, singleVmResourceGroupName, 'Microsoft.Compute/virtualMachines', vmName)
 var vmssResourceId = resourceId(subscription().subscriptionId, scaleSetResourceGroupName, 'Microsoft.Compute/virtualMachineScaleSets', vmssName)
 var appServicePlanResourceId = resourceId(subscription().subscriptionId, servicePlanResourceGroupName, 'Microsoft.Web/serverfarms', appServicePlanName)
-var webAppResourceId = resourceId(subscription().subscriptionId, servicePlanResourceGroupName, 'Microsoft.Web/sites', webAppName)
 var sqlDatabaseResourceId = resourceId(subscription().subscriptionId, sqlResourceGroupName, 'Microsoft.Sql/servers/databases', sqlServerName, sqlDatabaseName)
 var logAnalyticsWorkspaceId = resourceId(subscription().subscriptionId, logAnalyticsResourceGroupName, 'Microsoft.OperationalInsights/workspaces', '${resourcePrefix}-logs')
 var vmssAutoscaleResourceId = resourceId(subscription().subscriptionId, scaleSetResourceGroupName, 'Microsoft.Insights/autoscalesettings', 'autoscale-${vmssName}')
@@ -59,7 +58,6 @@ module dashboard 'modules/dashboard.bicep' = {
     vmResourceId: vmResourceId
     vmssResourceId: vmssResourceId
     appServicePlanResourceId: appServicePlanResourceId
-    webAppResourceId: webAppResourceId
     sqlDatabaseResourceId: sqlDatabaseResourceId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     vmssAutoscaleResourceId: vmssAutoscaleResourceId

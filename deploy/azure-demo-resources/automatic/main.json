@@ -1,0 +1,3377 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "5937380887170078626"
+    }
+  },
+  "parameters": {
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Administrator password for the VM, VM Scale Set, and SQL Server. The only required parameter - must meet Azure password complexity rules (12+ characters, 3 of 4 character classes)."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "demoadmin",
+      "metadata": {
+        "description": "Administrator username for the VM, VMSS, and SQL Server."
+      }
+    },
+    "resourceGroupPrefix": {
+      "type": "string",
+      "defaultValue": "ScaleTriggerDemo",
+      "metadata": {
+        "description": "Prefix applied to all resource group names, e.g. \"ScaleTriggerDemo-SingleVM\"."
+      }
+    },
+    "resourcePrefix": {
+      "type": "string",
+      "defaultValue": "ScaleTrigger",
+      "metadata": {
+        "description": "Prefix applied to all resource names inside those groups, e.g. \"ScaleTrigger-vm\". Globally unique resources (the SQL Server and the Web App) additionally get a random suffix."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus",
+      "metadata": {
+        "description": "Azure region for every resource."
+      }
+    },
+    "approvalNotificationUpn": {
+      "type": "string",
+      "defaultValue": "dummy@somemail.com",
+      "metadata": {
+        "description": "Azure AD account that receives a push notification (via the Azure mobile app) when the App Service plan approval-gated vertical scaling alert fires. The default will not notify anyone useful - replace it with a real account UPN."
+      }
+    },
+    "autoShutdownHour": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "UTC hour (0-23) the VM and VM Scale Set automatically shut down to limit cost when idle."
+      }
+    },
+    "autoShutdownEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Whether to create the daily VM Scale Set auto-shutdown schedule."
+      }
+    }
+  },
+  "variables": {
+    "logsResourceGroupName": "[format('{0}-Logs', parameters('resourceGroupPrefix'))]",
+    "singleVmResourceGroupName": "[format('{0}-SingleVM', parameters('resourceGroupPrefix'))]",
+    "scaleSetResourceGroupName": "[format('{0}-ScaleSet', parameters('resourceGroupPrefix'))]",
+    "servicePlanResourceGroupName": "[format('{0}-ServicePlan', parameters('resourceGroupPrefix'))]",
+    "sqlResourceGroupName": "[format('{0}-Database', parameters('resourceGroupPrefix'))]",
+    "automationResourceGroupName": "[format('{0}-Automation', parameters('resourceGroupPrefix'))]",
+    "autoShutdownTime": "[format('{0}00', padLeft(string(parameters('autoShutdownHour')), 2, '0'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('logsResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('singleVmResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('scaleSetResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('servicePlanResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('sqlResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('automationResourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-log-analytics",
+      "resourceGroup": "[variables('logsResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "12116938579793187931"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-logs', parameters('resourcePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]"
+              }
+            }
+          ],
+          "outputs": {
+            "workspaceResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('resourcePrefix')))]"
+            },
+            "workspaceName": {
+              "type": "string",
+              "value": "[format('{0}-logs', parameters('resourcePrefix'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('logsResourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-sql-database",
+      "resourceGroup": "[variables('sqlResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "1435383784922209741"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "maxVCores": {
+              "type": "int",
+              "defaultValue": 4
+            },
+            "minVCores": {
+              "type": "string",
+              "defaultValue": "0.5"
+            },
+            "autoPauseDelayMinutes": {
+              "type": "int",
+              "defaultValue": 1440
+            },
+            "allowAzureServices": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "backupStorageRedundancy": {
+              "type": "string",
+              "defaultValue": "Local"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "sqlServerName": "[toLower(format('{0}-sqlserver-{1}', parameters('resourcePrefix'), uniqueString(resourceGroup().id)))]",
+            "sqlDatabaseName": "[format('{0}-sqldb', parameters('resourcePrefix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[variables('sqlServerName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "administratorLogin": "[parameters('adminUsername')]",
+                "administratorLoginPassword": "[parameters('adminPassword')]",
+                "minimalTlsVersion": "1.2",
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "condition": "[parameters('allowAzureServices')]",
+              "type": "Microsoft.Sql/servers/firewallRules",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), 'AllowAllAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', variables('sqlServerName'), variables('sqlDatabaseName'))]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "GP_S_Gen5",
+                "tier": "GeneralPurpose",
+                "family": "Gen5",
+                "capacity": "[parameters('maxVCores')]"
+              },
+              "properties": {
+                "minCapacity": "[json(parameters('minVCores'))]",
+                "autoPauseDelay": "[parameters('autoPauseDelayMinutes')]",
+                "zoneRedundant": false,
+                "requestedBackupStorageRedundancy": "[parameters('backupStorageRedundancy')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDatabaseName'))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDatabaseName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "sqlDatabaseResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDatabaseName'))]"
+            },
+            "sqlServerFqdn": {
+              "type": "string",
+              "value": "[format('{0}{1}', variables('sqlServerName'), environment().suffixes.sqlServerHostname)]"
+            },
+            "sqlServerName": {
+              "type": "string",
+              "value": "[variables('sqlServerName')]"
+            },
+            "sqlDatabaseName": {
+              "type": "string",
+              "value": "[variables('sqlDatabaseName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('sqlResourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-single-vm",
+      "resourceGroup": "[variables('singleVmResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          },
+          "autoShutdownTime": {
+            "value": "[variables('autoShutdownTime')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "15095856903537272560"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "vmSize": {
+              "type": "string",
+              "defaultValue": "Standard_B1s"
+            },
+            "zone": {
+              "type": "string",
+              "defaultValue": "3"
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "addressPrefix": {
+              "type": "string",
+              "defaultValue": "10.10.0.0/24"
+            },
+            "osDiskType": {
+              "type": "string",
+              "defaultValue": "Standard_LRS"
+            },
+            "imagePublisher": {
+              "type": "string",
+              "defaultValue": "Canonical"
+            },
+            "imageOffer": {
+              "type": "string",
+              "defaultValue": "ubuntu-24_04-lts"
+            },
+            "imageSku": {
+              "type": "string",
+              "defaultValue": "server"
+            },
+            "imageVersion": {
+              "type": "string",
+              "defaultValue": "latest"
+            },
+            "enableBootDiagnostics": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "enableAutoShutdown": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "autoShutdownTime": {
+              "type": "string",
+              "defaultValue": "0500"
+            },
+            "autoShutdownTimeZone": {
+              "type": "string",
+              "defaultValue": "Central European Standard Time"
+            },
+            "retryMaxAttempts": {
+              "type": "int",
+              "defaultValue": 5
+            },
+            "retryDelaySeconds": {
+              "type": "int",
+              "defaultValue": 10
+            }
+          },
+          "variables": {
+            "vmName": "[format('{0}-vm', parameters('resourcePrefix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}-nic', variables('vmName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "subnet": {
+                        "id": "[reference(resourceId('Microsoft.Resources/deployments', 'network-single-vm'), '2025-04-01').outputs.subnetId.value]"
+                      },
+                      "privateIPAllocationMethod": "Dynamic",
+                      "publicIPAddress": {
+                        "id": "[reference(resourceId('Microsoft.Resources/deployments', 'network-single-vm'), '2025-04-01').outputs.pipId.value]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'network-single-vm')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2024-07-01",
+              "name": "[variables('vmName')]",
+              "location": "[parameters('location')]",
+              "zones": [
+                "[parameters('zone')]"
+              ],
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                  "computerName": "[variables('vmName')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]",
+                  "customData": "[reference(resourceId('Microsoft.Resources/deployments', 'cloud-init-single-vm'), '2025-04-01').outputs.cloudInitBase64.value]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": false
+                  }
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[parameters('imagePublisher')]",
+                    "offer": "[parameters('imageOffer')]",
+                    "sku": "[parameters('imageSku')]",
+                    "version": "[parameters('imageVersion')]"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                      "storageAccountType": "[parameters('osDiskType')]"
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmName')))]"
+                    }
+                  ]
+                },
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": "[parameters('enableBootDiagnostics')]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'cloud-init-single-vm')]",
+                "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmName')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enableAutoShutdown')]",
+              "type": "Microsoft.DevTestLab/schedules",
+              "apiVersion": "2018-09-15",
+              "name": "[format('shutdown-computevm-{0}', variables('vmName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "status": "Enabled",
+                "taskType": "ComputeVmShutdownTask",
+                "dailyRecurrence": {
+                  "time": "[parameters('autoShutdownTime')]"
+                },
+                "timeZoneId": "[parameters('autoShutdownTimeZone')]",
+                "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+                "notificationSettings": {
+                  "status": "Disabled"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-07-01",
+              "name": "[format('{0}/{1}', variables('vmName'), 'AzureMonitorLinuxAgent')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "publisher": "Microsoft.Azure.Monitor",
+                "type": "AzureMonitorLinuxAgent",
+                "typeHandlerVersion": "1.33",
+                "autoUpgradeMinorVersion": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2023-03-11",
+              "name": "[format('{0}-dcr', variables('vmName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "dataSources": {
+                  "performanceCounters": [
+                    {
+                      "name": "guestCounters",
+                      "streams": [
+                        "Microsoft-InsightsMetrics"
+                      ],
+                      "samplingFrequencyInSeconds": 60,
+                      "counterSpecifiers": [
+                        "\\Processor\\PercentProcessorTime",
+                        "\\Memory\\% Used Memory"
+                      ]
+                    }
+                  ]
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "name": "logAnalyticsDest",
+                      "workspaceResourceId": "[parameters('logAnalyticsWorkspaceId')]"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-InsightsMetrics"
+                    ],
+                    "destinations": [
+                      "logAnalyticsDest"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+              "apiVersion": "2023-03-11",
+              "scope": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]",
+              "name": "dcr-association",
+              "properties": {
+                "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', format('{0}-dcr', variables('vmName')))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('vmName'), 'AzureMonitorLinuxAgent')]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', format('{0}-dcr', variables('vmName')))]",
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "network-single-vm",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "namePrefix": {
+                    "value": "[variables('vmName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "addressPrefix": {
+                    "value": "[parameters('addressPrefix')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
+                    }
+                  },
+                  "parameters": {
+                    "namePrefix": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "addressPrefix": {
+                      "type": "string",
+                      "defaultValue": "10.10.0.0/24"
+                    },
+                    "dnsLabelSeed": {
+                      "type": "string",
+                      "defaultValue": "[parameters('namePrefix')]"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/networkSecurityGroups",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-nsg', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "securityRules": [
+                          {
+                            "name": "AllowSSH",
+                            "properties": {
+                              "priority": 1000,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "22",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          },
+                          {
+                            "name": "AllowHTTP",
+                            "properties": {
+                              "priority": 1010,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "80",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          },
+                          {
+                            "name": "AllowHTTPS",
+                            "properties": {
+                              "priority": 1020,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "443",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Network/virtualNetworks",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-vnet', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "addressSpace": {
+                          "addressPrefixes": [
+                            "[parameters('addressPrefix')]"
+                          ]
+                        },
+                        "subnets": [
+                          {
+                            "name": "default",
+                            "properties": {
+                              "addressPrefix": "[parameters('addressPrefix')]",
+                              "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/publicIPAddresses",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-pip', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "sku": {
+                        "name": "Standard"
+                      },
+                      "properties": {
+                        "publicIPAllocationMethod": "Static",
+                        "dnsSettings": {
+                          "domainNameLabel": "[toLower(format('{0}-{1}', parameters('dnsLabelSeed'), uniqueString(resourceGroup().id)))]"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "nsgId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                    },
+                    "vnetId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix')))]"
+                    },
+                    "subnetId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix'))), '2023-11-01').subnets[0].id]"
+                    },
+                    "pipId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix')))]"
+                    },
+                    "pipFqdn": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix'))), '2023-11-01').dnsSettings.fqdn]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "cloud-init-single-vm",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "databaseProvider": {
+                    "value": "Sqlite"
+                  },
+                  "authUsername": {
+                    "value": "[parameters('adminUsername')]"
+                  },
+                  "authPassword": {
+                    "value": "[parameters('adminPassword')]"
+                  },
+                  "retryMaxAttempts": {
+                    "value": "[parameters('retryMaxAttempts')]"
+                  },
+                  "retryDelaySeconds": {
+                    "value": "[parameters('retryDelaySeconds')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "14515054112816182311"
+                    }
+                  },
+                  "parameters": {
+                    "databaseProvider": {
+                      "type": "string",
+                      "defaultValue": "Sqlite",
+                      "allowedValues": [
+                        "Sqlite",
+                        "MsSql"
+                      ]
+                    },
+                    "sqlServerFqdn": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlDatabaseName": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlAdminUsername": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlAdminPassword": {
+                      "type": "securestring",
+                      "defaultValue": ""
+                    },
+                    "authUsername": {
+                      "type": "string"
+                    },
+                    "authPassword": {
+                      "type": "securestring"
+                    },
+                    "retryMaxAttempts": {
+                      "type": "int",
+                      "defaultValue": 5
+                    },
+                    "retryDelaySeconds": {
+                      "type": "int",
+                      "defaultValue": 10
+                    },
+                    "dotnetChannel": {
+                      "type": "string",
+                      "defaultValue": "10.0"
+                    },
+                    "repositoryUrl": {
+                      "type": "string",
+                      "defaultValue": "https://github.com/dopiskur/scaleTrigger.git"
+                    }
+                  },
+                  "variables": {
+                    "mssqlConnectionString": "[format('Server=tcp:{0},1433;Database={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;', parameters('sqlServerFqdn'), parameters('sqlDatabaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword'))]",
+                    "dbEnvLinesMssql": "[format('Environment=\"DatabaseProvider=MsSql\"\nEnvironment=\"ConnectionStrings__MsSql={0}\"', variables('mssqlConnectionString'))]",
+                    "dbEnvLines": "[if(equals(parameters('databaseProvider'), 'MsSql'), variables('dbEnvLinesMssql'), '')]",
+                    "scriptTemplate": "#!/bin/bash\nset -e\n\nretry() {\n  local n=0\n  until \"$@\"; do\n    n=$((n+1))\n    if [ \"$n\" -ge __RETRY_MAX__ ]; then\n      return 1\n    fi\n    sleep __RETRY_DELAY__\n  done\n}\n\nwait_for_apt_lock() {\n  while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do\n    sleep 5\n  done\n}\n\nwait_for_apt_lock\nretry apt-get update\nretry apt-get install -y wget git nginx openssl\n\nretry wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh\nchmod +x /tmp/dotnet-install.sh\nretry /tmp/dotnet-install.sh --channel __DOTNET_CHANNEL__ --install-dir /usr/share/dotnet\nln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet\n\nretry git clone __REPOSITORY_URL__ /opt/scaletrigger\ncp /opt/scaletrigger/ScaleTrigger/appsettings.json.example /opt/scaletrigger/ScaleTrigger/appsettings.json\n\ncd /opt/scaletrigger/ScaleTrigger\nretry dotnet publish -c Release -o /opt/scaletrigger/publish\n\ncat > /etc/systemd/system/scaletrigger.service <<'UNIT'\n[Unit]\nDescription=ScaleTrigger\nAfter=network.target\n\n[Service]\nWorkingDirectory=/opt/scaletrigger/publish\nExecStart=/usr/share/dotnet/dotnet /opt/scaletrigger/publish/ScaleTrigger.dll\nRestart=always\nRestartSec=5\nEnvironment=ASPNETCORE_URLS=http://127.0.0.1:5000\nEnvironment=ASPNETCORE_ENVIRONMENT=Production\nEnvironment=\"Auth__Enabled=true\"\nEnvironment=\"AdminUser__Username=__AUTH_USERNAME__\"\nEnvironment=\"AdminUser__Password=__AUTH_PASSWORD__\"\n__DB_ENV_LINES__\n\n[Install]\nWantedBy=multi-user.target\nUNIT\n\nsystemctl daemon-reload\nsystemctl enable scaletrigger\nsystemctl start scaletrigger\n\nmkdir -p /etc/nginx/ssl\nopenssl req -x509 -nodes -days 365 -newkey rsa:2048 \\\n  -keyout /etc/nginx/ssl/scaletrigger.key \\\n  -out /etc/nginx/ssl/scaletrigger.crt \\\n  -subj \"/CN=scaletrigger\"\n\ncat > /etc/nginx/sites-available/scaletrigger <<'NGINX'\nserver {\n    listen 80;\n    server_name _;\n\n    location / {\n        proxy_pass http://127.0.0.1:5000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n\nserver {\n    listen 443 ssl;\n    server_name _;\n\n    ssl_certificate /etc/nginx/ssl/scaletrigger.crt;\n    ssl_certificate_key /etc/nginx/ssl/scaletrigger.key;\n\n    location / {\n        proxy_pass http://127.0.0.1:5000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\nNGINX\n\nrm -f /etc/nginx/sites-enabled/default\nln -sf /etc/nginx/sites-available/scaletrigger /etc/nginx/sites-enabled/scaletrigger\nsystemctl restart nginx\n",
+                    "scriptWithRetryMax": "[replace(variables('scriptTemplate'), '__RETRY_MAX__', string(parameters('retryMaxAttempts')))]",
+                    "scriptWithRetryDelay": "[replace(variables('scriptWithRetryMax'), '__RETRY_DELAY__', string(parameters('retryDelaySeconds')))]",
+                    "scriptWithDotnet": "[replace(variables('scriptWithRetryDelay'), '__DOTNET_CHANNEL__', parameters('dotnetChannel'))]",
+                    "scriptWithRepo": "[replace(variables('scriptWithDotnet'), '__REPOSITORY_URL__', parameters('repositoryUrl'))]",
+                    "scriptWithAuthUser": "[replace(variables('scriptWithRepo'), '__AUTH_USERNAME__', parameters('authUsername'))]",
+                    "scriptWithAuthPassword": "[replace(variables('scriptWithAuthUser'), '__AUTH_PASSWORD__', parameters('authPassword'))]",
+                    "scriptFinal": "[replace(variables('scriptWithAuthPassword'), '__DB_ENV_LINES__', variables('dbEnvLines'))]"
+                  },
+                  "resources": [],
+                  "outputs": {
+                    "cloudInitBase64": {
+                      "type": "string",
+                      "value": "[base64(variables('scriptFinal'))]"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "vmResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+            },
+            "vmName": {
+              "type": "string",
+              "value": "[variables('vmName')]"
+            },
+            "vmFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-single-vm'), '2025-04-01').outputs.pipFqdn.value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('singleVmResourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-scale-set",
+      "resourceGroup": "[variables('scaleSetResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          },
+          "sqlResourceGroupName": {
+            "value": "[variables('sqlResourceGroupName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "18369759847898322015"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "vmSize": {
+              "type": "string",
+              "defaultValue": "Standard_B1s"
+            },
+            "zone": {
+              "type": "string",
+              "defaultValue": "3"
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "baseCapacity": {
+              "type": "int",
+              "defaultValue": 1
+            },
+            "maxCapacity": {
+              "type": "int",
+              "defaultValue": 4
+            },
+            "scaleOutThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "scaleInThreshold": {
+              "type": "int",
+              "defaultValue": 30
+            },
+            "cooldownMinutes": {
+              "type": "int",
+              "defaultValue": 2
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "sqlResourceGroupName": {
+              "type": "string"
+            },
+            "addressPrefix": {
+              "type": "string",
+              "defaultValue": "10.20.0.0/24"
+            },
+            "osDiskType": {
+              "type": "string",
+              "defaultValue": "Standard_LRS"
+            },
+            "imagePublisher": {
+              "type": "string",
+              "defaultValue": "Canonical"
+            },
+            "imageOffer": {
+              "type": "string",
+              "defaultValue": "ubuntu-24_04-lts"
+            },
+            "imageSku": {
+              "type": "string",
+              "defaultValue": "server"
+            },
+            "imageVersion": {
+              "type": "string",
+              "defaultValue": "latest"
+            },
+            "enableBootDiagnostics": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "rollingUpgradeMaxBatchPercent": {
+              "type": "int",
+              "defaultValue": 50
+            },
+            "rollingUpgradeMaxUnhealthyPercent": {
+              "type": "int",
+              "defaultValue": 50
+            },
+            "rollingUpgradePauseBetweenBatches": {
+              "type": "string",
+              "defaultValue": "PT30S"
+            },
+            "retryMaxAttempts": {
+              "type": "int",
+              "defaultValue": 5
+            },
+            "retryDelaySeconds": {
+              "type": "int",
+              "defaultValue": 10
+            }
+          },
+          "variables": {
+            "vmssName": "[format('{0}-vmss', parameters('resourcePrefix'))]",
+            "loadBalancerName": "[format('{0}-nlb', parameters('resourcePrefix'))]",
+            "sqlResourceGroupId": "[format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sqlResourceGroupName'))]",
+            "sqlServerName": "[toLower(format('{0}-sqlserver-{1}', parameters('resourcePrefix'), uniqueString(variables('sqlResourceGroupId'))))]",
+            "sqlDatabaseName": "[format('{0}-sqldb', parameters('resourcePrefix'))]",
+            "sqlServerFqdn": "[format('{0}{1}', variables('sqlServerName'), environment().suffixes.sqlServerHostname)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/loadBalancers",
+              "apiVersion": "2023-11-01",
+              "name": "[variables('loadBalancerName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "frontendIPConfigurations": [
+                  {
+                    "name": "LoadBalancerFrontEnd",
+                    "properties": {
+                      "publicIPAddress": {
+                        "id": "[reference(resourceId('Microsoft.Resources/deployments', 'network-scale-set'), '2025-04-01').outputs.pipId.value]"
+                      }
+                    }
+                  }
+                ],
+                "backendAddressPools": [
+                  {
+                    "name": "backendPool"
+                  }
+                ],
+                "probes": [
+                  {
+                    "name": "httpProbe",
+                    "properties": {
+                      "protocol": "Tcp",
+                      "port": 80,
+                      "intervalInSeconds": 5,
+                      "numberOfProbes": 2
+                    }
+                  }
+                ],
+                "loadBalancingRules": [
+                  {
+                    "name": "httpRule",
+                    "properties": {
+                      "frontendIPConfiguration": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', variables('loadBalancerName'), 'LoadBalancerFrontEnd')]"
+                      },
+                      "backendAddressPool": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', variables('loadBalancerName'), 'backendPool')]"
+                      },
+                      "probe": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/probes', variables('loadBalancerName'), 'httpProbe')]"
+                      },
+                      "protocol": "Tcp",
+                      "frontendPort": 80,
+                      "backendPort": 80,
+                      "idleTimeoutInMinutes": 4
+                    }
+                  },
+                  {
+                    "name": "httpsRule",
+                    "properties": {
+                      "frontendIPConfiguration": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', variables('loadBalancerName'), 'LoadBalancerFrontEnd')]"
+                      },
+                      "backendAddressPool": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', variables('loadBalancerName'), 'backendPool')]"
+                      },
+                      "probe": {
+                        "id": "[resourceId('Microsoft.Network/loadBalancers/probes', variables('loadBalancerName'), 'httpProbe')]"
+                      },
+                      "protocol": "Tcp",
+                      "frontendPort": 443,
+                      "backendPort": 443,
+                      "idleTimeoutInMinutes": 4
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'network-scale-set')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachineScaleSets",
+              "apiVersion": "2024-07-01",
+              "name": "[variables('vmssName')]",
+              "location": "[parameters('location')]",
+              "zones": [
+                "[parameters('zone')]"
+              ],
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "sku": {
+                "name": "[parameters('vmSize')]",
+                "tier": "Standard",
+                "capacity": "[parameters('baseCapacity')]"
+              },
+              "properties": {
+                "overprovision": false,
+                "upgradePolicy": {
+                  "mode": "Rolling",
+                  "rollingUpgradePolicy": {
+                    "maxBatchInstancePercent": "[parameters('rollingUpgradeMaxBatchPercent')]",
+                    "maxUnhealthyInstancePercent": "[parameters('rollingUpgradeMaxUnhealthyPercent')]",
+                    "maxUnhealthyUpgradedInstancePercent": "[parameters('rollingUpgradeMaxUnhealthyPercent')]",
+                    "pauseTimeBetweenBatches": "[parameters('rollingUpgradePauseBetweenBatches')]"
+                  }
+                },
+                "virtualMachineProfile": {
+                  "osProfile": {
+                    "computerNamePrefix": "st",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "customData": "[reference(resourceId('Microsoft.Resources/deployments', 'cloud-init-scale-set'), '2025-04-01').outputs.cloudInitBase64.value]",
+                    "linuxConfiguration": {
+                      "disablePasswordAuthentication": false
+                    }
+                  },
+                  "storageProfile": {
+                    "imageReference": {
+                      "publisher": "[parameters('imagePublisher')]",
+                      "offer": "[parameters('imageOffer')]",
+                      "sku": "[parameters('imageSku')]",
+                      "version": "[parameters('imageVersion')]"
+                    },
+                    "osDisk": {
+                      "createOption": "FromImage",
+                      "managedDisk": {
+                        "storageAccountType": "[parameters('osDiskType')]"
+                      }
+                    }
+                  },
+                  "networkProfile": {
+                    "healthProbe": {
+                      "id": "[resourceId('Microsoft.Network/loadBalancers/probes', variables('loadBalancerName'), 'httpProbe')]"
+                    },
+                    "networkInterfaceConfigurations": [
+                      {
+                        "name": "[format('{0}-nic', variables('vmssName'))]",
+                        "properties": {
+                          "primary": true,
+                          "ipConfigurations": [
+                            {
+                              "name": "ipconfig1",
+                              "properties": {
+                                "subnet": {
+                                  "id": "[reference(resourceId('Microsoft.Resources/deployments', 'network-scale-set'), '2025-04-01').outputs.subnetId.value]"
+                                },
+                                "loadBalancerBackendAddressPools": [
+                                  {
+                                    "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', variables('loadBalancerName'), 'backendPool')]"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                      "enabled": "[parameters('enableBootDiagnostics')]"
+                    }
+                  },
+                  "extensionProfile": {
+                    "extensions": [
+                      {
+                        "name": "AzureMonitorLinuxAgent",
+                        "properties": {
+                          "publisher": "Microsoft.Azure.Monitor",
+                          "type": "AzureMonitorLinuxAgent",
+                          "typeHandlerVersion": "1.33",
+                          "autoUpgradeMinorVersion": true
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'cloud-init-scale-set')]",
+                "[resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName'))]",
+                "[resourceId('Microsoft.Resources/deployments', 'network-scale-set')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/autoscalesettings",
+              "apiVersion": "2022-10-01",
+              "name": "[format('autoscale-{0}', variables('vmssName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enabled": true,
+                "targetResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]",
+                "profiles": [
+                  {
+                    "name": "default",
+                    "capacity": {
+                      "minimum": "[string(parameters('baseCapacity'))]",
+                      "maximum": "[string(parameters('maxCapacity'))]",
+                      "default": "[string(parameters('baseCapacity'))]"
+                    },
+                    "rules": [
+                      {
+                        "metricTrigger": {
+                          "metricName": "Percentage CPU",
+                          "metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]",
+                          "timeGrain": "PT1M",
+                          "statistic": "Average",
+                          "timeWindow": "PT1M",
+                          "timeAggregation": "Average",
+                          "operator": "GreaterThan",
+                          "threshold": "[parameters('scaleOutThreshold')]"
+                        },
+                        "scaleAction": {
+                          "direction": "Increase",
+                          "type": "ChangeCount",
+                          "value": "1",
+                          "cooldown": "[format('PT{0}M', parameters('cooldownMinutes'))]"
+                        }
+                      },
+                      {
+                        "metricTrigger": {
+                          "metricName": "Percentage CPU",
+                          "metricResourceUri": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]",
+                          "timeGrain": "PT1M",
+                          "statistic": "Average",
+                          "timeWindow": "PT1M",
+                          "timeAggregation": "Average",
+                          "operator": "LessThan",
+                          "threshold": "[parameters('scaleInThreshold')]"
+                        },
+                        "scaleAction": {
+                          "direction": "Decrease",
+                          "type": "ChangeCount",
+                          "value": "1",
+                          "cooldown": "[format('PT{0}M', parameters('cooldownMinutes'))]"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Insights/autoscalesettings', format('autoscale-{0}', variables('vmssName')))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "logAnalyticsDestinationType": "Dedicated",
+                "logs": [
+                  {
+                    "category": "AutoscaleEvaluations",
+                    "enabled": true
+                  },
+                  {
+                    "category": "AutoscaleScaleActions",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/autoscalesettings', format('autoscale-{0}', variables('vmssName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2023-03-11",
+              "name": "[format('{0}-dcr', variables('vmssName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "dataSources": {
+                  "performanceCounters": [
+                    {
+                      "name": "guestCounters",
+                      "streams": [
+                        "Microsoft-InsightsMetrics"
+                      ],
+                      "samplingFrequencyInSeconds": 60,
+                      "counterSpecifiers": [
+                        "\\Processor\\PercentProcessorTime",
+                        "\\Memory\\% Used Memory"
+                      ]
+                    }
+                  ]
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "name": "logAnalyticsDest",
+                      "workspaceResourceId": "[parameters('logAnalyticsWorkspaceId')]"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-InsightsMetrics"
+                    ],
+                    "destinations": [
+                      "logAnalyticsDest"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+              "apiVersion": "2023-03-11",
+              "scope": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]",
+              "name": "dcr-association",
+              "properties": {
+                "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', format('{0}-dcr', variables('vmssName')))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', format('{0}-dcr', variables('vmssName')))]",
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "network-scale-set",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "namePrefix": {
+                    "value": "[variables('vmssName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "addressPrefix": {
+                    "value": "[parameters('addressPrefix')]"
+                  },
+                  "dnsLabelSeed": {
+                    "value": "[variables('loadBalancerName')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
+                    }
+                  },
+                  "parameters": {
+                    "namePrefix": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "addressPrefix": {
+                      "type": "string",
+                      "defaultValue": "10.10.0.0/24"
+                    },
+                    "dnsLabelSeed": {
+                      "type": "string",
+                      "defaultValue": "[parameters('namePrefix')]"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/networkSecurityGroups",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-nsg', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "securityRules": [
+                          {
+                            "name": "AllowSSH",
+                            "properties": {
+                              "priority": 1000,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "22",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          },
+                          {
+                            "name": "AllowHTTP",
+                            "properties": {
+                              "priority": 1010,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "80",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          },
+                          {
+                            "name": "AllowHTTPS",
+                            "properties": {
+                              "priority": 1020,
+                              "direction": "Inbound",
+                              "access": "Allow",
+                              "protocol": "Tcp",
+                              "sourcePortRange": "*",
+                              "destinationPortRange": "443",
+                              "sourceAddressPrefix": "*",
+                              "destinationAddressPrefix": "*"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Network/virtualNetworks",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-vnet', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "addressSpace": {
+                          "addressPrefixes": [
+                            "[parameters('addressPrefix')]"
+                          ]
+                        },
+                        "subnets": [
+                          {
+                            "name": "default",
+                            "properties": {
+                              "addressPrefix": "[parameters('addressPrefix')]",
+                              "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Network/publicIPAddresses",
+                      "apiVersion": "2023-11-01",
+                      "name": "[format('{0}-pip', parameters('namePrefix'))]",
+                      "location": "[parameters('location')]",
+                      "sku": {
+                        "name": "Standard"
+                      },
+                      "properties": {
+                        "publicIPAllocationMethod": "Static",
+                        "dnsSettings": {
+                          "domainNameLabel": "[toLower(format('{0}-{1}', parameters('dnsLabelSeed'), uniqueString(resourceGroup().id)))]"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "nsgId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+                    },
+                    "vnetId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix')))]"
+                    },
+                    "subnetId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix'))), '2023-11-01').subnets[0].id]"
+                    },
+                    "pipId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix')))]"
+                    },
+                    "pipFqdn": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix'))), '2023-11-01').dnsSettings.fqdn]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "cloud-init-scale-set",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "databaseProvider": {
+                    "value": "MsSql"
+                  },
+                  "sqlServerFqdn": {
+                    "value": "[variables('sqlServerFqdn')]"
+                  },
+                  "sqlDatabaseName": {
+                    "value": "[variables('sqlDatabaseName')]"
+                  },
+                  "sqlAdminUsername": {
+                    "value": "[parameters('adminUsername')]"
+                  },
+                  "sqlAdminPassword": {
+                    "value": "[parameters('adminPassword')]"
+                  },
+                  "authUsername": {
+                    "value": "[parameters('adminUsername')]"
+                  },
+                  "authPassword": {
+                    "value": "[parameters('adminPassword')]"
+                  },
+                  "retryMaxAttempts": {
+                    "value": "[parameters('retryMaxAttempts')]"
+                  },
+                  "retryDelaySeconds": {
+                    "value": "[parameters('retryDelaySeconds')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "14515054112816182311"
+                    }
+                  },
+                  "parameters": {
+                    "databaseProvider": {
+                      "type": "string",
+                      "defaultValue": "Sqlite",
+                      "allowedValues": [
+                        "Sqlite",
+                        "MsSql"
+                      ]
+                    },
+                    "sqlServerFqdn": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlDatabaseName": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlAdminUsername": {
+                      "type": "string",
+                      "defaultValue": ""
+                    },
+                    "sqlAdminPassword": {
+                      "type": "securestring",
+                      "defaultValue": ""
+                    },
+                    "authUsername": {
+                      "type": "string"
+                    },
+                    "authPassword": {
+                      "type": "securestring"
+                    },
+                    "retryMaxAttempts": {
+                      "type": "int",
+                      "defaultValue": 5
+                    },
+                    "retryDelaySeconds": {
+                      "type": "int",
+                      "defaultValue": 10
+                    },
+                    "dotnetChannel": {
+                      "type": "string",
+                      "defaultValue": "10.0"
+                    },
+                    "repositoryUrl": {
+                      "type": "string",
+                      "defaultValue": "https://github.com/dopiskur/scaleTrigger.git"
+                    }
+                  },
+                  "variables": {
+                    "mssqlConnectionString": "[format('Server=tcp:{0},1433;Database={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;', parameters('sqlServerFqdn'), parameters('sqlDatabaseName'), parameters('sqlAdminUsername'), parameters('sqlAdminPassword'))]",
+                    "dbEnvLinesMssql": "[format('Environment=\"DatabaseProvider=MsSql\"\nEnvironment=\"ConnectionStrings__MsSql={0}\"', variables('mssqlConnectionString'))]",
+                    "dbEnvLines": "[if(equals(parameters('databaseProvider'), 'MsSql'), variables('dbEnvLinesMssql'), '')]",
+                    "scriptTemplate": "#!/bin/bash\nset -e\n\nretry() {\n  local n=0\n  until \"$@\"; do\n    n=$((n+1))\n    if [ \"$n\" -ge __RETRY_MAX__ ]; then\n      return 1\n    fi\n    sleep __RETRY_DELAY__\n  done\n}\n\nwait_for_apt_lock() {\n  while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do\n    sleep 5\n  done\n}\n\nwait_for_apt_lock\nretry apt-get update\nretry apt-get install -y wget git nginx openssl\n\nretry wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh\nchmod +x /tmp/dotnet-install.sh\nretry /tmp/dotnet-install.sh --channel __DOTNET_CHANNEL__ --install-dir /usr/share/dotnet\nln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet\n\nretry git clone __REPOSITORY_URL__ /opt/scaletrigger\ncp /opt/scaletrigger/ScaleTrigger/appsettings.json.example /opt/scaletrigger/ScaleTrigger/appsettings.json\n\ncd /opt/scaletrigger/ScaleTrigger\nretry dotnet publish -c Release -o /opt/scaletrigger/publish\n\ncat > /etc/systemd/system/scaletrigger.service <<'UNIT'\n[Unit]\nDescription=ScaleTrigger\nAfter=network.target\n\n[Service]\nWorkingDirectory=/opt/scaletrigger/publish\nExecStart=/usr/share/dotnet/dotnet /opt/scaletrigger/publish/ScaleTrigger.dll\nRestart=always\nRestartSec=5\nEnvironment=ASPNETCORE_URLS=http://127.0.0.1:5000\nEnvironment=ASPNETCORE_ENVIRONMENT=Production\nEnvironment=\"Auth__Enabled=true\"\nEnvironment=\"AdminUser__Username=__AUTH_USERNAME__\"\nEnvironment=\"AdminUser__Password=__AUTH_PASSWORD__\"\n__DB_ENV_LINES__\n\n[Install]\nWantedBy=multi-user.target\nUNIT\n\nsystemctl daemon-reload\nsystemctl enable scaletrigger\nsystemctl start scaletrigger\n\nmkdir -p /etc/nginx/ssl\nopenssl req -x509 -nodes -days 365 -newkey rsa:2048 \\\n  -keyout /etc/nginx/ssl/scaletrigger.key \\\n  -out /etc/nginx/ssl/scaletrigger.crt \\\n  -subj \"/CN=scaletrigger\"\n\ncat > /etc/nginx/sites-available/scaletrigger <<'NGINX'\nserver {\n    listen 80;\n    server_name _;\n\n    location / {\n        proxy_pass http://127.0.0.1:5000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n\nserver {\n    listen 443 ssl;\n    server_name _;\n\n    ssl_certificate /etc/nginx/ssl/scaletrigger.crt;\n    ssl_certificate_key /etc/nginx/ssl/scaletrigger.key;\n\n    location / {\n        proxy_pass http://127.0.0.1:5000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\nNGINX\n\nrm -f /etc/nginx/sites-enabled/default\nln -sf /etc/nginx/sites-available/scaletrigger /etc/nginx/sites-enabled/scaletrigger\nsystemctl restart nginx\n",
+                    "scriptWithRetryMax": "[replace(variables('scriptTemplate'), '__RETRY_MAX__', string(parameters('retryMaxAttempts')))]",
+                    "scriptWithRetryDelay": "[replace(variables('scriptWithRetryMax'), '__RETRY_DELAY__', string(parameters('retryDelaySeconds')))]",
+                    "scriptWithDotnet": "[replace(variables('scriptWithRetryDelay'), '__DOTNET_CHANNEL__', parameters('dotnetChannel'))]",
+                    "scriptWithRepo": "[replace(variables('scriptWithDotnet'), '__REPOSITORY_URL__', parameters('repositoryUrl'))]",
+                    "scriptWithAuthUser": "[replace(variables('scriptWithRepo'), '__AUTH_USERNAME__', parameters('authUsername'))]",
+                    "scriptWithAuthPassword": "[replace(variables('scriptWithAuthUser'), '__AUTH_PASSWORD__', parameters('authPassword'))]",
+                    "scriptFinal": "[replace(variables('scriptWithAuthPassword'), '__DB_ENV_LINES__', variables('dbEnvLines'))]"
+                  },
+                  "resources": [],
+                  "outputs": {
+                    "cloudInitBase64": {
+                      "type": "string",
+                      "value": "[base64(variables('scriptFinal'))]"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "vmssResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', variables('vmssName'))]"
+            },
+            "vmssFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-scale-set'), '2025-04-01').outputs.pipFqdn.value]"
+            },
+            "loadBalancerName": {
+              "type": "string",
+              "value": "[variables('loadBalancerName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('scaleSetResourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('sqlResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-sql-database')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-service-plan",
+      "resourceGroup": "[variables('servicePlanResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          },
+          "sqlResourceGroupName": {
+            "value": "[variables('sqlResourceGroupName')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('adminPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "7930856682838280384"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "skuName": {
+              "type": "string",
+              "defaultValue": "P0v3",
+              "allowedValues": [
+                "P0v3",
+                "P1v3",
+                "P2v3",
+                "P3v3"
+              ]
+            },
+            "repositoryUrl": {
+              "type": "string",
+              "defaultValue": "https://github.com/dopiskur/scaleTrigger"
+            },
+            "branch": {
+              "type": "string",
+              "defaultValue": "master"
+            },
+            "baseCapacity": {
+              "type": "int",
+              "defaultValue": 1
+            },
+            "maxCapacity": {
+              "type": "int",
+              "defaultValue": 4
+            },
+            "scaleOutThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "scaleInThreshold": {
+              "type": "int",
+              "defaultValue": 30
+            },
+            "cooldownMinutes": {
+              "type": "int",
+              "defaultValue": 2
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "sqlResourceGroupName": {
+              "type": "string"
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            }
+          },
+          "variables": {
+            "webAppName": "[toLower(format('{0}-webapp-{1}', parameters('resourcePrefix'), uniqueString(resourceGroup().id)))]",
+            "appServicePlanName": "[format('{0}-plan', variables('webAppName'))]",
+            "sqlResourceGroupId": "[format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sqlResourceGroupName'))]",
+            "sqlServerName": "[toLower(format('{0}-sqlserver-{1}', parameters('resourcePrefix'), uniqueString(variables('sqlResourceGroupId'))))]",
+            "sqlDatabaseName": "[format('{0}-sqldb', parameters('resourcePrefix'))]",
+            "sqlServerFqdn": "[format('{0}{1}', variables('sqlServerName'), environment().suffixes.sqlServerHostname)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('appServicePlanName')]",
+              "location": "[parameters('location')]",
+              "kind": "linux",
+              "sku": {
+                "name": "[parameters('skuName')]"
+              },
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[variables('webAppName')]",
+              "location": "[parameters('location')]",
+              "kind": "app,linux",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "httpsOnly": true,
+                "siteConfig": {
+                  "linuxFxVersion": "DOTNETCORE|10.0",
+                  "alwaysOn": true,
+                  "appSettings": [
+                    {
+                      "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                      "value": "true"
+                    },
+                    {
+                      "name": "DatabaseProvider",
+                      "value": "MsSql"
+                    },
+                    {
+                      "name": "ConnectionStrings__MsSql",
+                      "value": "[format('Server=tcp:{0},1433;Database={1};User ID={2};Password={3};Encrypt=True;TrustServerCertificate=False;', variables('sqlServerFqdn'), variables('sqlDatabaseName'), parameters('adminUsername'), parameters('adminPassword'))]"
+                    },
+                    {
+                      "name": "Auth__Enabled",
+                      "value": "true"
+                    },
+                    {
+                      "name": "AdminUser__Username",
+                      "value": "[parameters('adminUsername')]"
+                    },
+                    {
+                      "name": "AdminUser__Password",
+                      "value": "[parameters('adminPassword')]"
+                    },
+                    {
+                      "name": "Startup__FailFastOnDbCheck",
+                      "value": "false"
+                    },
+                    {
+                      "name": "Jwt__Key",
+                      "value": "abcdefghijklmnopqrstuvwxyz012345"
+                    },
+                    {
+                      "name": "Jwt__Issuer",
+                      "value": "ScaleTrigger"
+                    },
+                    {
+                      "name": "Jwt__Audience",
+                      "value": "ScaleTrigger.Clients"
+                    },
+                    {
+                      "name": "Jwt__ExpirationMinutes",
+                      "value": "60"
+                    },
+                    {
+                      "name": "Cache__SlidingExpirationMinutes",
+                      "value": "5"
+                    },
+                    {
+                      "name": "Load__ConfigRefresh__Min",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__ConfigRefresh__Max",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__LoadEnabled__Min",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__LoadEnabled__Max",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__CacheEnabled__Min",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__CacheEnabled__Max",
+                      "value": "1"
+                    },
+                    {
+                      "name": "Load__CpuIterationsPerVote__Min",
+                      "value": "100000"
+                    },
+                    {
+                      "name": "Load__CpuIterationsPerVote__Max",
+                      "value": "500000"
+                    },
+                    {
+                      "name": "Load__MemoryKilobytesPerVote__Min",
+                      "value": "3072"
+                    },
+                    {
+                      "name": "Load__MemoryKilobytesPerVote__Max",
+                      "value": "8192"
+                    },
+                    {
+                      "name": "Load__DiskWriteKilobytesPerVote__Min",
+                      "value": "32"
+                    },
+                    {
+                      "name": "Load__DiskWriteKilobytesPerVote__Max",
+                      "value": "96"
+                    },
+                    {
+                      "name": "Load__NetworkLatencyMillisecondsPerVote__Min",
+                      "value": "10"
+                    },
+                    {
+                      "name": "Load__NetworkLatencyMillisecondsPerVote__Max",
+                      "value": "30"
+                    },
+                    {
+                      "name": "Load__PayloadBytesPerVote__Min",
+                      "value": "0"
+                    },
+                    {
+                      "name": "Load__PayloadBytesPerVote__Max",
+                      "value": "0"
+                    },
+                    {
+                      "name": "Load__DbCpuIterationsPerVote__Min",
+                      "value": "0"
+                    },
+                    {
+                      "name": "Load__DbCpuIterationsPerVote__Max",
+                      "value": "0"
+                    },
+                    {
+                      "name": "NodeBenchmark__CpuDurationSeconds",
+                      "value": "20"
+                    },
+                    {
+                      "name": "NodeBenchmark__MemoryBlockMegabytes",
+                      "value": "64"
+                    },
+                    {
+                      "name": "NodeBenchmark__MemoryRepetitions",
+                      "value": "5"
+                    },
+                    {
+                      "name": "NodeBenchmark__DiskSizeMegabytes",
+                      "value": "20"
+                    },
+                    {
+                      "name": "NodeBenchmark__DiskRepetitions",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/sourcecontrols",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}/{1}', variables('webAppName'), 'web')]",
+              "properties": {
+                "repoUrl": "[parameters('repositoryUrl')]",
+                "branch": "[parameters('branch')]",
+                "isManualIntegration": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/autoscalesettings",
+              "apiVersion": "2022-10-01",
+              "name": "[format('autoscale-{0}', variables('appServicePlanName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enabled": true,
+                "targetResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "profiles": [
+                  {
+                    "name": "default",
+                    "capacity": {
+                      "minimum": "[string(parameters('baseCapacity'))]",
+                      "maximum": "[string(parameters('maxCapacity'))]",
+                      "default": "[string(parameters('baseCapacity'))]"
+                    },
+                    "rules": [
+                      {
+                        "metricTrigger": {
+                          "metricName": "CpuPercentage",
+                          "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                          "timeGrain": "PT1M",
+                          "statistic": "Average",
+                          "timeWindow": "PT1M",
+                          "timeAggregation": "Average",
+                          "operator": "GreaterThan",
+                          "threshold": "[parameters('scaleOutThreshold')]"
+                        },
+                        "scaleAction": {
+                          "direction": "Increase",
+                          "type": "ChangeCount",
+                          "value": "1",
+                          "cooldown": "[format('PT{0}M', parameters('cooldownMinutes'))]"
+                        }
+                      },
+                      {
+                        "metricTrigger": {
+                          "metricName": "CpuPercentage",
+                          "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                          "timeGrain": "PT1M",
+                          "statistic": "Average",
+                          "timeWindow": "PT1M",
+                          "timeAggregation": "Average",
+                          "operator": "LessThan",
+                          "threshold": "[parameters('scaleInThreshold')]"
+                        },
+                        "scaleAction": {
+                          "direction": "Decrease",
+                          "type": "ChangeCount",
+                          "value": "1",
+                          "cooldown": "[format('PT{0}M', parameters('cooldownMinutes'))]"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Insights/autoscalesettings', format('autoscale-{0}', variables('appServicePlanName')))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "logAnalyticsDestinationType": "Dedicated",
+                "logs": [
+                  {
+                    "category": "AutoscaleEvaluations",
+                    "enabled": true
+                  },
+                  {
+                    "category": "AutoscaleScaleActions",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/autoscalesettings', format('autoscale-{0}', variables('appServicePlanName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Web/sites', variables('webAppName'))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appServicePlanResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+            },
+            "appServicePlanName": {
+              "type": "string",
+              "value": "[variables('appServicePlanName')]"
+            },
+            "appServiceUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2023-12-01').defaultHostName)]"
+            },
+            "webAppName": {
+              "type": "string",
+              "value": "[variables('webAppName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('servicePlanResourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('sqlResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-sql-database')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-automation",
+      "resourceGroup": "[variables('automationResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "singleVmResourceGroup": {
+            "value": "[variables('singleVmResourceGroupName')]"
+          },
+          "servicePlanResourceGroup": {
+            "value": "[variables('servicePlanResourceGroupName')]"
+          },
+          "scaleSetResourceGroup": {
+            "value": "[variables('scaleSetResourceGroupName')]"
+          },
+          "approvalNotificationUpn": {
+            "value": "[parameters('approvalNotificationUpn')]"
+          },
+          "autoShutdownEnabled": {
+            "value": "[parameters('autoShutdownEnabled')]"
+          },
+          "autoShutdownHour": {
+            "value": "[parameters('autoShutdownHour')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "2008809855522564574"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "singleVmResourceGroup": {
+              "type": "string"
+            },
+            "servicePlanResourceGroup": {
+              "type": "string"
+            },
+            "scaleSetResourceGroup": {
+              "type": "string"
+            },
+            "approvalNotificationUpn": {
+              "type": "string",
+              "defaultValue": "dummy@somemail.com"
+            },
+            "vmCpuThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "planCpuThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "autoShutdownEnabled": {
+              "type": "bool",
+              "defaultValue": true
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "autoShutdownHour": {
+              "type": "int",
+              "defaultValue": 5,
+              "metadata": {
+                "description": "UTC hour (0-23) the daily VMSS shutdown schedule fires at. Kept in UTC (rather than a named time zone) so the schedule start time can be computed declaratively without a timezone/DST-aware function."
+              }
+            },
+            "teardownRunbookUri": {
+              "type": "string",
+              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/automatic/scripts/teardown-runbook.ps1",
+              "metadata": {
+                "description": "Raw GitHub URLs the two runbooks are published from - override if deploying from a fork/branch."
+              }
+            },
+            "stopVmssRunbookUri": {
+              "type": "string",
+              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/automatic/scripts/stop-vmss-runbook.ps1"
+            },
+            "deploymentTime": {
+              "type": "string",
+              "defaultValue": "[utcNow('yyyy-MM-ddTHH:mm:ssZ')]",
+              "metadata": {
+                "description": "Used only to compute a schedule start time in the future - not a meaningful user-facing parameter."
+              }
+            }
+          },
+          "variables": {
+            "armEndpoint": "[environment().resourceManager]",
+            "vmName": "[format('{0}-vm', parameters('resourcePrefix'))]",
+            "vmssName": "[format('{0}-vmss', parameters('resourcePrefix'))]",
+            "vmResourceId": "[resourceId(subscription().subscriptionId, parameters('singleVmResourceGroup'), 'Microsoft.Compute/virtualMachines', variables('vmName'))]",
+            "servicePlanResourceGroupId": "[format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('servicePlanResourceGroup'))]",
+            "webAppName": "[toLower(format('{0}-webapp-{1}', parameters('resourcePrefix'), uniqueString(variables('servicePlanResourceGroupId'))))]",
+            "servicePlanName": "[format('{0}-plan', variables('webAppName'))]",
+            "planResourceId": "[resourceId(subscription().subscriptionId, parameters('servicePlanResourceGroup'), 'Microsoft.Web/serverfarms', variables('servicePlanName'))]",
+            "todayDate": "[substring(parameters('deploymentTime'), 0, 10)]",
+            "paddedShutdownHour": "[padLeft(string(parameters('autoShutdownHour')), 2, '0')]",
+            "todayShutdownTime": "[format('{0}T{1}:00:00Z', variables('todayDate'), variables('paddedShutdownHour'))]",
+            "scheduleStartTime": "[if(greater(dateTimeToEpoch(variables('todayShutdownTime')), dateTimeToEpoch(parameters('deploymentTime'))), variables('todayShutdownTime'), dateTimeAdd(variables('todayShutdownTime'), 'P1D'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[format('{0}-la-vm-resize', parameters('resourcePrefix'))]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "triggers": {
+                    "manual": {
+                      "type": "Request",
+                      "kind": "Http",
+                      "inputs": {
+                        "schema": {}
+                      }
+                    }
+                  },
+                  "actions": {
+                    "CheckAlertState": {
+                      "type": "If",
+                      "expression": {
+                        "equals": [
+                          "@triggerBody()?['data']?['essentials']?['monitorCondition']",
+                          "Fired"
+                        ]
+                      },
+                      "actions": {
+                        "ScaleUp": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "PATCH",
+                            "uri": "[uri(variables('armEndpoint'), format('{0}?api-version=2024-07-01', variables('vmResourceId')))]",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "[variables('armEndpoint')]"
+                            },
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "hardwareProfile": {
+                                  "vmSize": "Standard_B1ms"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "ScaleDown": {
+                            "type": "Http",
+                            "inputs": {
+                              "method": "PATCH",
+                              "uri": "[uri(variables('armEndpoint'), format('{0}?api-version=2024-07-01', variables('vmResourceId')))]",
+                              "authentication": {
+                                "type": "ManagedServiceIdentity",
+                                "audience": "[variables('armEndpoint')]"
+                              },
+                              "headers": {
+                                "Content-Type": "application/json"
+                              },
+                              "body": {
+                                "properties": {
+                                  "hardwareProfile": {
+                                    "vmSize": "Standard_B1s"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "logs": [
+                  {
+                    "category": "WorkflowRuntime",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/actionGroups",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}-ag-vm', parameters('resourcePrefix'))]",
+              "location": "global",
+              "properties": {
+                "groupShortName": "stVmScale",
+                "enabled": true,
+                "logicAppReceivers": [
+                  {
+                    "name": "scaleTriggerLogicAppVm",
+                    "resourceId": "[resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]",
+                    "callbackUrl": "[listCallbackUrl(format('{0}/triggers/manual', resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))), '2019-05-01').value]",
+                    "useCommonAlertSchema": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-alert-vm-cpu-high', parameters('resourcePrefix'))]",
+              "location": "global",
+              "properties": {
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[variables('vmResourceId')]"
+                ],
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT5M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "criterionType": "StaticThresholdCriterion",
+                      "name": "HighCpu",
+                      "metricNamespace": "Microsoft.Compute/virtualMachines",
+                      "metricName": "Percentage CPU",
+                      "operator": "GreaterThan",
+                      "threshold": "[parameters('vmCpuThreshold')]",
+                      "timeAggregation": "Average"
+                    }
+                  ]
+                },
+                "actions": [
+                  {
+                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', format('{0}-ag-vm', parameters('resourcePrefix')))]"
+                  }
+                ],
+                "autoMitigate": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-ag-vm', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[format('{0}-la-plan-resize-approval', parameters('resourcePrefix'))]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "triggers": {
+                    "manual": {
+                      "type": "Request",
+                      "kind": "Http",
+                      "inputs": {
+                        "schema": {}
+                      }
+                    }
+                  },
+                  "actions": {
+                    "ScaleUpPlan": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "PATCH",
+                        "uri": "[uri(variables('armEndpoint'), format('{0}?api-version=2023-12-01', variables('planResourceId')))]",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "[variables('armEndpoint')]"
+                        },
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "sku": {
+                            "name": "P1v3",
+                            "tier": "PremiumV3"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix')))]",
+              "name": "send-to-log-analytics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "logs": [
+                  {
+                    "category": "WorkflowRuntime",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/actionGroups",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}-ag-plan', parameters('resourcePrefix'))]",
+              "location": "global",
+              "properties": {
+                "groupShortName": "stPlanEsc",
+                "enabled": true,
+                "azureAppPushReceivers": [
+                  {
+                    "name": "approvalPush",
+                    "emailAddress": "[parameters('approvalNotificationUpn')]"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('{0}-alert-plan-cpu-high-escalation', parameters('resourcePrefix'))]",
+              "location": "global",
+              "properties": {
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[variables('planResourceId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "criterionType": "StaticThresholdCriterion",
+                      "name": "SustainedHighCpu",
+                      "metricNamespace": "Microsoft.Web/serverfarms",
+                      "metricName": "CpuPercentage",
+                      "operator": "GreaterThan",
+                      "threshold": "[parameters('planCpuThreshold')]",
+                      "timeAggregation": "Average"
+                    }
+                  ]
+                },
+                "actions": [
+                  {
+                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', format('{0}-ag-plan', parameters('resourcePrefix')))]"
+                  }
+                ],
+                "autoMitigate": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('{0}-ag-plan', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Automation/automationAccounts",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}-automation', parameters('resourcePrefix'))]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "sku": {
+                  "name": "Free"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Automation/automationAccounts/runbooks",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), 'Remove-DemoResources')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "runbookType": "PowerShell",
+                "logProgress": false,
+                "logVerbose": false,
+                "publishContentLink": {
+                  "uri": "[parameters('teardownRunbookUri')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('autoShutdownEnabled')]",
+              "type": "Microsoft.Automation/automationAccounts/runbooks",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "runbookType": "PowerShell",
+                "logProgress": false,
+                "logVerbose": false,
+                "publishContentLink": {
+                  "uri": "[parameters('stopVmssRunbookUri')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('autoShutdownEnabled')]",
+              "type": "Microsoft.Automation/automationAccounts/schedules",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), 'daily-vmss-shutdown')]",
+              "properties": {
+                "startTime": "[variables('scheduleStartTime')]",
+                "frequency": "Day",
+                "interval": 1,
+                "timeZone": "UTC"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('autoShutdownEnabled')]",
+              "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), guid(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), 'stop-vmss-schedule'))]",
+              "properties": {
+                "runbook": {
+                  "name": "Stop-ScaleSetInstances"
+                },
+                "schedule": {
+                  "name": "daily-vmss-shutdown"
+                },
+                "parameters": {
+                  "VmssResourceGroup": "[parameters('scaleSetResourceGroup')]",
+                  "VmssName": "[variables('vmssName')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/schedules', format('{0}-automation', parameters('resourcePrefix')), 'daily-vmss-shutdown')]",
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks', format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "grant-role-vm",
+              "resourceGroup": "[parameters('singleVmResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "vmName": {
+                    "value": "[variables('vmName')]"
+                  },
+                  "principalId": {
+                    "value": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix'))), '2019-05-01', 'full').identity.principalId]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "11566062173068089823"
+                    }
+                  },
+                  "parameters": {
+                    "vmName": {
+                      "type": "string"
+                    },
+                    "principalId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+                      "name": "[guid(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), parameters('principalId'), 'Contributor')]",
+                      "properties": {
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "grant-role-plan",
+              "resourceGroup": "[parameters('servicePlanResourceGroup')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "planName": {
+                    "value": "[variables('servicePlanName')]"
+                  },
+                  "principalId": {
+                    "value": "[reference(resourceId('Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix'))), '2019-05-01', 'full').identity.principalId]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "8106311303023005978"
+                    }
+                  },
+                  "parameters": {
+                    "planName": {
+                      "type": "string"
+                    },
+                    "principalId": {
+                      "type": "string"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "scope": "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+                      "name": "[guid(resourceId('Microsoft.Web/serverfarms', parameters('planName')), parameters('principalId'), 'Contributor')]",
+                      "properties": {
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "grant-role-automation-account",
+              "subscriptionId": "[subscription().subscriptionId]",
+              "location": "[resourceGroup().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "principalId": {
+                    "value": "[reference(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), '2023-11-01', 'full').identity.principalId]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.46.1.21595",
+                      "templateHash": "12141154995807114082"
+                    }
+                  },
+                  "parameters": {
+                    "principalId": {
+                      "type": "string"
+                    },
+                    "roleDefinitionId": {
+                      "type": "string",
+                      "defaultValue": "b24988ac-6180-42a0-ab88-20f7382dd24c"
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Authorization/roleAssignments",
+                      "apiVersion": "2022-04-01",
+                      "name": "[guid(subscription().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+                      "properties": {
+                        "principalId": "[parameters('principalId')]",
+                        "principalType": "ServicePrincipal",
+                        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]"
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "logicAppVmName": {
+              "type": "string",
+              "value": "[format('{0}-la-vm-resize', parameters('resourcePrefix'))]"
+            },
+            "logicAppPlanName": {
+              "type": "string",
+              "value": "[format('{0}-la-plan-resize-approval', parameters('resourcePrefix'))]"
+            },
+            "automationAccountName": {
+              "type": "string",
+              "value": "[format('{0}-automation', parameters('resourcePrefix'))]"
+            },
+            "teardownRunbookName": {
+              "type": "string",
+              "value": "Remove-DemoResources"
+            },
+            "stopVmssRunbookNameOut": {
+              "type": "string",
+              "value": "[if(parameters('autoShutdownEnabled'), 'Stop-ScaleSetInstances', '')]"
+            },
+            "logicAppPlanTriggerUrl": {
+              "type": "string",
+              "value": "[listCallbackUrl(format('{0}/triggers/manual', resourceId('Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix')))), '2019-05-01').value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('automationResourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('scaleSetResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-scale-set')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('servicePlanResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-service-plan')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('singleVmResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-single-vm')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "deploy-dashboard",
+      "resourceGroup": "[variables('logsResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('singleVmResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-single-vm'), '2025-04-01').outputs.vmResourceId.value]"
+          },
+          "vmssResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('scaleSetResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-scale-set'), '2025-04-01').outputs.vmssResourceId.value]"
+          },
+          "appServicePlanResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('servicePlanResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-service-plan'), '2025-04-01').outputs.appServicePlanResourceId.value]"
+          },
+          "sqlDatabaseResourceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('sqlResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-sql-database'), '2025-04-01').outputs.sqlDatabaseResourceId.value]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics'), '2025-04-01').outputs.workspaceResourceId.value]"
+          },
+          "vmssAutoscaleResourceId": {
+            "value": "[resourceId(subscription().subscriptionId, variables('scaleSetResourceGroupName'), 'Microsoft.Insights/autoscalesettings', format('autoscale-{0}-vmss', parameters('resourcePrefix')))]"
+          },
+          "planAutoscaleResourceId": {
+            "value": "[resourceId(subscription().subscriptionId, variables('servicePlanResourceGroupName'), 'Microsoft.Insights/autoscalesettings', format('autoscale-{0}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('servicePlanResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-service-plan'), '2025-04-01').outputs.appServicePlanName.value))]"
+          },
+          "logicAppVmResourceId": {
+            "value": "[resourceId(subscription().subscriptionId, variables('automationResourceGroupName'), 'Microsoft.Logic/workflows', format('{0}-la-vm-resize', parameters('resourcePrefix')))]"
+          },
+          "logicAppPlanResourceId": {
+            "value": "[resourceId(subscription().subscriptionId, variables('automationResourceGroupName'), 'Microsoft.Logic/workflows', format('{0}-la-plan-resize-approval', parameters('resourcePrefix')))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "9097186275397359085"
+            }
+          },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "textItem": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "itemName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "text"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": {
+                      "type": 1,
+                      "name": "[parameters('itemName')]",
+                      "content": {
+                        "json": "[parameters('text')]"
+                      }
+                    }
+                  }
+                },
+                "kqlChartItem": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "itemName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "title"
+                    },
+                    {
+                      "type": "string",
+                      "name": "query"
+                    },
+                    {
+                      "type": "string",
+                      "name": "workspaceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": {
+                      "type": 3,
+                      "name": "[parameters('itemName')]",
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "[parameters('query')]",
+                        "size": 0,
+                        "title": "[parameters('title')]",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "crossComponentResources": [
+                          "[parameters('workspaceId')]"
+                        ],
+                        "visualization": "linechart"
+                      }
+                    }
+                  }
+                },
+                "argTableItem": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "itemName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "title"
+                    },
+                    {
+                      "type": "string",
+                      "name": "query"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": {
+                      "type": 3,
+                      "name": "[parameters('itemName')]",
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "[parameters('query')]",
+                        "size": 0,
+                        "title": "[parameters('title')]",
+                        "queryType": 1,
+                        "resourceType": "microsoft.resourcegraph/resources",
+                        "visualization": "table"
+                      }
+                    }
+                  }
+                },
+                "kqlTableItem": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "itemName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "title"
+                    },
+                    {
+                      "type": "string",
+                      "name": "query"
+                    },
+                    {
+                      "type": "string",
+                      "name": "workspaceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": {
+                      "type": 3,
+                      "name": "[parameters('itemName')]",
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "[parameters('query')]",
+                        "size": 0,
+                        "title": "[parameters('title')]",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "crossComponentResources": [
+                          "[parameters('workspaceId')]"
+                        ],
+                        "visualization": "table"
+                      }
+                    }
+                  }
+                },
+                "azureMetricAvgQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "resourceId"
+                    },
+                    {
+                      "type": "string",
+                      "name": "metricName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AzureMetrics | where ResourceId =~ \"{0}\" | where MetricName == \"{1}\" | summarize Value=avg(Average) by bin(TimeGenerated, 1m) | render timechart', parameters('resourceId'), parameters('metricName'))]"
+                  }
+                },
+                "azureMetricTotalQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "resourceId"
+                    },
+                    {
+                      "type": "string",
+                      "name": "metricName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AzureMetrics | where ResourceId =~ \"{0}\" | where MetricName == \"{1}\" | summarize Value=avg(Total) by bin(TimeGenerated, 1m) | render timechart', parameters('resourceId'), parameters('metricName'))]"
+                  }
+                },
+                "azureMetricAvgWithThresholdQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "resourceId"
+                    },
+                    {
+                      "type": "string",
+                      "name": "metricName"
+                    },
+                    {
+                      "type": "int",
+                      "name": "threshold"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AzureMetrics | where ResourceId =~ \"{0}\" | where MetricName == \"{1}\" | summarize Value=avg(Average) by bin(TimeGenerated, 1m) | extend Threshold={2} | render timechart', parameters('resourceId'), parameters('metricName'), string(parameters('threshold')))]"
+                  }
+                },
+                "azureMetricAvgWithThresholdsQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "resourceId"
+                    },
+                    {
+                      "type": "string",
+                      "name": "metricName"
+                    },
+                    {
+                      "type": "int",
+                      "name": "scaleOutThreshold"
+                    },
+                    {
+                      "type": "int",
+                      "name": "scaleInThreshold"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AzureMetrics | where ResourceId =~ \"{0}\" | where MetricName == \"{1}\" | summarize Value=avg(Average) by bin(TimeGenerated, 1m) | extend ScaleOutThreshold={2}, ScaleInThreshold={3} | render timechart', parameters('resourceId'), parameters('metricName'), string(parameters('scaleOutThreshold')), string(parameters('scaleInThreshold')))]"
+                  }
+                },
+                "autoscaleActionsQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "autoscaleResourceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AutoscaleScaleActionsLog | where ResourceId =~ \"{0}\" | project TimeGenerated, OperationName, ResultType, Properties | order by TimeGenerated desc | take 20', parameters('autoscaleResourceId'))]"
+                  }
+                },
+                "logicAppRunsQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "logicAppResourceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[format('AzureDiagnostics | where ResourceId =~ \"{0}\" | where Category == \"WorkflowRuntime\" | project TimeGenerated, OperationName, ResultType, Level | order by TimeGenerated desc | take 20', parameters('logicAppResourceId'))]"
+                  }
+                },
+                "insightsMetricQuery": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "resourceId"
+                    },
+                    {
+                      "type": "string",
+                      "name": "namespaceName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "counterName"
+                    },
+                    {
+                      "type": "bool",
+                      "name": "perInstance"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[if(parameters('perInstance'), format('InsightsMetrics | where _ResourceId =~ \"{0}\" | where Namespace == \"{1}\" and Name == \"{2}\" | summarize Value=avg(Val) by bin(TimeGenerated, 1m), Computer | render timechart', parameters('resourceId'), parameters('namespaceName'), parameters('counterName')), format('InsightsMetrics | where _ResourceId =~ \"{0}\" | where Namespace == \"{1}\" and Name == \"{2}\" | summarize Value=avg(Val) by bin(TimeGenerated, 1m) | render timechart', parameters('resourceId'), parameters('namespaceName'), parameters('counterName')))]"
+                  }
+                }
+              }
+            }
+          ],
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "defaultValue": "ScaleTrigger"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "vmResourceId": {
+              "type": "string"
+            },
+            "vmssResourceId": {
+              "type": "string"
+            },
+            "appServicePlanResourceId": {
+              "type": "string"
+            },
+            "sqlDatabaseResourceId": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string"
+            },
+            "vmssAutoscaleResourceId": {
+              "type": "string"
+            },
+            "planAutoscaleResourceId": {
+              "type": "string"
+            },
+            "logicAppVmResourceId": {
+              "type": "string"
+            },
+            "logicAppPlanResourceId": {
+              "type": "string"
+            },
+            "vmResizeThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "vmssScaleOutThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "vmssScaleInThreshold": {
+              "type": "int",
+              "defaultValue": 30
+            },
+            "planScaleOutThreshold": {
+              "type": "int",
+              "defaultValue": 80
+            },
+            "planScaleInThreshold": {
+              "type": "int",
+              "defaultValue": 30
+            }
+          },
+          "variables": {
+            "vmItems": [
+              "[__bicep.textItem('vm-header', format('## VM ({0}-vm) - vertical scaling (Azure Monitor + Logic App resizes B1s -> B1ms)', parameters('resourcePrefix')))]",
+              "[__bicep.argTableItem('vm-size', 'Current VM size', format('Resources | where id =~ \"{0}\" | project Name=name, VmSize=tostring(properties.hardwareProfile.vmSize)', parameters('vmResourceId')))]",
+              "[__bicep.kqlTableItem('vm-resize-history', 'Resize Logic App - recent runs', __bicep.logicAppRunsQuery(parameters('logicAppVmResourceId')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vm-cpu', 'CPU % (dashed line = resize threshold)', __bicep.azureMetricAvgWithThresholdQuery(parameters('vmResourceId'), 'Percentage CPU', parameters('vmResizeThreshold')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vm-mem', 'Memory % used', __bicep.insightsMetricQuery(parameters('vmResourceId'), 'Memory', '% Used Memory', false()), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vm-disk', 'Disk bytes/min (read+write)', __bicep.azureMetricTotalQuery(parameters('vmResourceId'), 'Disk Read Bytes'), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.textItem('vm-note', 'Single VM: no instance count tile - this scenario demonstrates vertical (resize) scaling only. Watch the \"Current VM size\" tile change from Standard_B1s to Standard_B1ms (and back) as the Logic App reacts to the CPU alert; the CPU chart plots the resize threshold alongside actual CPU, and the run-history table shows when the Logic App actually fired.')]"
+            ],
+            "vmssItems": [
+              "[__bicep.textItem('vmss-header', format('## VM Scale Set ({0}-vmss) - horizontal scaling (native Autoscale)', parameters('resourcePrefix')))]",
+              "[__bicep.argTableItem('vmss-size', 'Current VM size (SKU)', format('Resources | where id =~ \"{0}\" | project Name=name, VmSize=tostring(sku.name)', parameters('vmssResourceId')))]",
+              "[__bicep.argTableItem('vmss-instances', 'Current instance count', format('Resources | where id =~ \"{0}\" | project Name=name, InstanceCount=toint(sku.capacity)', parameters('vmssResourceId')))]",
+              "[__bicep.kqlTableItem('vmss-scale-events', 'Autoscale - recent scale actions', __bicep.autoscaleActionsQuery(parameters('vmssAutoscaleResourceId')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vmss-cpu-avg', 'CPU % - average across all instances (dashed lines = scale-out/in thresholds)', __bicep.azureMetricAvgWithThresholdsQuery(parameters('vmssResourceId'), 'Percentage CPU', parameters('vmssScaleOutThreshold'), parameters('vmssScaleInThreshold')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vmss-cpu-per-instance', 'CPU % - per instance', __bicep.insightsMetricQuery(parameters('vmssResourceId'), 'Processor', 'PercentProcessorTime', true()), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vmss-mem-avg', 'Memory % used - average across all instances', __bicep.insightsMetricQuery(parameters('vmssResourceId'), 'Memory', '% Used Memory', false()), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vmss-mem-per-instance', 'Memory % used - per instance', __bicep.insightsMetricQuery(parameters('vmssResourceId'), 'Memory', '% Used Memory', true()), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('vmss-disk', 'Disk read bytes/min (aggregate)', __bicep.azureMetricTotalQuery(parameters('vmssResourceId'), 'Disk Read Bytes'), parameters('logAnalyticsWorkspaceId'))]"
+            ],
+            "servicePlanItems": [
+              "[__bicep.textItem('plan-header', format('## App Service ({0}-webapp) - horizontal Autoscale + approval-gated vertical scaling', parameters('resourcePrefix')))]",
+              "[__bicep.argTableItem('plan-size', 'Current App Service Plan SKU', format('Resources | where id =~ \"{0}\" | project Name=name, Sku=tostring(sku.name)', parameters('appServicePlanResourceId')))]",
+              "[__bicep.argTableItem('plan-instances', 'Current instance (worker) count', format('Resources | where id =~ \"{0}\" | project Name=name, InstanceCount=toint(properties.numberOfWorkers)', parameters('appServicePlanResourceId')))]",
+              "[__bicep.kqlTableItem('plan-scale-events', 'Autoscale - recent scale actions', __bicep.autoscaleActionsQuery(parameters('planAutoscaleResourceId')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlTableItem('plan-resize-history', 'Approval-gated resize Logic App - recent runs', __bicep.logicAppRunsQuery(parameters('logicAppPlanResourceId')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('plan-cpu', 'CPU % (dashed lines = scale-out/in thresholds)', __bicep.azureMetricAvgWithThresholdsQuery(parameters('appServicePlanResourceId'), 'CpuPercentage', parameters('planScaleOutThreshold'), parameters('planScaleInThreshold')), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('plan-mem', 'Memory %', __bicep.azureMetricAvgQuery(parameters('appServicePlanResourceId'), 'MemoryPercentage'), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('plan-disk', 'Disk queue length', __bicep.azureMetricAvgQuery(parameters('appServicePlanResourceId'), 'DiskQueueLength'), parameters('logAnalyticsWorkspaceId'))]"
+            ],
+            "sqlItems": [
+              "[__bicep.textItem('sql-header', format('## Azure SQL Database ({0}-sqldb) - Serverless, platform-native vertical scaling', parameters('resourcePrefix')))]",
+              "[__bicep.argTableItem('sql-vcores', 'Configured vCore range (min-max)', format('Resources | where id =~ \"{0}\" | project Name=name, MaxVCores=toint(sku.capacity), MinVCores=todouble(properties.minCapacity)', parameters('sqlDatabaseResourceId')))]",
+              "[__bicep.kqlChartItem('sql-cpu', 'CPU %', __bicep.azureMetricAvgQuery(parameters('sqlDatabaseResourceId'), 'cpu_percent'), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.kqlChartItem('sql-storage', 'Storage %', __bicep.azureMetricAvgQuery(parameters('sqlDatabaseResourceId'), 'storage_percent'), parameters('logAnalyticsWorkspaceId'))]",
+              "[__bicep.textItem('sql-note', 'Serverless SQL DB has no \"instance count\" (it is a single logical database that scales vCores up/down, not out) and exposes no network metric. The vCore tile shows the configured min/max envelope (from the database resource properties) - Azure does not expose a metric for the exact vCore allocation active at a given moment, only CPU % relative to the max.')]"
+            ],
+            "workbookDefinition": {
+              "version": "Notebook/1.0",
+              "items": "[concat(createArray(__bicep.textItem('main-header', format('# {0} scaling dashboard\nCPU/memory/disk/network and instance counts across all four scaling scenarios. Charts default to a 1-hour window; use each chart''s own time-range picker to widen it, and the workbook toolbar''s Auto refresh control (top-right) to refresh live - Azure Monitor metrics land roughly once a minute, so a 1-5 minute auto-refresh is a reasonable match.', parameters('resourcePrefix')))), variables('vmItems'), variables('vmssItems'), variables('servicePlanItems'), variables('sqlItems'))]",
+              "isLocked": false,
+              "fallbackResourceIds": [
+                "[parameters('logAnalyticsWorkspaceId')]"
+              ]
+            }
+          },
+          "resources": {
+            "workbook": {
+              "type": "Microsoft.Insights/workbooks",
+              "apiVersion": "2023-06-01",
+              "name": "[guid(resourceGroup().id, format('{0}-scaling-dashboard', parameters('resourcePrefix')))]",
+              "location": "[parameters('location')]",
+              "kind": "shared",
+              "properties": {
+                "displayName": "[format('{0} Scaling Dashboard', parameters('resourcePrefix'))]",
+                "serializedData": "[string(variables('workbookDefinition'))]",
+                "version": "1.0",
+                "sourceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "category": "workbook"
+              }
+            }
+          },
+          "outputs": {
+            "workbookName": {
+              "type": "string",
+              "value": "[guid(resourceGroup().id, format('{0}-scaling-dashboard', parameters('resourcePrefix')))]"
+            },
+            "workbookResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/workbooks', guid(resourceGroup().id, format('{0}-scaling-dashboard', parameters('resourcePrefix'))))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('automationResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-automation')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('logsResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-log-analytics')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('logsResourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('scaleSetResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-scale-set')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('servicePlanResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-service-plan')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('singleVmResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-single-vm')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('sqlResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-sql-database')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "vmFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('singleVmResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-single-vm'), '2025-04-01').outputs.vmFqdn.value]"
+    },
+    "vmssFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('scaleSetResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-scale-set'), '2025-04-01').outputs.vmssFqdn.value]"
+    },
+    "appServiceUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('servicePlanResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-service-plan'), '2025-04-01').outputs.appServiceUrl.value]"
+    },
+    "sqlServerFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('sqlResourceGroupName')), 'Microsoft.Resources/deployments', 'deploy-sql-database'), '2025-04-01').outputs.sqlServerFqdn.value]"
+    },
+    "dashboardResourceGroup": {
+      "type": "string",
+      "value": "[variables('logsResourceGroupName')]"
+    }
+  }
+}
