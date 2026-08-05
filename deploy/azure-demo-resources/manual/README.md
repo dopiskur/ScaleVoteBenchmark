@@ -20,6 +20,7 @@ plus a live monitoring dashboard covering all four.
 ```
 Deploy.ps1
 README.md
+config.json.example
 scripts/
   01-log-analytics.bicep
   02-single-vm.bicep
@@ -61,6 +62,20 @@ a sensible default.
 .\Deploy.ps1 -Mode All -AdminPassword $securePassword
 .\Deploy.ps1 -Mode Single -Module 04 -AdminPassword $securePassword
 ```
+
+Running `.\Deploy.ps1` with no arguments prints a short usage summary (one real example
+plus a one-line-per-parameter reference) instead of parameters and defaults - the full
+`Get-Help .\Deploy.ps1 -Full` reference is still available on request.
+
+### config.json
+
+Copy `config.json.example` to `config.json` (same folder as `Deploy.ps1`) and fill in
+your usual values to skip retyping them every run - `config.json` is gitignored, so it's
+safe to leave your real prefixes, subscription, etc. in it locally. It never holds the
+admin password: when `.\Deploy.ps1` is run with no arguments and finds a `config.json`,
+it asks `Load config.json and proceed?`; answering yes loads every other parameter from
+the file and then prompts for the password separately, same as always. Answering no (or
+having no `config.json` at all) falls back to the usage summary above.
 
 ## Parameters
 

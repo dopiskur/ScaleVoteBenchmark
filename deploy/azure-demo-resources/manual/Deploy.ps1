@@ -113,12 +113,56 @@ param(
     [int]$SqlWarmupRetryDelaySeconds = 15
 )
 
+function Show-UsageHelp {
+    Write-Host ""
+    Write-Host "Example:" -ForegroundColor Cyan
+    Write-Host '  .\Deploy.ps1 -Mode All -AdminPassword (Read-Host -Prompt "Password" -AsSecureString) -ResourceGroupPrefix MyDemo -ResourcePrefix MyApp -Location westeurope -ApprovalNotificationUpn you@example.com' -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Parameters:"
+    Write-Host "  -Mode <All|Single>                 Deploy everything, or one module via -Module. Default: interactive menu."
+    Write-Host "  -Module <01..07>                   Used with -Mode Single."
+    Write-Host "  -AdminUsername <string>            Admin login for the VM, VMSS, and SQL Server. Default: demoadmin."
+    Write-Host "  -AdminPassword <SecureString>      Required. Must meet Azure's password complexity rules."
+    Write-Host "  -ResourceGroupPrefix <string>      Prefix for resource group names. Default: ScaleTriggerDemo."
+    Write-Host "  -ResourcePrefix <string>           Prefix for resource names. Default: ScaleTrigger."
+    Write-Host "  -SubscriptionId <string>           Az subscription to switch to before deploying. Default: current context."
+    Write-Host "  -Location <string>                 Azure region. Default: eastus."
+    Write-Host "  -ApprovalNotificationUpn <string>  Azure AD account for the approval push notification. Default: dummy@somemail.com (replace it)."
+    Write-Host "  -AutoShutdownHour <int>             Hour (0-23) the VM/VMSS auto-shut down. Default: 5."
+    Write-Host "  -DeploymentMaxAttempts / -DeploymentRetryDelaySeconds / -SqlWarmupRetryDelaySeconds"
+    Write-Host "                                      Retry tuning - sensible defaults, rarely need changing."
+    Write-Host ""
+    Write-Host "Full parameter reference: Get-Help .\Deploy.ps1 -Full"
+    Write-Host "Tip: copy config.json.example to config.json to skip retyping these every run."
+    Write-Host ""
+}
+
 if ($PSBoundParameters.Count -eq 0) {
-    Write-Host ""
-    Write-Host "Example: .\Deploy.ps1 -AdminPassword (Read-Host -Prompt 'Password' -AsSecureString)" -ForegroundColor Cyan
-    Write-Host ""
-    Get-Help -Full $PSCommandPath
-    return
+    $configPath = Join-Path $PSScriptRoot 'config.json'
+    $loadedFromConfig = $false
+
+    if (Test-Path $configPath) {
+        $answer = Read-Host -Prompt "Found config.json. Load config.json and proceed? (y/n)"
+        if ($answer -eq 'y' -or $answer -eq 'yes') {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            foreach ($prop in $config.PSObject.Properties) {
+                if ($prop.Name -like '//*') { continue }
+                if (Get-Variable -Name $prop.Name -Scope 0 -ErrorAction SilentlyContinue) {
+                    Set-Variable -Name $prop.Name -Value $prop.Value -Scope 0
+                }
+            }
+            $loadedFromConfig = $true
+        }
+    }
+
+    if (-not $loadedFromConfig) {
+        Show-UsageHelp
+        return
+    }
+
+    if (-not $AdminPassword) {
+        $AdminPassword = Read-Host -Prompt "Password" -AsSecureString
+    }
 }
 
 $ErrorActionPreference = 'Stop'
@@ -161,7 +205,7 @@ $ModuleMap = [ordered]@{
     '04' = @{ File = 'scripts/04-service-plan.bicep';   NeedsCredentials = $true;  Description = 'Horizontal + approval-gated vertical scaling - App Service' }
     '05' = @{ File = 'scripts/05-sql-database.bicep';   NeedsCredentials = $true;  Description = 'Scenario B - Azure SQL Serverless' }
     '06' = @{ File = 'scripts/06-automation.bicep';     NeedsCredentials = $false; Description = 'Automation - Logic Apps, alerts, runbooks' }
-    '07' = @{ File = 'scripts/07-dashboard.bicep';      NeedsCredentials = $false; Description = 'Monitoring dashboard - Azure Workbook (CPU/memory/disk/network, instance counts)' }
+    '07' = @{ File = 'scripts/07-dashboard.bicep';      NeedsCredentials = $false; Description = 'Monitoring dashboard - Azure Workbook (CPU/memory/disk, size/instance counts, scale-event history)' }
 }
 
 $DeployOrder = @('01', '05', '02', '03', '04', '06', '07')

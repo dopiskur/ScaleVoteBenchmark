@@ -23,6 +23,9 @@ appsettings.Local.json
 *.db-shm
 *.db-wal
 
+## Deploy.ps1 local config - template (config.json.example) stays tracked, the real file does not.
+config.json
+
 ## OS
 .DS_Store
 Thumbs.db
