@@ -210,6 +210,40 @@ queries in `scripts/modules/dashboard.bicep` if needed:
   charts) adds a small amount of Log Analytics ingestion volume — negligible for a demo
   workspace, but not zero.
 
+## Estimated cost
+
+Pay-as-you-go, East US, retail prices (no reserved instances/savings plans, no free
+subscription credit), all default parameter values (`baseCapacity = 1`, default SKUs).
+This is the **baseline while everything is actively deployed and in use** — the biggest
+lever you have to reduce it is simply not leaving resources up when you're not
+demoing (see "Tearing down" below), or deploying only the modules for the scenario
+you're actually showing (`-Mode Single`).
+
+| Resource | Daily | Monthly | Notes |
+|---|---:|---:|---|
+| VM (02) — `Standard_B1s` + 30GB disk + Standard public IP | $0.43 | $12.78 | Roughly doubles while resized to `Standard_B1ms` during the vertical-scaling demo; that's a short-lived spike, not a sustained cost. |
+| VM Scale Set (03) — 1× `Standard_B1s` + disk + Standard Load Balancer + public IP | $1.03 | $31.03 | Scales close to linearly up to 4 instances under load — the Load Balancer and public IP are flat regardless of instance count, only compute+disk multiply. |
+| App Service Plan (04) — `P0v3` | $1.89 | $56.58 | PaaS — bills 24/7 regardless of traffic, can't be deallocated like a VM. Also scales toward 4× under load (and briefly to `P1v3` for the approval-gated scenario). |
+| Azure SQL Database (05) — Serverless GP Gen5, 0.5–4 vCore | $6.37 | $191.02 | **Largest line item.** Assumes the database stays active (default `autoPauseDelay` is 24h of inactivity before it pauses) — a demo in regular use rarely goes 24h idle. If it does auto-pause, this drops to just storage cost (well under $1/month). |
+| Log Analytics workspace (01) | $0.69 | $20.70 | Estimated ingestion (~0.3 GB/day) from `AllMetrics` on every resource, the two Autoscale/Logic App diagnostic logs, and the Azure Monitor Agent counters — scales up with instance count and how much load-testing you actually run. |
+| Automation Account + Logic Apps + metric alerts (06) | $0.00 | $0.00 | Free-tier Automation SKU and low execution volume keep this inside the free monthly allowances. |
+| Azure Workbook dashboard (07) | $0.00 | $0.00 | The Workbook resource itself is free; it only reads the Log Analytics data already counted above. |
+| **Total** | **~$10.40** | **~$312** | |
+
+A few things worth knowing before treating this as a budget:
+- SQL Serverless dominates the total specifically because it's assumed to stay active.
+  If you're demoing intermittently, letting it auto-pause (or lowering
+  `autoPauseDelayMinutes`) is the single biggest cost lever here.
+- If everything is left running continuously at **maximum** scale (VMSS and App Service
+  both at 4 instances, VM parked at `B1ms`), the realistic ceiling is roughly
+  **1.5–1.7× this total** (~$500/month) — but autoscale only holds that ceiling while
+  load is actually being generated, not by default.
+- Prices retrieved from the [Azure Retail Prices API](https://prices.azure.com/api/retail/prices)
+  on 2026-08-05; Azure pricing changes over time and by negotiated agreement, so treat
+  this as a planning estimate, not an invoice — re-check with the
+  [Azure Pricing Calculator](https://azure.microsoft.com/en-us/pricing/calculator/) before
+  relying on it for a real budget.
+
 ## Tearing down
 
 Either run the Automation runbook (`teardown-runbook.ps1`, uploaded and published by
