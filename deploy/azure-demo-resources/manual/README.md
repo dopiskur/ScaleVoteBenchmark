@@ -106,8 +106,8 @@ App), since Azure requires this regardless of which subscription deploys them.
 
 Both the VM and the VMSS install and configure the ScaleTrigger app automatically via
 cloud-init: .NET 10, the app itself, a systemd service, and Nginx as a reverse proxy on
-ports 80 and 443 (self-signed certificate). The App Service deploys the app directly
-from the public GitHub repository.
+port 443 (self-signed certificate), with port 80 redirecting to it. The App Service
+deploys the app directly from the public GitHub repository.
 
 ## Monitoring dashboard (module 07)
 
