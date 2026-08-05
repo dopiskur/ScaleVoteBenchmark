@@ -147,9 +147,21 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 | `GET /api/nodebenchmark/hardware` | anonymous | Detects the hosting environment (Azure App Service/Container Apps, AWS ECS/EC2, Kubernetes, generic Docker, bare metal) and reports CPU/memory/disk |
 | `POST /api/nodebenchmark/run` | optional | Runs a one-off CPU/memory/disk saturation benchmark on the current node (~20s by default) |
 
+## Node benchmark: a fast load baseline
+
+Picking a `Load:*` range by hand is guesswork: what does `CpuIterationsPerVote = 50000` even mean on this particular node? `POST /api/nodebenchmark/run` answers that in about 20 seconds instead of a trial-and-error series of load-test runs. It benchmarks the current node in isolation, no vote traffic involved, in three steps:
+
+1. **CPU**: chained SHA-512 hashing on every logical processor at once (dedicated threads, not the thread pool, so a benchmark taken mid-load-test isn't starved by concurrent request handling) for `NodeBenchmark:CpuDurationSeconds` (default 20s); score is total hashes/sec summed across cores.
+2. **Memory**: repeatedly fills a `NodeBenchmark:MemoryBlockMegabytes` buffer (default 64 MB) `NodeBenchmark:MemoryRepetitions` times (default 5); score is MB/sec, from the median fill time.
+3. **Disk**: repeatedly writes and deletes a `NodeBenchmark:DiskSizeMegabytes` file (default 20 MB, real I/O via `WriteThrough` + `Flush(true)`) `NodeBenchmark:DiskRepetitions` times (default 5); score is MB/sec, from the median write time.
+
+`GET /api/nodebenchmark/hardware` (anonymous, cached after the first call) reports the detected hosting environment (Azure App Service/Container Apps, AWS ECS/EC2, Kubernetes, generic Docker, bare metal) plus processor count, total memory, and disk size, so the scores above have context without needing to check the portal.
+
+The dashboard's "Run benchmark" button uses the CPU score specifically to suggest a ready-to-use `CpuIterationsPerVote` range for a target vote count (see "CPU calibration" below) - the fastest path from "just deployed" to "load config that actually reflects this node's capacity."
+
 ## Dashboard
 
-A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. It needs no login regardless of `Auth:Enabled`.
+A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. Loading the dashboard itself needs no login, but with `Auth:Enabled = true` its admin actions (saving `LoadConfig` changes, resetting the schema, running the benchmark) prompt for one on the first `401`, same as calling those endpoints directly.
 
 **CPU calibration:** "Run benchmark" measures the node's raw CPU throughput (`R_total`), then suggests a `CpuIterationsPerVote` range for a target vote count `N` you set (default 100): Max = `0.8 * (R_total / N)` - 80% of the per-vote fair share of total capacity - Min = 50% of Max. "Set recommended" fills in the Min/Max fields above (still needs "Save changes" to persist).
 
