@@ -69,15 +69,12 @@ App), same as `manual/`.
 ## Structure
 
 ```
-main.bicep             - entry point (subscription scope), what the button deploys
-main.json              - compiled from main.bicep, what the button URL points at
-createUiDefinition.json - a 3-step portal wizard (Basics/Naming/Scaling behavior) for
-                         nicer UX than the default flat parameter list - written, but
-                         not currently wired to the button; see "Portal wizard" below
-modules/               - same modules as manual/scripts/modules, except automation.bicep
-                         (rewritten to publish runbooks / register the schedule natively)
-scripts/               - the same two runbook scripts as manual/, published from here by URL
-README.md              - this file
+main.bicep - entry point (subscription scope), what the button deploys
+main.json  - compiled from main.bicep, what the button URL points at
+modules/   - same modules as manual/scripts/modules, except automation.bicep
+             (rewritten to publish runbooks / register the schedule natively)
+scripts/   - the same two runbook scripts as manual/, published from here by URL
+README.md  - this file
 ```
 
 ### Keeping main.json in sync
@@ -87,35 +84,34 @@ README.md              - this file
 `modules/`) and commits the regenerated `main.json` back to the branch automatically —
 you never need to run `az bicep build` by hand after editing the template, though
 `az bicep build --file main.bicep` locally is the fastest way to check an edit before
-pushing. `createUiDefinition.json` needs no build step - it's committed as plain JSON.
+pushing.
 
-### Portal wizard (not currently used)
+### Why there's no portal wizard
 
-`createUiDefinition.json` is a working 3-step Form view wizard (Basics/Naming/Scaling
-behavior) for a nicer deploy experience than the portal's default flat, alphabetical
-parameter list - but it's **not wired into the button above**. Getting a Form view
-wizard (the newer `uiFormDefinition.schema.json` format, delivered via the
-`uiFormDefinitionUri` portal URL parameter) working through the generic "Deploy a
-custom template" blade for a *subscription-scope* template hit the same
+A nicer, multi-step deploy wizard (instead of the portal's default flat, alphabetical
+parameter list) was attempted here and abandoned after repeated portal-side failures.
+Both the classic `createUiDefinition.json` format (Azure Managed Applications) and the
+newer `uiFormDefinition.schema.json` Form view format (delivered via the
+`uiFormDefinitionUri` portal URL parameter) were tried against the generic "Deploy a
+custom template" blade for this *subscription-scope* template; the Form view attempt
+got as far as the Review step before crashing identically twice in a row —
 `getFormTemplateDeploymentOptions: Cannot read properties of undefined (reading
-'location')` crash in `Microsoft_Azure_CreateUIDef` across multiple attempts,
-including after switching the scope picker from standalone
-`SubscriptionSelector`/`LocationSelector` elements to the composite
-`Microsoft.Common.ResourceScope` control (the one pattern an official Microsoft
-tutorial demonstrates working end-to-end) - identical error both times, which points
-at a bug or unsupported combination somewhere in that code path for
+'location')` in `Microsoft_Azure_CreateUIDef` — once with standalone
+`SubscriptionSelector`/`LocationSelector` elements and again after switching to the
+composite `Microsoft.Common.ResourceScope` control (the one pattern an official
+Microsoft tutorial demonstrates working end-to-end). The identical error surviving that
+change points at a bug or unsupported combination in how the portal handles
 `view.outputs.kind: "Subscription"` outside an actual Template Spec resource, not at
-anything fixable by editing this JSON further.
+anything fixable by further editing.
 
-The button therefore points at `main.json` alone (`Microsoft.Template/uri/...`, no
-`createUIDefinitionUri`/`uiFormDefinitionUri` suffix), which uses the portal's
-standard, always-reliable flat parameter list - only 8 parameters, 1 required, so
-that's not much of a downside. `createUiDefinition.json` is left in the repo since
-it's the correct, tested-as-far-as-possible artifact for the one context this schema
-is actually documented for: an actual `Microsoft.Resources/templateSpecs` resource
-(`az ts create --ui-form-definition createUiDefinition.json ...`), which someone could
-still use if they package this template as a Template Spec instead of deploying it via
-the raw URI.
+The button points at `main.json` alone (`Microsoft.Template/uri/...`, no
+`createUIDefinitionUri`/`uiFormDefinitionUri` suffix) — the portal's standard,
+always-reliable flat parameter list. Not much of a downside for 8 parameters, 1 of
+them required. If someone wants to revisit this: Form view is documented almost
+entirely around actual `Microsoft.Resources/templateSpecs` resources
+(`az ts create --ui-form-definition ...`), which is a genuinely different delivery
+mechanism from the raw-URI button and untested here — that's the more promising
+starting point than retrying the raw-URI path again.
 
 ## What gets deployed
 
@@ -214,9 +210,6 @@ Portal UI):
 - Confirm the `daily-vmss-shutdown` schedule's `jobSchedules` link actually triggers the
   `Stop-ScaleSetInstances` runbook with the right `VmssResourceGroup`/`VmssName`
   parameters at its first scheduled run.
-- `createUiDefinition.json` is not currently wired to the button - see "Portal wizard
-  (not currently used)" above for why, and check there before spending more time
-  investigating a portal-side wizard error against this template.
 
 ## Estimated cost
 
