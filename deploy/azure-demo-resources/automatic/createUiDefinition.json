@@ -1,0 +1,125 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "basics": [
+      {
+        "name": "introText",
+        "type": "Microsoft.Common.TextBlock",
+        "options": {
+          "text": "Provisions five Azure scaling scenarios (VM, VM Scale Set, App Service, Azure SQL Serverless) plus a live monitoring dashboard, each running ScaleTrigger - six resource groups in total, named from the prefixes on the next step. Estimated cost at these defaults: roughly $10/day, $312/month while left running (see the automatic/README.md for the full breakdown)."
+        }
+      },
+      {
+        "name": "adminUsername",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Admin username",
+        "defaultValue": "demoadmin",
+        "toolTip": "Administrator login for the VM, VM Scale Set, and SQL Server.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-zA-Z][a-zA-Z0-9-]{2,19}$",
+          "validationMessage": "3-20 characters, must start with a letter; letters, digits, and hyphens only."
+        }
+      },
+      {
+        "name": "adminPasswordControl",
+        "type": "Microsoft.Common.PasswordBox",
+        "label": {
+          "password": "Admin password",
+          "confirmPassword": "Confirm password"
+        },
+        "toolTip": "Administrator password for the VM, VM Scale Set, and SQL Server - the only field with no default. Must meet Azure's password complexity rules: 12+ characters, at least 3 of lowercase / uppercase / digit / special character. Only the length is checked here; the full rule is enforced by Azure at deployment time.",
+        "constraints": {
+          "required": true,
+          "regex": "^.{12,}$",
+          "validationMessage": "At least 12 characters."
+        },
+        "options": {
+          "hideConfirmation": false
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "naming",
+        "label": "Naming",
+        "elements": [
+          {
+            "name": "resourceGroupPrefix",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resource group prefix",
+            "defaultValue": "ScaleTriggerDemo",
+            "toolTip": "Applied to all six resource group names, e.g. \"<prefix>-SingleVM\".",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,60}$",
+              "validationMessage": "1-61 characters: letters, digits, periods, underscores, hyphens."
+            }
+          },
+          {
+            "name": "resourcePrefix",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Resource name prefix",
+            "defaultValue": "ScaleTrigger",
+            "toolTip": "Applied to resource names inside those groups, e.g. \"<prefix>-vm\". The SQL Server and Web App additionally get a random suffix appended to stay globally unique.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z][a-zA-Z0-9-]{0,20}$",
+              "validationMessage": "1-21 characters, must start with a letter; letters, digits, and hyphens only."
+            }
+          }
+        ]
+      },
+      {
+        "name": "scalingBehavior",
+        "label": "Scaling behavior",
+        "elements": [
+          {
+            "name": "approvalNotificationUpn",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Approval notification account (UPN)",
+            "defaultValue": "",
+            "placeholder": "you@example.com",
+            "toolTip": "Azure AD account that receives a push notification (Azure mobile app) when the App Service plan's approval-gated vertical scaling alert fires. Leave blank to use a placeholder that notifies no one - fine for trying the rest of the demo, but that one scenario won't do anything useful until you set a real account here.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "validationMessage": "Enter a valid email/UPN, or leave blank."
+            }
+          },
+          {
+            "name": "autoShutdownEnabled",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Automatically shut down the VM Scale Set daily",
+            "defaultValue": true,
+            "toolTip": "Limits cost when the demo is left idle. The single VM always gets its own shutdown schedule regardless of this setting."
+          },
+          {
+            "name": "autoShutdownHour",
+            "type": "Microsoft.Common.Slider",
+            "label": "Auto-shutdown hour (UTC)",
+            "defaultValue": 5,
+            "min": 0,
+            "max": 23,
+            "step": 1,
+            "showStepMarkers": false,
+            "toolTip": "UTC hour (0-23) the daily shutdown fires - kept in UTC rather than converted to a local time zone.",
+            "visible": "[steps('scalingBehavior').autoShutdownEnabled]"
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": {
+    "location": "[location()]",
+    "adminUsername": "[basics('adminUsername')]",
+    "adminPassword": "[basics('adminPasswordControl').password]",
+    "resourceGroupPrefix": "[steps('naming').resourceGroupPrefix]",
+    "resourcePrefix": "[steps('naming').resourcePrefix]",
+    "approvalNotificationUpn": "[if(empty(steps('scalingBehavior').approvalNotificationUpn), 'dummy@somemail.com', steps('scalingBehavior').approvalNotificationUpn)]",
+    "autoShutdownEnabled": "[steps('scalingBehavior').autoShutdownEnabled]",
+    "autoShutdownHour": "[int(steps('scalingBehavior').autoShutdownHour)]"
+  }
+}

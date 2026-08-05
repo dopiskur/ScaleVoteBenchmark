@@ -5,7 +5,13 @@ scenarios (VM, VM Scale Set, App Service, Azure SQL Serverless) plus a live moni
 dashboard, each running [ScaleTrigger](https://github.com/dopiskur/scaleTrigger) — but
 as a **single Bicep template**, deployable with one click and no PowerShell.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2FcreateUiDefinition.json)
+
+The button opens a 3-step wizard (`createUiDefinition.json`) instead of the portal's
+default flat, alphabetical parameter list - Basics (admin credentials), Naming (the two
+prefixes), and Scaling behavior (approval notification account, auto-shutdown). Deploying
+by hand via `az deployment sub create` (below) skips the wizard entirely and talks
+straight to `main.bicep` - `createUiDefinition.json` only affects the button.
 
 Click it, fill in a password (the only required field), and deploy. Everything else —
 resource groups, the VM/VMSS/App Service/SQL scenarios, the monitoring dashboard, and
@@ -69,12 +75,15 @@ App), same as `manual/`.
 ## Structure
 
 ```
-main.bicep       - entry point (subscription scope), what the button deploys
-main.json        - compiled from main.bicep, what the button URL actually points at
-modules/         - same modules as manual/scripts/modules, except automation.bicep
-                   (rewritten to publish runbooks / register the schedule natively)
-scripts/         - the same two runbook scripts as manual/, published from here by URL
-README.md        - this file
+main.bicep             - entry point (subscription scope), what the button deploys
+main.json              - compiled from main.bicep, what the button URL points at
+createUiDefinition.json - the button's 3-step portal wizard (Basics/Naming/Scaling
+                         behavior) instead of a flat parameter list; irrelevant to
+                         `az deployment sub create`, which talks to main.bicep directly
+modules/               - same modules as manual/scripts/modules, except automation.bicep
+                         (rewritten to publish runbooks / register the schedule natively)
+scripts/               - the same two runbook scripts as manual/, published from here by URL
+README.md              - this file
 ```
 
 ### Keeping main.json in sync
@@ -84,7 +93,8 @@ README.md        - this file
 `modules/`) and commits the regenerated `main.json` back to the branch automatically —
 you never need to run `az bicep build` by hand after editing the template, though
 `az bicep build --file main.bicep` locally is the fastest way to check an edit before
-pushing.
+pushing. `createUiDefinition.json` needs no build step - it's committed as plain JSON
+and takes effect as soon as it's pushed.
 
 ## What gets deployed
 
@@ -183,6 +193,11 @@ Portal UI):
 - Confirm the `daily-vmss-shutdown` schedule's `jobSchedules` link actually triggers the
   `Stop-ScaleSetInstances` runbook with the right `VmssResourceGroup`/`VmssName`
   parameters at its first scheduled run.
+- Click through the `createUiDefinition.json` wizard once and confirm the values it
+  collects (especially the Slider-driven `autoShutdownHour` and the conditional
+  `approvalNotificationUpn` fallback to `dummy@somemail.com`) land on the actual
+  deployment as expected — this file was written against the documented
+  CreateUiDefinition schema but not run through the Portal's sandbox tester.
 
 ## Estimated cost
 
