@@ -5,7 +5,7 @@ scenarios (VM, VM Scale Set, App Service, Azure SQL Serverless) plus a live moni
 dashboard, each running [ScaleTrigger](https://github.com/dopiskur/scaleTrigger) — but
 as a **single Bicep template**, deployable with one click and no PowerShell.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2FcreateUiDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2FcreateUiDefinition.json)
 
 The button opens a 3-step wizard (`createUiDefinition.json`) instead of the portal's
 default flat, alphabetical parameter list - Basics (admin credentials), Naming (the two
@@ -193,11 +193,20 @@ Portal UI):
 - Confirm the `daily-vmss-shutdown` schedule's `jobSchedules` link actually triggers the
   `Stop-ScaleSetInstances` runbook with the right `VmssResourceGroup`/`VmssName`
   parameters at its first scheduled run.
-- Click through the `createUiDefinition.json` wizard once and confirm the values it
-  collects (especially the Slider-driven `autoShutdownHour` and the conditional
-  `approvalNotificationUpn` fallback to `dummy@somemail.com`) land on the actual
-  deployment as expected — this file was written against the documented
-  CreateUiDefinition schema but not run through the Portal's sandbox tester.
+- The wizard (`createUiDefinition.json`, delivered via the `uiFormDefinitionUri`
+  portal URL parameter) is the least battle-tested part of this whole folder — it's
+  been through two rounds of portal errors already (a schema mismatch, then a
+  render-time crash) while getting it working, and Microsoft's own docs mostly
+  describe this schema in the context of Template Specs rather than a plain
+  `Microsoft.Template/uri` custom deployment. If the button still errors, the
+  portal's own "Click here to fall back to the default experience" link (or just
+  dropping the `/uiFormDefinitionUri/...` suffix from the URL entirely) always gets
+  you the standard flat parameter list instead — that path talks to `main.bicep`
+  directly and has no dependency on this file working.
+- If the wizard does load, click through it once and confirm the values it collects
+  (especially the Slider-driven `autoShutdownHour`, the Subscription/Region pickers,
+  and the conditional `approvalNotificationUpn` fallback to `dummy@somemail.com`)
+  land on the actual deployment as expected.
 
 ## Estimated cost
 
