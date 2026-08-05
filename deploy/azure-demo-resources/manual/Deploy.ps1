@@ -244,38 +244,49 @@ function Ensure-ClientFirewallRule {
     }
 }
 
+function Test-SqlPortReachable {
+    param(
+        [string]$SqlServerFqdn,
+        [int]$TimeoutMs = 5000
+    )
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $connectTask = $client.ConnectAsync($SqlServerFqdn, 1433)
+        if (-not $connectTask.Wait($TimeoutMs)) {
+            return $false
+        }
+        return $client.Connected
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
 function Wait-ForSqlReady {
     param(
         [string]$SqlResourceGroupName,
         [string]$SqlServerName,
-        [string]$SqlServerFqdn,
-        [string]$SqlDatabaseName
+        [string]$SqlServerFqdn
     )
 
     Ensure-ClientFirewallRule -SqlResourceGroupName $SqlResourceGroupName -SqlServerName $SqlServerName
 
-    $plainPassword = Get-PlainPassword
-    $connectionString = "Server=tcp:$SqlServerFqdn,1433;Database=$SqlDatabaseName;User ID=$AdminUsername;Password=$plainPassword;Encrypt=True;TrustServerCertificate=False;Connect Timeout=10;"
-
     $deadline = (Get-Date).AddMinutes(10)
     $attempt = 0
-    $lastError = $null
     while ((Get-Date) -lt $deadline) {
         $attempt++
-        try {
-            $conn = New-Object System.Data.SqlClient.SqlConnection $connectionString
-            $conn.Open()
-            $conn.Close()
+        if (Test-SqlPortReachable -SqlServerFqdn $SqlServerFqdn) {
             return
         }
-        catch {
-            $lastError = $_
-            Write-Host "Attempt $attempt failed ($($_.Exception.Message.Split("`n")[0])), retrying in ${SqlWarmupRetryDelaySeconds}s ..." -ForegroundColor Yellow
-            Start-Sleep -Seconds $SqlWarmupRetryDelaySeconds
-        }
+        Write-Host "Attempt ${attempt}: port 1433 not reachable yet on $SqlServerFqdn, retrying in ${SqlWarmupRetryDelaySeconds}s ..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $SqlWarmupRetryDelaySeconds
     }
 
-    throw "SQL Database did not become reachable within 10 minutes. Last error: $($lastError.Exception.Message)"
+    throw "SQL Database did not become reachable within 10 minutes."
 }
 
 function Deploy-ScaleTriggerModule {
@@ -366,8 +377,7 @@ function Deploy-ScaleTriggerModule {
         Wait-ForSqlReady `
             -SqlResourceGroupName $result.Outputs.resourceGroupName.Value `
             -SqlServerName $script:SqlServerName `
-            -SqlServerFqdn $script:SqlServerFqdn `
-            -SqlDatabaseName "$ResourcePrefix-sqldb"
+            -SqlServerFqdn $script:SqlServerFqdn
     }
 
     if ($Id -eq '06') {
