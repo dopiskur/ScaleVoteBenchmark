@@ -17,27 +17,12 @@
               }
             },
             {
-              "name": "subscription",
-              "type": "Microsoft.Common.SubscriptionSelector",
-              "constraints": {
-                "validations": [
-                  {
-                    "isValid": "[not(empty(steps('basics').subscription.subscriptionId))]",
-                    "message": "Select a subscription."
-                  }
-                ]
-              },
-              "visible": true
-            },
-            {
-              "name": "location",
-              "type": "Microsoft.Common.LocationSelector",
-              "label": "Region",
-              "toolTip": "Azure region for every resource this template creates.",
-              "scope": {
-                "subscriptionId": "[steps('basics').subscription.subscriptionId]"
-              },
-              "visible": true
+              "name": "resourceScope",
+              "type": "Microsoft.Common.ResourceScope",
+              "location": {
+                "label": "Region",
+                "toolTip": "Azure region for every resource this template creates."
+              }
             },
             {
               "name": "adminUsername",
@@ -148,10 +133,10 @@
     },
     "outputs": {
       "kind": "Subscription",
-      "subscriptionId": "[steps('basics').subscription.subscriptionId]",
-      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('basics').resourceScope.subscription.subscriptionId]",
+      "location": "[steps('basics').resourceScope.location.name]",
       "parameters": {
-        "location": "[steps('basics').location.name]",
+        "location": "[steps('basics').resourceScope.location.name]",
         "adminUsername": "[steps('basics').adminUsername]",
         "adminPassword": "[steps('basics').adminPasswordControl.password]",
         "resourceGroupPrefix": "[steps('naming').resourceGroupPrefix]",

@@ -195,13 +195,20 @@ Portal UI):
   parameters at its first scheduled run.
 - The wizard (`createUiDefinition.json`, delivered via the `uiFormDefinitionUri`
   portal URL parameter) is the least battle-tested part of this whole folder — it's
-  been through two rounds of portal errors already (a schema mismatch, then a
-  render-time crash) while getting it working, and Microsoft's own docs mostly
-  describe this schema in the context of Template Specs rather than a plain
-  `Microsoft.Template/uri` custom deployment. If the button still errors, the
-  portal's own "Click here to fall back to the default experience" link (or just
-  dropping the `/uiFormDefinitionUri/...` suffix from the URL entirely) always gets
-  you the standard flat parameter list instead — that path talks to `main.bicep`
+  been through three rounds of portal errors already (a schema mismatch, a
+  render-time crash, then a crash building the deployment options at the Review
+  step) while getting it working, and Microsoft's own docs mostly describe this
+  schema in the context of Template Specs rather than a plain `Microsoft.Template/uri`
+  custom deployment. The Basics step now uses the composite
+  `Microsoft.Common.ResourceScope` control (subscription + region in one picker)
+  instead of separate Subscription/Location selectors, since it's the only pattern
+  an official Microsoft tutorial demonstrates working end-to-end — if it still shows
+  a resource-group field even though this template doesn't use one, that's expected
+  and harmless, just don't read anything into whatever you pick there. If the button
+  still errors, the portal's own "Click here to fall back to the default experience"
+  link (or just dropping the `/uiFormDefinitionUri/...` suffix from the URL
+  entirely) always gets you the standard flat parameter list instead — that path
+  talks to `main.bicep`
   directly and has no dependency on this file working.
 - If the wizard does load, click through it once and confirm the values it collects
   (especially the Slider-driven `autoShutdownHour`, the Subscription/Region pickers,
