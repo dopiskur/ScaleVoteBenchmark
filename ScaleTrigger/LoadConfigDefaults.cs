@@ -2,10 +2,10 @@ using ScaleTrigger.Models;
 
 namespace ScaleTrigger
 {
-    /// <summary>Reads LoadConfig's seed values from appsettings.json's "Load" section; keep in sync with LoadConfigApiController.KnownSettingNames.</summary>
+    /// <summary>Reads LoadConfig's seed values from appsettings.json's "Load" section; SettingNames is also the source of truth for LoadConfigApiController's validation.</summary>
     public static class LoadConfigDefaults
     {
-        private static readonly string[] SettingNames =
+        public static readonly string[] SettingNames =
         {
             "CpuIterationsPerVote",
             "MemoryKilobytesPerVote",

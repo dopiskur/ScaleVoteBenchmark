@@ -85,6 +85,14 @@ namespace ScaleTrigger.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<VoteReport>> VoteReportGet()
         {
+            // With CacheEnabled off (used to benchmark database read load in isolation), skip the
+            // lock entirely - otherwise every concurrent request would serialize on it for nothing,
+            // since GetItem/SetItem are no-ops anyway.
+            if (loadConfigCache.Get("CacheEnabled").Min <= 0)
+            {
+                return await FetchReportAsync();
+            }
+
             var cached = repoFactory.GetCache().GetItem<VoteReport>(ReportCacheKey);
             if (cached != null)
             {
@@ -101,27 +109,34 @@ namespace ScaleTrigger.Controllers
                     return Ok(cached);
                 }
 
-                int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
-
-                var repo = repoFactory.GetRepo();
-                VoteReport report;
-                try
-                {
-                    report = await repo.VoteReportGetAsync();
-                }
-                catch (Exception ex)
-                {
-                    return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(repo.ClassifyException(ex)));
-                }
-
-                repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
-
-                return Ok(report);
+                return await FetchReportAsync(cacheResult: true);
             }
             finally
             {
                 ReportFetchLock.Release();
             }
+        }
+
+        private async Task<ActionResult<VoteReport>> FetchReportAsync(bool cacheResult = false)
+        {
+            var repo = repoFactory.GetRepo();
+            VoteReport report;
+            try
+            {
+                report = await repo.VoteReportGetAsync();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(repo.ClassifyException(ex)));
+            }
+
+            if (cacheResult)
+            {
+                int slidingExpiration = int.Parse(configuration["Cache:SlidingExpirationMinutes"] ?? "5");
+                repoFactory.GetCache().SetItem(ReportCacheKey, report, slidingExpiration);
+            }
+
+            return Ok(report);
         }
 
         /// <summary>Drops and recreates the schema, so the database ends up looking brand new.</summary>

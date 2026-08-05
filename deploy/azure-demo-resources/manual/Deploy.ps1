@@ -447,7 +447,7 @@ function Deploy-All {
         Deploy-ScaleTriggerModule -Id $id
     }
     Write-Host ""
-    Write-Host "All six modules deployed." -ForegroundColor Green
+    Write-Host "All seven modules deployed." -ForegroundColor Green
 }
 
 $context = Get-AzContext
@@ -460,7 +460,7 @@ if ($SubscriptionId) {
 
 if (-not $Mode) {
     Write-Host ""
-    Write-Host "1) Deploy All     - all six templates, in order ($($DeployOrder -join ' -> '))"
+    Write-Host "1) Deploy All     - all seven templates, in order ($($DeployOrder -join ' -> '))"
     Write-Host "2) Deploy Single  - one selected template"
     $choice = Read-Host -Prompt "Enter 1 or 2"
     switch ($choice) {
@@ -475,7 +475,7 @@ if ($Mode -eq 'Single' -and -not $Module) {
     foreach ($id in $ModuleMap.Keys) {
         Write-Host "  $id - $($ModuleMap[$id].Description)"
     }
-    $Module = Read-Host -Prompt "Enter module number (01-06)"
+    $Module = Read-Host -Prompt "Enter module number (01-07)"
 }
 
 switch ($Mode) {

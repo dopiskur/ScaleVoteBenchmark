@@ -8,19 +8,6 @@ namespace ScaleTrigger.Controllers
     [Route("api/loadconfig")]
     public class LoadConfigApiController : ControllerBase
     {
-        private static readonly string[] KnownSettingNames =
-        {
-            "CpuIterationsPerVote",
-            "MemoryKilobytesPerVote",
-            "DiskWriteKilobytesPerVote",
-            "NetworkLatencyMillisecondsPerVote",
-            "PayloadBytesPerVote",
-            "DbCpuIterationsPerVote",
-            "ConfigRefresh",
-            "CacheEnabled",
-            "LoadEnabled"
-        };
-
         /// <summary>Per-setting ceiling on Max, scaled to what each unit can safely allocate/block on per vote (memory/disk bytes, latency ms), not just an arbitrary shared number.</summary>
         private static readonly Dictionary<string, int> MaxAllowedValues = new()
         {
@@ -72,7 +59,7 @@ namespace ScaleTrigger.Controllers
 
             foreach (var setting in settings)
             {
-                if (!KnownSettingNames.Contains(setting.SettingName))
+                if (!LoadConfigDefaults.SettingNames.Contains(setting.SettingName))
                 {
                     return BadRequest($"Unknown setting name: '{setting.SettingName}'.");
                 }
