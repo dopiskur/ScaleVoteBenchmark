@@ -15,6 +15,9 @@ param logAnalyticsWorkspaceId string
 param sqlResourceGroupName string
 param adminUsername string
 
+@description('Seconds to wait after creating the App Service Plan before anything creates a metric alert against it - Azure Monitor briefly reports CpuPercentage as an unknown metric for a just-created serverfarms resource.')
+param appServicePlanMetricWaitSeconds int = 120
+
 @secure()
 param adminPassword string
 
@@ -31,6 +34,31 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   kind: 'linux'
   sku: { name: skuName }
   properties: { reserved: true }
+}
+
+// Same eventual-consistency issue as InsightsMetrics in log-analytics.bicep: ARM reports
+// the plan created before Azure Monitor's metric definitions for it are queryable, failing
+// both this module's own autoscale rule and automation.bicep's alertPlan with "Couldn't
+// find a metric named CpuPercentage".
+resource waitForAppServicePlanMetrics 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
+  name: 'wait-for-app-service-plan-metrics'
+  location: location
+  kind: 'AzurePowerShell'
+  properties: {
+    azPowerShellVersion: '14.0'
+    retentionInterval: 'PT1H'
+    cleanupPreference: 'OnSuccess'
+    timeout: 'PT10M'
+    arguments: '-waitSeconds ${appServicePlanMetricWaitSeconds}'
+    scriptContent: '''
+      param([int] $waitSeconds)
+      Write-Host "Waiting $waitSeconds seconds for the App Service Plan CpuPercentage metric to become queryable before anything creates an alert or autoscale rule against it."
+      Start-Sleep -Seconds $waitSeconds
+    '''
+  }
+  dependsOn: [
+    appServicePlan
+  ]
 }
 
 resource appService 'Microsoft.Web/sites@2023-12-01' = {
@@ -135,6 +163,9 @@ resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = {
       }
     ]
   }
+  dependsOn: [
+    waitForAppServicePlanMetrics
+  ]
 }
 
 resource diagnosticsPlan 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {

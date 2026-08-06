@@ -211,6 +211,13 @@ provisions is actually queryable - without it, the VM/VMSS modules fail with
 (`vmInsightsPropagationWaitSeconds` in `modules/log-analytics.bicep`, default 600s)
 wasn't long enough for that region/run; increase it and redeploy.
 
+**App Service Plan deploy can fail with `Couldn't find a metric named CpuPercentage`:**
+same class of issue - the plan reports "Succeeded" before Azure Monitor's metric
+definitions for it are actually queryable, so both the plan's own autoscale rule and
+automation.bicep's `alertPlan` can fail if they're created too soon after it. Mitigated
+the same way (`appServicePlanMetricWaitSeconds` in `modules/service-plan.bicep`, default
+120s); if you still hit it, increase that and redeploy.
+
 **Redeploying on top of a previous failed attempt can fail with `Conflict` / `A
 jobSchedule with same id already exists`:** the daily VMSS-stop job schedule is
 registered by a `deploymentScripts` resource instead of the declarative `jobSchedules`

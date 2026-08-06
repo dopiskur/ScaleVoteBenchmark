@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "5640929663289262531"
+      "templateHash": "4220909611208483922"
     }
   },
   "parameters": {
@@ -1827,7 +1827,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "7930856682838280384"
+              "templateHash": "2387624736715389895"
             }
           },
           "parameters": {
@@ -1886,6 +1886,13 @@
             "adminUsername": {
               "type": "string"
             },
+            "appServicePlanMetricWaitSeconds": {
+              "type": "int",
+              "defaultValue": 120,
+              "metadata": {
+                "description": "Seconds to wait after creating the App Service Plan before anything creates a metric alert against it - Azure Monitor briefly reports CpuPercentage as an unknown metric for a just-created serverfarms resource."
+              }
+            },
             "adminPassword": {
               "type": "securestring"
             }
@@ -1911,6 +1918,24 @@
               "properties": {
                 "reserved": true
               }
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "wait-for-app-service-plan-metrics",
+              "location": "[parameters('location')]",
+              "kind": "AzurePowerShell",
+              "properties": {
+                "azPowerShellVersion": "14.0",
+                "retentionInterval": "PT1H",
+                "cleanupPreference": "OnSuccess",
+                "timeout": "PT10M",
+                "arguments": "[format('-waitSeconds {0}', parameters('appServicePlanMetricWaitSeconds'))]",
+                "scriptContent": "      param([int] $waitSeconds)\n      Write-Host \"Waiting $waitSeconds seconds for the App Service Plan CpuPercentage metric to become queryable before anything creates an alert or autoscale rule against it.\"\n      Start-Sleep -Seconds $waitSeconds\n    "
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+              ]
             },
             {
               "type": "Microsoft.Web/sites",
@@ -2143,7 +2168,8 @@
                 ]
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "[resourceId('Microsoft.Resources/deploymentScripts', 'wait-for-app-service-plan-metrics')]"
               ]
             },
             {
