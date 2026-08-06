@@ -185,7 +185,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-vm-resize"
         ApiUrl          = "https://<vm-public-ip-or-dns>"
-        LoadArgs        = "--ramp true --votes 100 --duration 1200"
+        LoadArgs        = "--ramp true --ramp-step 25 --votes 100 --duration 1200"
     }
 
     ScenarioB = @{
@@ -195,7 +195,7 @@ $Config = @{
         MetricName      = "cpu_percent"
         MetricNamespace = "Microsoft.Sql/servers/databases"
         ApiUrl          = "https://<scaletrigger-instance-url-for-db-test>"
-        LoadArgs        = "--ramp true --votes 100 --duration 1200"
+        LoadArgs        = "--ramp true --ramp-step 25 --votes 100 --duration 1200"
     }
 
     ScenarioC = @{
@@ -206,7 +206,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-plan-resize-approval"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 100 --duration 2400"
+        LoadArgs        = "--ramp true --ramp-step 25 --votes 100 --duration 2400"
     }
 
     ScenarioVMSS = @{
@@ -215,7 +215,7 @@ $Config = @{
         MetricName      = "Percentage CPU"
         MetricNamespace = "Microsoft.Compute/virtualMachineScaleSets"
         ApiUrl          = "http://<scaleset-lb-public-ip>"
-        LoadArgs        = "--ramp true --votes 100 --duration 900"
+        LoadArgs        = "--ramp true --ramp-step 25 --votes 100 --duration 900"
     }
 
     ScenarioAppService = @{
@@ -224,7 +224,7 @@ $Config = @{
         MetricName      = "CpuPercentage"
         MetricNamespace = "Microsoft.Web/serverfarms"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 100 --duration 900"
+        LoadArgs        = "--ramp true --ramp-step 25 --votes 100 --duration 900"
     }
 }
 
