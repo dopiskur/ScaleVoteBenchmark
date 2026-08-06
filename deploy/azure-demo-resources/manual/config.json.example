@@ -19,6 +19,7 @@
   "ApprovalNotificationUpn": "you@example.com",
 
   "AutoShutdownHour": 5,
+  "AutoShutdownEnabled": true,
   "DeploymentMaxAttempts": 5,
   "DeploymentRetryDelaySeconds": 60,
   "SqlWarmupRetryDelaySeconds": 15

@@ -67,6 +67,11 @@
     idle. Default: 5 (05:00). Applies to module 02's own auto-shutdown schedule and to
     module 06's daily VMSS-stop runbook schedule.
 
+.PARAMETER AutoShutdownEnabled
+    Whether module 06 creates the daily VMSS-stop runbook and its schedule at all.
+    Default: $true. Set to $false to leave the VM Scale Set running continuously (the
+    VM's own module 02 auto-shutdown schedule is unaffected either way).
+
 .PARAMETER DeploymentMaxAttempts
     How many times to retry a module's deployment when it fails with the known
     transient "metric not yet available on a freshly created resource" error. Default:
@@ -115,6 +120,8 @@ param(
 
     [int]$AutoShutdownHour = 5,
 
+    [bool]$AutoShutdownEnabled = $true,
+
     [int]$DeploymentMaxAttempts = 5,
     [int]$DeploymentRetryDelaySeconds = 60,
 
@@ -137,6 +144,7 @@ function Show-UsageHelp {
     Write-Host "  -Location <string>                 Azure region. Default: eastus."
     Write-Host "  -ApprovalNotificationUpn <string>  Azure AD account for the approval push notification. Default: dummy@somemail.com (replace it)."
     Write-Host "  -AutoShutdownHour <int>             Hour (0-23) the VM/VMSS auto-shut down. Default: 5."
+    Write-Host "  -AutoShutdownEnabled <bool>         Whether module 06 creates the daily VMSS-stop schedule at all. Default: `$true."
     Write-Host "  -DeploymentMaxAttempts / -DeploymentRetryDelaySeconds / -SqlWarmupRetryDelaySeconds"
     Write-Host "                                      Retry tuning - sensible defaults, rarely need changing."
     Write-Host ""
@@ -406,6 +414,7 @@ function Deploy-ScaleTriggerModule {
         $paramObject['servicePlanResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['logAnalyticsResourceGroupPrefix'] = $ResourceGroupPrefix
         $paramObject['approvalNotificationUpn'] = $ApprovalNotificationUpn
+        $paramObject['autoShutdownEnabled'] = $AutoShutdownEnabled
     }
     if ($Id -eq '07') {
         $paramObject['singleVmResourceGroupPrefix'] = $ResourceGroupPrefix

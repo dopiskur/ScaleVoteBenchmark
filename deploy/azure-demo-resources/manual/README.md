@@ -198,7 +198,9 @@ queries in `scripts/modules/dashboard.bicep` if needed:
 
 - The VM and VMSS shut down automatically at 05:00 local time to limit cost when idle.
   Autoscale settings are untouched, so scaling still works correctly the next time they
-  are started.
+  are started. Pass `-AutoShutdownEnabled $false` to skip creating module 06's daily
+  VMSS-stop schedule if you want the Scale Set to keep running continuously (module 02's
+  own VM shutdown schedule is separate and unaffected).
 - The App Service plan has no automatic shutdown; PaaS plans cannot be deallocated the
   way a VM can, only deleted and recreated.
 - `Deploy.ps1` retries automatically on two known transient conditions: a metric not yet
