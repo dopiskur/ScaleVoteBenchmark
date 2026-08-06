@@ -2,6 +2,9 @@ param resourcePrefix string = 'ScaleTrigger'
 param location string = resourceGroup().location
 param retentionInDays int = 30
 
+@description('Seconds to wait after enabling the VM Insights solution before anything creates a data collection rule against this workspace. The solution resource reports success in ARM well before the InsightsMetrics table it provisions is actually queryable - this is a fixed wait, not a poll, because confirming table readiness would need an authenticated identity/RBAC for no real gain in reliability over a generous fixed delay.')
+param vmInsightsPropagationWaitSeconds int = 600
+
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${resourcePrefix}-logs'
   location: location
@@ -16,7 +19,8 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 // DCR creation is validated against the table existing already, not created lazily on
 // first ingestion. Enabling the VM Insights solution provisions it (and the other
 // VMInsights tables) up front. Deploy.ps1 already runs module 01 (this one) to
-// completion before modules 02/03 that create DCRs, so no extra ordering is needed here.
+// completion before modules 02/03 that create DCRs, but that alone isn't enough - see
+// waitForVmInsightsTables below.
 resource vmInsightsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
   name: 'VMInsights(${workspace.name})'
   location: location
@@ -29,6 +33,33 @@ resource vmInsightsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01
   properties: {
     workspaceResourceId: workspace.id
   }
+}
+
+// vmInsightsSolution reporting "Succeeded" in ARM does not mean InsightsMetrics is
+// queryable yet - that table's actual creation happens asynchronously behind the
+// solution resource and has been observed to lag by several minutes, which fails DCR
+// creation in single-vm.bicep/scale-set.bicep with "InvalidOutputTable" even though
+// module 01 already finishes before modules 02/03 start. This resource exists purely to
+// burn time; it needs no identity because it makes no Azure API calls.
+resource waitForVmInsightsTables 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
+  name: 'wait-for-vminsights-tables'
+  location: location
+  kind: 'AzurePowerShell'
+  properties: {
+    azPowerShellVersion: '14.0'
+    retentionInterval: 'PT1H'
+    cleanupPreference: 'OnSuccess'
+    timeout: 'PT20M'
+    arguments: '-waitSeconds ${vmInsightsPropagationWaitSeconds}'
+    scriptContent: '''
+      param([int] $waitSeconds)
+      Write-Host "Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it."
+      Start-Sleep -Seconds $waitSeconds
+    '''
+  }
+  dependsOn: [
+    vmInsightsSolution
+  ]
 }
 
 output workspaceResourceId string = workspace.id

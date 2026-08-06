@@ -196,6 +196,15 @@ queries in `scripts/modules/dashboard.bicep` if needed:
 
 ## Cost and reliability notes
 
+- Module 01 (Log Analytics) takes noticeably longer than it looks like it should - after
+  enabling the VM Insights solution, it deliberately waits (~10 minutes by default,
+  `vmInsightsPropagationWaitSeconds` in `modules/log-analytics.bicep`) before letting
+  anything create a data collection rule against the workspace. The wait exists because
+  the solution reports "Succeeded" in ARM well before the `InsightsMetrics` table it
+  provisions is actually queryable - without it, modules 02/03 fail with
+  `InvalidOutputTable`. If you ever see that error again, the default wait wasn't long
+  enough for that region/run; increase `vmInsightsPropagationWaitSeconds` and redeploy
+  module 01 before retrying 02/03.
 - The VM and VMSS shut down automatically at 05:00 local time to limit cost when idle.
   Autoscale settings are untouched, so scaling still works correctly the next time they
   are started. Pass `-AutoShutdownEnabled $false` to skip creating module 06's daily
@@ -233,6 +242,10 @@ you're actually showing (`-Mode Single`).
 | **Total** | **~$10.40** | **~$312** | |
 
 A few things worth knowing before treating this as a budget:
+- Not in the table because it's one-time, not recurring: module 01 briefly spins up a
+  Container Instance and a storage account (auto-deleted after the run) to wait out the
+  VM Insights table propagation delay described in "Cost and reliability notes" above —
+  a few cents at most.
 - SQL Serverless dominates the total specifically because the $191.02 figure assumes the
   database runs 24/7 with no idle gap over 24h. It doesn't have to: by default it
   auto-pauses itself automatically once nothing has queried it for `autoPauseDelayMinutes`

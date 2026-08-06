@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15815096655150351661"
+      "templateHash": "10423643138269850197"
     }
   },
   "parameters": {
@@ -129,7 +129,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12352936713447652356"
+              "templateHash": "10064653385550116189"
             }
           },
           "parameters": {
@@ -144,6 +144,13 @@
             "retentionInDays": {
               "type": "int",
               "defaultValue": 30
+            },
+            "vmInsightsPropagationWaitSeconds": {
+              "type": "int",
+              "defaultValue": 600,
+              "metadata": {
+                "description": "Seconds to wait after enabling the VM Insights solution before anything creates a data collection rule against this workspace. The solution resource reports success in ARM well before the InsightsMetrics table it provisions is actually queryable - this is a fixed wait, not a poll, because confirming table readiness would need an authenticated identity/RBAC for no real gain in reliability over a generous fixed delay."
+              }
             }
           },
           "resources": [
@@ -175,6 +182,24 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "wait-for-vminsights-tables",
+              "location": "[parameters('location')]",
+              "kind": "AzurePowerShell",
+              "properties": {
+                "azPowerShellVersion": "14.0",
+                "retentionInterval": "PT1H",
+                "cleanupPreference": "OnSuccess",
+                "timeout": "PT20M",
+                "arguments": "[format('-waitSeconds {0}', parameters('vmInsightsPropagationWaitSeconds'))]",
+                "scriptContent": "      param([int] $waitSeconds)\r\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\r\n      Start-Sleep -Seconds $waitSeconds\r\n    "
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationsManagement/solutions', format('VMInsights({0})', format('{0}-logs', parameters('resourcePrefix'))))]"
               ]
             }
           ],

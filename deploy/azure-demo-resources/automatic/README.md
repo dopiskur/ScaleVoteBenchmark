@@ -198,6 +198,15 @@ closer to instant but still only update when the workbook itself refreshes.
 Two categories of thing worth verifying once, since neither can be fully checked
 without a live subscription:
 
+**Deploy takes ~10 minutes longer than it looks like it should:** module 01 (Log
+Analytics) enables the VM Insights solution, then deliberately waits before letting
+anything create a data collection rule against the workspace. The wait exists because
+the solution reports "Succeeded" in ARM well before the `InsightsMetrics` table it
+provisions is actually queryable — without it, `deploy-single-vm`/`deploy-scale-set` fail
+with `InvalidOutputTable`. If you ever see that error again, the wait
+(`vmInsightsPropagationWaitSeconds`, default 600) wasn't long enough for that region/run;
+increase it and redeploy.
+
 **Same as `manual/`** (this workbook is hand-authored JSON, not built through the
 Portal UI):
 - Open the `InsightsMetrics` table in Log Analytics and confirm the `Namespace`/`Name`
@@ -239,6 +248,13 @@ Prices retrieved from the [Azure Retail Prices API](https://prices.azure.com/api
 on 2026-08-05 for East US, pay-as-you-go — re-check with the
 [Azure Pricing Calculator](https://azure.microsoft.com/en-us/pricing/calculator/) before
 treating this as a real budget.
+
+Not in the table because it's one-time, not recurring: module 01 includes a
+`deploymentScripts` resource that waits ~10 minutes after enabling the VM Insights
+solution before anything creates a data collection rule against the workspace (see
+"First-deploy checklist" above for why). It briefly spins up a Container Instance and a
+storage account, both auto-deleted after the run — a few cents at most, and the reason
+the overall deployment takes noticeably longer than just the sum of its resources.
 
 ## Tearing down
 
