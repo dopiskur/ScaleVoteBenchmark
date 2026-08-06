@@ -1004,9 +1004,15 @@ if ($Scenario -ne 'Report') {
     Write-Host "`nAll foreground scenarios are done. Result CSV files are in: $Path" -ForegroundColor Green
 
     if ($scenarioCJob) {
-        if ($scenarioCJob.State -eq 'Completed') {
-            Receive-Job -Job $scenarioCJob | Out-Null
-            Write-Host "Scenario C (background job) has finished in the meantime as well." -ForegroundColor Green
+        if ($scenarioCJob.State -in @('Completed', 'Failed', 'Stopped')) {
+            $jobErrors = $null
+            Receive-Job -Job $scenarioCJob -ErrorAction SilentlyContinue -ErrorVariable jobErrors | Out-Null
+            if ($scenarioCJob.State -eq 'Completed' -and -not $jobErrors) {
+                Write-Host "Scenario C (background job) has finished in the meantime as well." -ForegroundColor Green
+            } else {
+                Write-Warning "Scenario C's background job did not finish successfully (state: $($scenarioCJob.State)) - ScenarioC_AppServicePlan.csv was likely never written."
+                foreach ($jobError in $jobErrors) { Write-Warning "  $jobError" }
+            }
         } else {
             Write-Host "`nScenario C is still waiting for your approval (manually triggering the Logic App after the push notification)." -ForegroundColor Yellow
             Write-Host "Don't close this PowerShell window until you do - the job is running in the background (Job Id $($scenarioCJob.Id))." -ForegroundColor Yellow
