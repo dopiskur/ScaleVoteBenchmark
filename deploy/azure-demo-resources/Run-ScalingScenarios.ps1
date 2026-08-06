@@ -174,6 +174,9 @@ $Config = @{
 
     LogAnalyticsWorkspaceId = "<workspace-id-for-$ResourcePrefix-logs-in-$ResourceGroupPrefix-Logs>"
 
+    # Both resize Logic Apps (la-vm-resize, la-plan-resize-approval) live here, not in the VM/plan's own resource group.
+    AutomationResourceGroup = "$ResourceGroupPrefix-Automation"
+
     ScenarioA = @{
         ResourceGroup   = "$ResourceGroupPrefix-SingleVM"
         VMName          = "$ResourcePrefix-vm"
@@ -598,7 +601,7 @@ function Invoke-ScenarioA {
 
     $alarmRun = $null
     if ($thresholdTime) {
-        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $cfg.ResourceGroup -LogicAppName $cfg.LogicAppName `
+        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
             -AfterUtc $thresholdTime -TimeoutMinutes 20
     }
 
@@ -688,7 +691,7 @@ function Invoke-ScenarioC {
 
     $alarmRun = $null
     if ($thresholdTime) {
-        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $cfg.ResourceGroup -LogicAppName $cfg.LogicAppName `
+        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
             -AfterUtc $thresholdTime -TimeoutMinutes $ScenarioCTimeoutMinutes
     }
 
