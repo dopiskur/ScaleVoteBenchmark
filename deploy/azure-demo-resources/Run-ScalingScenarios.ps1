@@ -108,17 +108,14 @@ param(
     [string]$AppServiceApiUrl,
     [string]$VmssApiUrl,
 
-    # Every scenario has Auth:Enabled=true from these exact values - no "no auth" case here.
     [string]$AdminUsername = "demoadmin",
     [string]$AdminPassword,
 
     [int]$DbCpuIterationsMin = 5000,
     [int]$DbCpuIterationsMax = 5000,
 
-    # Target vote count (N) for the CPU calibration formula - same default as the dashboard.
     [int]$BenchmarkTargetVotes = 100,
 
-    # Anchored to $PSScriptRoot so it works regardless of cwd (see .NOTES for the caveat).
     [string]$PythonExe = "python",
     [string]$LoadScriptPath = (Join-Path $PSScriptRoot "..\..\scripts\scaleTriggerLoad.py"),
 
@@ -165,23 +162,18 @@ if (-not $Scenario -or -not $Path -or ($Scenario -ne 'Report' -and -not $AdminPa
     return
 }
 
-# ============================================================================
 # CONFIGURATION - defaults, filled in by Resolve-DeployedResources/-XxxApiUrl below
-# ============================================================================
 
-# Two resource names include a random uniqueString() suffix at deploy time and can't be
-# derived from either prefix alone - Resolve-DeployedResources looks these up directly.
+# These two include a random uniqueString() suffix and can't be derived from a prefix alone - Resolve-DeployedResources looks them up directly.
 $sqlServerNamePlaceholder      = "<$ResourcePrefix-sqlserver-xxxxxxxxxxxxx>"
 $appServicePlanNamePlaceholder = "<app-service-plan-name>"
 
 $Config = @{
-    # Resolved after Assert-AzConnection runs, from -SubscriptionId if given, otherwise
-    # from whatever subscription ends up active in the Az context.
+    # Resolved after Assert-AzConnection runs: -SubscriptionId if given, else whatever's active.
     SubscriptionId          = $null
 
     LogAnalyticsWorkspaceId = "<workspace-id-for-$ResourcePrefix-logs-in-$ResourceGroupPrefix-Logs>"
 
-    # --- Scenario A: virtual machine (chapter 7.3.2) ---
     ScenarioA = @{
         ResourceGroup   = "$ResourceGroupPrefix-SingleVM"
         VMName          = "$ResourcePrefix-vm"
@@ -193,7 +185,6 @@ $Config = @{
         LoadArgs        = "--ramp true --votes 100 --duration 1200"
     }
 
-    # --- Scenario B: Azure SQL Serverless (chapter 7.3.3) ---
     ScenarioB = @{
         ResourceGroup   = "$ResourceGroupPrefix-Database"
         ServerName      = $sqlServerNamePlaceholder
@@ -204,7 +195,6 @@ $Config = @{
         LoadArgs        = "--ramp true --votes 100 --duration 1200"
     }
 
-    # --- Scenario C: App Service plan with human approval (chapter 7.3.4) ---
     ScenarioC = @{
         ResourceGroup   = "$ResourceGroupPrefix-ServicePlan"
         AppServicePlan  = $appServicePlanNamePlaceholder
@@ -216,7 +206,6 @@ $Config = @{
         LoadArgs        = "--ramp true --votes 100 --duration 2400"
     }
 
-    # --- Horizontal scaling: VMSS (chapter 7.4) ---
     ScenarioVMSS = @{
         ResourceGroup   = "$ResourceGroupPrefix-ScaleSet"
         VMSSName        = "$ResourcePrefix-vmss"
@@ -226,7 +215,6 @@ $Config = @{
         LoadArgs        = "--ramp true --votes 100 --duration 900"
     }
 
-    # --- Horizontal scaling: App Service plan (chapter 7.5) ---
     ScenarioAppService = @{
         ResourceGroup   = "$ResourceGroupPrefix-ServicePlan"
         AppServicePlan  = $appServicePlanNamePlaceholder
@@ -243,10 +231,7 @@ if ($DatabaseApiUrl)    { $Config.ScenarioB.ApiUrl = $DatabaseApiUrl }
 if ($AppServiceApiUrl)  { $Config.ScenarioC.ApiUrl = $AppServiceApiUrl; $Config.ScenarioAppService.ApiUrl = $AppServiceApiUrl }
 if ($VmssApiUrl)        { $Config.ScenarioVMSS.ApiUrl = $VmssApiUrl }
 
-# ============================================================================
-# TLS setup - VM/VMSS use a self-signed cert (Nginx); disable validation like scaleTriggerLoad.py does
-# ============================================================================
-
+# TLS setup - VM/VMSS use a self-signed cert (Nginx); disable validation like scaleTriggerLoad.py does.
 $script:authTokens = @{}
 
 if ($PSVersionTable.PSVersion.Major -lt 6) {
@@ -265,15 +250,8 @@ public class ScaleTriggerCertBypass : ICertificatePolicy {
     $script:restMethodCertArgs = @{ SkipCertificateCheck = $true }
 }
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
 function Resolve-DeployedResources {
-    <#
-        Fills in unset placeholder values by querying what's actually deployed, scoped to
-        $NeededScenarios; anything it can't find is left as-is with a Write-Warning.
-    #>
+    <# Fills in unset placeholder values by querying what's actually deployed, scoped to $NeededScenarios; anything it can't find is left as-is with a Write-Warning. #>
     param([string[]]$NeededScenarios)
 
     function Get-PublicEndpointUrl {
@@ -356,8 +334,7 @@ function Resolve-DeployedResources {
 
 function Assert-AzConnection {
     if ($AzContextPath -and (Test-Path $AzContextPath)) {
-        # Running inside a background job (scenario C) - reuses the login saved by the
-        # foreground process, instead of an interactive Connect-AzAccount.
+        # Running inside a background job (scenario C) - reuses the login saved by the foreground process.
         Import-AzContext -Path $AzContextPath | Out-Null
         return
     }
@@ -393,10 +370,7 @@ function Get-ScaleTriggerAuthToken {
 }
 
 function Invoke-ScaleTriggerApi {
-    <#
-        POSTs to a ScaleTrigger endpoint; logs in and retries once on 401, caching the
-        token per ApiUrl. Returns Success=$false (never throws) so callers can skip gracefully.
-    #>
+    <# POSTs to a ScaleTrigger endpoint; logs in and retries once on 401, caching the token per ApiUrl. Returns Success=$false (never throws) so callers can skip gracefully. #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
         [Parameter(Mandatory)] [string]$RoutePath,
@@ -435,10 +409,7 @@ function Invoke-ScaleTriggerApi {
 }
 
 function Set-RecommendedCpuLoad {
-    <#
-        Benchmarks the node and pushes a calibrated CpuIterationsPerVote via /api/loadconfig
-        (dashboard's "CPU calibration" formula). Non-fatal - warns and leaves it as-is on failure.
-    #>
+    <# Benchmarks the node and pushes a calibrated CpuIterationsPerVote via /api/loadconfig (dashboard's "CPU calibration" formula). Non-fatal - warns and leaves it as-is on failure. #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl
     )
@@ -533,7 +504,7 @@ function Wait-ForMetricThreshold {
 }
 
 function Get-ScalingActivityLog {
-    <# Runs the chapter 7.2.2 KQL query against AzureActivity for scaling/resize ops in the window. #>
+    <# Runs a KQL query against AzureActivity for scaling/resize ops in the window. #>
     param(
         [Parameter(Mandatory)] [string]$ResourceId,
         [Parameter(Mandatory)] [datetime]$FromUtc,
@@ -612,10 +583,6 @@ function Export-ActivityLog {
     return $file
 }
 
-# ============================================================================
-# SCENARIO A - VIRTUAL MACHINE (fully automatic, chapter 7.3.2)
-# ============================================================================
-
 function Invoke-ScenarioA {
     $cfg = $Config.ScenarioA
     $resourceId = "/subscriptions/$($Config.SubscriptionId)/resourceGroups/$($cfg.ResourceGroup)" +
@@ -663,10 +630,6 @@ function Invoke-ScenarioA {
     }
 }
 
-# ============================================================================
-# SCENARIO B - AZURE SQL SERVERLESS (built into the platform, chapter 7.3.3)
-# ============================================================================
-
 function Invoke-ScenarioB {
     $cfg = $Config.ScenarioB
     $resourceId = "/subscriptions/$($Config.SubscriptionId)/resourceGroups/$($cfg.ResourceGroup)" +
@@ -705,10 +668,6 @@ function Invoke-ScenarioB {
         Note                = "Assess the curve shape and the auto-pause wake-up latency manually from the attached CSV series."
     }
 }
-
-# ============================================================================
-# SCENARIO C - APP SERVICE PLAN WITH HUMAN APPROVAL (chapter 7.3.4)
-# ============================================================================
 
 function Invoke-ScenarioC {
     $cfg = $Config.ScenarioC
@@ -758,10 +717,6 @@ function Invoke-ScenarioC {
     }
 }
 
-# ============================================================================
-# HORIZONTAL SCALING - VMSS (chapter 7.4)
-# ============================================================================
-
 function Invoke-ScenarioVMSS {
     $cfg = $Config.ScenarioVMSS
     $resourceId = "/subscriptions/$($Config.SubscriptionId)/resourceGroups/$($cfg.ResourceGroup)" +
@@ -807,10 +762,6 @@ function Invoke-ScenarioVMSS {
     }
 }
 
-# ============================================================================
-# HORIZONTAL SCALING - APP SERVICE PLAN (chapter 7.5)
-# ============================================================================
-
 function Invoke-ScenarioAppService {
     $cfg = $Config.ScenarioAppService
     $resourceId = "/subscriptions/$($Config.SubscriptionId)/resourceGroups/$($cfg.ResourceGroup)" +
@@ -850,9 +801,7 @@ function Invoke-ScenarioAppService {
     }
 }
 
-# ============================================================================
-# HTML REPORT - ASSEMBLES ALL CSV RESULTS INTO ONE READABLE DOCUMENT
-# ============================================================================
+# HTML REPORT - assembles all CSV results into one readable document
 
 function ConvertTo-HtmlDataTable {
     <# Converts a CSV into an HTML table; prints a note instead if the file is missing/empty. #>
@@ -964,9 +913,7 @@ $reportSections
     return $reportPath
 }
 
-# ============================================================================
-# MAIN FLOW - RUNNING SCENARIOS ONE AT A TIME
-# ============================================================================
+# MAIN FLOW - running scenarios one at a time
 
 if (-not (Test-Path $Path)) {
     New-Item -ItemType Directory -Path $Path | Out-Null
