@@ -595,17 +595,22 @@ function Invoke-ScenarioA {
     $startingSize = $vmBefore.HardwareProfile.VmSize
 
     Set-RecommendedCpuLoad -ApiUrl $cfg.ApiUrl
-    $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
-    $thresholdTime = Wait-ForMetricThreshold -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
-        -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 25
-
+    $load = $null
+    $thresholdTime = $null
     $alarmRun = $null
-    if ($thresholdTime) {
-        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
-            -AfterUtc $thresholdTime -TimeoutMinutes 20
-    }
+    try {
+        $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
+        $thresholdTime = Wait-ForMetricThreshold -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
+            -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 25
 
-    Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+        if ($thresholdTime) {
+            $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
+                -AfterUtc $thresholdTime -TimeoutMinutes 20
+        }
+    }
+    finally {
+        if ($load) { Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue }
+    }
 
     $activity = if ($thresholdTime) {
         Get-ScalingActivityLog -ResourceId $resourceId -FromUtc $thresholdTime.AddMinutes(-1)
@@ -640,13 +645,18 @@ function Invoke-ScenarioB {
 
     Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'CpuIterationsPerVote' -MinValue 0 -MaxValue 0
     Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'DbCpuIterationsPerVote' -MinValue $DbCpuIterationsMin -MaxValue $DbCpuIterationsMax
-    $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
-    $startUtc = (Get-Date).ToUniversalTime()
+    $load = $null
+    $startUtc = $null
+    try {
+        $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
+        $startUtc = (Get-Date).ToUniversalTime()
 
-    Write-Host "Collecting the cpu_percent time series for 20 minutes to plot the scale-up curve..." -ForegroundColor Cyan
-    Start-Sleep -Seconds 1200
-
-    Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "Collecting the cpu_percent time series for 20 minutes to plot the scale-up curve..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 1200
+    }
+    finally {
+        if ($load) { Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue }
+    }
     Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'DbCpuIterationsPerVote' -MinValue 0 -MaxValue 0
     $endUtc = (Get-Date).ToUniversalTime()
 
@@ -681,21 +691,26 @@ function Invoke-ScenarioC {
     $startingTier = $planBefore.Sku.Name
 
     Set-RecommendedCpuLoad -ApiUrl $cfg.ApiUrl
-    $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
-    $thresholdTime = Wait-ForMetricThreshold -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
-        -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 45
-
-    Write-Host "" -ForegroundColor Yellow
-    Write-Host "The alert should send a push notification. Manually trigger the Logic App '$($cfg.LogicAppName)' in the Azure Portal ('Run Trigger' button) once you receive the notification." -ForegroundColor Yellow
-    Write-Host "The script is waiting to detect the Logic App run..." -ForegroundColor Yellow
-
+    $load = $null
+    $thresholdTime = $null
     $alarmRun = $null
-    if ($thresholdTime) {
-        $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
-            -AfterUtc $thresholdTime -TimeoutMinutes $ScenarioCTimeoutMinutes
-    }
+    try {
+        $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
+        $thresholdTime = Wait-ForMetricThreshold -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
+            -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 45
 
-    Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "" -ForegroundColor Yellow
+        Write-Host "The alert should send a push notification. Manually trigger the Logic App '$($cfg.LogicAppName)' in the Azure Portal ('Run Trigger' button) once you receive the notification." -ForegroundColor Yellow
+        Write-Host "The script is waiting to detect the Logic App run..." -ForegroundColor Yellow
+
+        if ($thresholdTime) {
+            $alarmRun = Wait-ForLogicAppRun -ResourceGroup $Config.AutomationResourceGroup -LogicAppName $cfg.LogicAppName `
+                -AfterUtc $thresholdTime -TimeoutMinutes $ScenarioCTimeoutMinutes
+        }
+    }
+    finally {
+        if ($load) { Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue }
+    }
 
     $planAfter = Get-AzAppServicePlan -ResourceGroupName $cfg.ResourceGroup -Name $cfg.AppServicePlan
     $endingTier = $planAfter.Sku.Name
@@ -729,22 +744,27 @@ function Invoke-ScenarioVMSS {
     $startingCapacity = $vmssBefore.Sku.Capacity
 
     Set-RecommendedCpuLoad -ApiUrl $cfg.ApiUrl
-    $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
-    $startUtc = (Get-Date).ToUniversalTime()
-
+    $load = $null
+    $startUtc = $null
     $capacityIncreaseTime = $null
-    $deadline = (Get-Date).AddMinutes(20)
-    while ((Get-Date) -lt $deadline) {
-        $current = Get-AzVmss -ResourceGroupName $cfg.ResourceGroup -VMScaleSetName $cfg.VMSSName
-        if ($current.Sku.Capacity -gt $startingCapacity) {
-            $capacityIncreaseTime = (Get-Date).ToUniversalTime()
-            Write-Host "Instance count increased from $startingCapacity to $($current.Sku.Capacity) at $capacityIncreaseTime" -ForegroundColor Green
-            break
-        }
-        Start-Sleep -Seconds 15
-    }
+    try {
+        $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
+        $startUtc = (Get-Date).ToUniversalTime()
 
-    Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+        $deadline = (Get-Date).AddMinutes(20)
+        while ((Get-Date) -lt $deadline) {
+            $current = Get-AzVmss -ResourceGroupName $cfg.ResourceGroup -VMScaleSetName $cfg.VMSSName
+            if ($current.Sku.Capacity -gt $startingCapacity) {
+                $capacityIncreaseTime = (Get-Date).ToUniversalTime()
+                Write-Host "Instance count increased from $startingCapacity to $($current.Sku.Capacity) at $capacityIncreaseTime" -ForegroundColor Green
+                break
+            }
+            Start-Sleep -Seconds 15
+        }
+    }
+    finally {
+        if ($load) { Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue }
+    }
 
     $activity = if ($capacityIncreaseTime) {
         Get-ScalingActivityLog -ResourceId $resourceId -FromUtc $startUtc -ToUtc $capacityIncreaseTime
@@ -774,22 +794,27 @@ function Invoke-ScenarioAppService {
     $startingCapacity = $planBefore.Sku.Capacity
 
     Set-RecommendedCpuLoad -ApiUrl $cfg.ApiUrl
-    $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
-    $startUtc = (Get-Date).ToUniversalTime()
-
+    $load = $null
+    $startUtc = $null
     $capacityIncreaseTime = $null
-    $deadline = (Get-Date).AddMinutes(20)
-    while ((Get-Date) -lt $deadline) {
-        $current = Get-AzAppServicePlan -ResourceGroupName $cfg.ResourceGroup -Name $cfg.AppServicePlan
-        if ($current.Sku.Capacity -gt $startingCapacity) {
-            $capacityIncreaseTime = (Get-Date).ToUniversalTime()
-            Write-Host "Instance count increased from $startingCapacity to $($current.Sku.Capacity) at $capacityIncreaseTime" -ForegroundColor Green
-            break
-        }
-        Start-Sleep -Seconds 15
-    }
+    try {
+        $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
+        $startUtc = (Get-Date).ToUniversalTime()
 
-    Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+        $deadline = (Get-Date).AddMinutes(20)
+        while ((Get-Date) -lt $deadline) {
+            $current = Get-AzAppServicePlan -ResourceGroupName $cfg.ResourceGroup -Name $cfg.AppServicePlan
+            if ($current.Sku.Capacity -gt $startingCapacity) {
+                $capacityIncreaseTime = (Get-Date).ToUniversalTime()
+                Write-Host "Instance count increased from $startingCapacity to $($current.Sku.Capacity) at $capacityIncreaseTime" -ForegroundColor Green
+                break
+            }
+            Start-Sleep -Seconds 15
+        }
+    }
+    finally {
+        if ($load) { Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue }
+    }
 
     $planFinal = Get-AzAppServicePlan -ResourceGroupName $cfg.ResourceGroup -Name $cfg.AppServicePlan
 
