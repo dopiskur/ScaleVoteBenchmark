@@ -14,6 +14,14 @@
     Missing Az modules (Az.Accounts, Az.Resources, Az.Automation, Az.Sql) and the Bicep
     CLI are installed automatically on first run.
 
+    Before deploying module 05 (Azure SQL), a pre-flight check registers the Microsoft.Sql
+    resource provider automatically if needed, and verifies the requested SKU/vCore count
+    is offered in -Location and that the regional server quota isn't exhausted. This is
+    meant to fail fast with a clear reason instead of dying mid-deployment; a subscription-
+    level vCore quota shortfall can still only be caught when Azure actually rejects the
+    deployment, at which point the error is re-thrown with an explanation instead of a raw
+    stack trace.
+
 .PARAMETER Mode
     'All' deploys all seven templates in the required order. 'Single' deploys only one,
     selected via -Module. If omitted, an interactive menu is shown.
@@ -289,6 +297,77 @@ function Wait-ForSqlReady {
     throw "SQL Database did not become reachable within 10 minutes."
 }
 
+function Test-SqlPrerequisites {
+    param(
+        [string]$Location,
+        [int]$RequestedMaxVCores = 4
+    )
+
+    Write-Host "    Checking Azure SQL prerequisites (region: $Location) ..." -ForegroundColor Cyan
+
+    # 1. Resource provider registration - the most common cause of a deployment dying
+    #    partway through with no useful error: Microsoft.Sql was never registered on
+    #    this subscription. Auto-register and wait, rather than failing.
+    $provider = Get-AzResourceProvider -ProviderNamespace 'Microsoft.Sql'
+    if ($provider.RegistrationState -ne 'Registered') {
+        Write-Host "    Microsoft.Sql resource provider is '$($provider.RegistrationState)' - registering ..." -ForegroundColor Yellow
+        Register-AzResourceProvider -ProviderNamespace 'Microsoft.Sql' | Out-Null
+
+        $deadline = (Get-Date).AddMinutes(5)
+        do {
+            Start-Sleep -Seconds 10
+            $provider = Get-AzResourceProvider -ProviderNamespace 'Microsoft.Sql'
+        } while ($provider.RegistrationState -ne 'Registered' -and (Get-Date) -lt $deadline)
+
+        if ($provider.RegistrationState -ne 'Registered') {
+            throw "Pre-flight validation failed: Microsoft.Sql resource provider did not finish registering within 5 minutes (state: $($provider.RegistrationState)). Check status with 'Get-AzResourceProvider -ProviderNamespace Microsoft.Sql' and re-run once it shows 'Registered'."
+        }
+        Write-Host "    Microsoft.Sql resource provider registered." -ForegroundColor Green
+    }
+
+    # 2. Regional capability - is GP_S_Gen5 (GeneralPurpose Serverless, Gen5) at the
+    #    requested vCore count actually offered in this region for this subscription?
+    try {
+        $capability = Get-AzSqlCapability -LocationName $Location -ErrorAction Stop
+        $edition = $capability.SupportedServerVersions |
+            Select-Object -ExpandProperty SupportedEditions |
+            Where-Object { $_.Name -eq 'GeneralPurpose' } |
+            Select-Object -First 1
+
+        $matchingObjectives = $edition.SupportedServiceObjectives |
+            Where-Object { $_.Name -eq 'GP_S_Gen5' -and $_.Capacity -eq $RequestedMaxVCores }
+
+        if (-not $matchingObjectives) {
+            throw "Pre-flight validation failed: 'GP_S_Gen5' at $RequestedMaxVCores vCores (GeneralPurpose Serverless, Gen5) is not offered in region '$Location' for this subscription. Pick a different -Location and retry."
+        }
+        if (($matchingObjectives | Select-Object -First 1).Status -eq 'Disabled') {
+            throw "Pre-flight validation failed: 'GP_S_Gen5' at $RequestedMaxVCores vCores is currently disabled/unavailable in region '$Location' - a regional capacity limit, not a config problem. Pick a different -Location and retry."
+        }
+    }
+    catch {
+        if ($_.Exception.Message -like 'Pre-flight validation failed*') { throw }
+        Write-Host "    Could not verify regional SQL capability for '$Location' - skipping that check ($($_.Exception.Message))." -ForegroundColor Yellow
+    }
+
+    # 3. Logical server quota in this region (default cap is 20 servers/subscription/region).
+    try {
+        $subId = (Get-AzContext).Subscription.Id
+        $usageResponse = Invoke-AzRestMethod -Method GET -Path "/subscriptions/$subId/providers/Microsoft.Sql/locations/$Location/usages?api-version=2014-04-01"
+        if ($usageResponse.StatusCode -eq 200) {
+            $serverQuota = ($usageResponse.Content | ConvertFrom-Json).value | Where-Object { $_.name.value -eq 'ServerQuota' }
+            if ($serverQuota -and $serverQuota.currentValue -ge $serverQuota.limit) {
+                throw "Pre-flight validation failed: Azure SQL logical server quota reached in '$Location' ($($serverQuota.currentValue)/$($serverQuota.limit) servers). Delete an unused SQL server in this region, request a quota increase, or deploy to a different -Location."
+            }
+        }
+    }
+    catch {
+        if ($_.Exception.Message -like 'Pre-flight validation failed*') { throw }
+        Write-Host "    Could not verify SQL server quota for '$Location' - skipping that check ($($_.Exception.Message))." -ForegroundColor Yellow
+    }
+
+    Write-Host "    SQL prerequisites OK." -ForegroundColor Green
+}
+
 function Deploy-ScaleTriggerModule {
     param([string]$Id)
 
@@ -298,6 +377,10 @@ function Deploy-ScaleTriggerModule {
 
     Write-Host ""
     Write-Host "==> [$Id] $($info.Description)" -ForegroundColor Cyan
+
+    if ($Id -eq '05') {
+        Test-SqlPrerequisites -Location $Location -RequestedMaxVCores 4
+    }
 
     $paramObject = @{
         resourceGroupPrefix = $ResourceGroupPrefix
@@ -357,11 +440,20 @@ function Deploy-ScaleTriggerModule {
         }
         catch {
             $isMetricNotReadyYet = $_.Exception.Message -like "*Couldn't find a metric named*"
-            if (-not $isMetricNotReadyYet -or $attempt -eq $DeploymentMaxAttempts) {
-                throw
+            if ($isMetricNotReadyYet -and $attempt -lt $DeploymentMaxAttempts) {
+                Write-Host "    Metric not yet available on newly created resource, retrying in ${DeploymentRetryDelaySeconds}s (attempt $attempt/$DeploymentMaxAttempts) ..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $DeploymentRetryDelaySeconds
+                continue
             }
-            Write-Host "    Metric not yet available on newly created resource, retrying in ${DeploymentRetryDelaySeconds}s (attempt $attempt/$DeploymentMaxAttempts) ..." -ForegroundColor Yellow
-            Start-Sleep -Seconds $DeploymentRetryDelaySeconds
+
+            if ($Id -eq '05') {
+                $isQuotaOrCapacity = $_.Exception.Message -match 'quota|vCore|capacity|not accepting creation|ServerQuota|exceed'
+                if ($isQuotaOrCapacity) {
+                    throw "SQL deployment failed - this looks like a vCore quota or regional capacity problem that the pre-flight check couldn't see in advance (subscription-level vCore quotas aren't exposed via a query API). Request a quota increase for 'GeneralPurpose Serverless Gen5' in '$Location', lower the vCore count, or deploy to a different -Location. Original error: $($_.Exception.Message)"
+                }
+            }
+
+            throw
         }
     }
 
