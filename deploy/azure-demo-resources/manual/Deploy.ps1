@@ -313,9 +313,7 @@ function Test-SqlPrerequisites {
 
     Write-Host "    Checking Azure SQL prerequisites (region: $Location) ..." -ForegroundColor Cyan
 
-    # 1. Resource provider registration - the most common cause of a deployment dying
-    #    partway through with no useful error: Microsoft.Sql was never registered on
-    #    this subscription. Auto-register and wait, rather than failing.
+    # 1. Resource provider registration - most common cause of a deploy dying with no useful error.
     $provider = Get-AzResourceProvider -ProviderNamespace 'Microsoft.Sql'
     if ($provider.RegistrationState -ne 'Registered') {
         Write-Host "    Microsoft.Sql resource provider is '$($provider.RegistrationState)' - registering ..." -ForegroundColor Yellow

@@ -2,7 +2,7 @@ param resourcePrefix string = 'ScaleTrigger'
 param location string = resourceGroup().location
 param retentionInDays int = 30
 
-@description('Seconds to wait after enabling the VM Insights solution before anything creates a data collection rule against this workspace. The solution resource reports success in ARM well before the InsightsMetrics table it provisions is actually queryable - this is a fixed wait, not a poll, because confirming table readiness would need an authenticated identity/RBAC for no real gain in reliability over a generous fixed delay.')
+@description('Seconds to wait after enabling VM Insights before any DCR references the workspace - ARM reports success before InsightsMetrics is actually queryable.')
 param vmInsightsPropagationWaitSeconds int = 600
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -14,11 +14,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-// The VM/VMSS scenarios' data collection rules stream 'Microsoft-InsightsMetrics' into
-// the built-in InsightsMetrics table, which a freshly created workspace doesn't have -
-// DCR creation is validated against the table existing already, not created lazily on
-// first ingestion. Enabling the VM Insights solution provisions it (and the other
-// VMInsights tables) up front.
+// DCR creation is validated against InsightsMetrics existing already - enabling VM Insights provisions it up front.
 resource vmInsightsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
   name: 'VMInsights(${workspace.name})'
   location: location
@@ -33,14 +29,8 @@ resource vmInsightsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01
   }
 }
 
-// vmInsightsSolution reporting "Succeeded" in ARM does not mean InsightsMetrics is
-// queryable yet - that table's actual creation happens asynchronously behind the
-// solution resource and has been observed to lag by several minutes, which fails DCR
-// creation in single-vm.bicep/scale-set.bicep with "InvalidOutputTable" even though the
-// dependency order above is already correct. This resource exists purely to burn time;
-// it needs no identity because it makes no Azure API calls. Anything that consumes
-// workspaceResourceId already waits for this whole module (including this resource), so
-// no extra dependsOn is needed on the DCR side.
+// "Succeeded" in ARM doesn't mean InsightsMetrics is queryable yet - real creation lags by minutes,
+// failing DCRs with "InvalidOutputTable". Pure time-burner, no identity needed (makes no API calls).
 resource waitForVmInsightsTables 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'wait-for-vminsights-tables'
   location: location

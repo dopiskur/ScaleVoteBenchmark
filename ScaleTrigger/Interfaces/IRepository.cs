@@ -18,13 +18,7 @@ namespace ScaleTrigger.Interfaces
         /// <summary>No-op if the schema already exists.</summary>
         Task EnsureSchemaAsync();
 
-        /// <summary>
-        /// Drops Vote, Payload and LoadConfig and shrinks the freed space.
-        /// Best-effort force-disconnects other connections first so this
-        /// can't hang behind an open transaction. Callers must follow up
-        /// with EnsureSchemaAsync() and LoadConfigEnsureSeededAsync() to
-        /// get a working schema back.
-        /// </summary>
+        /// <summary>Drops Vote, Payload and LoadConfig and shrinks the freed space; best-effort force-disconnects other connections first so this can't hang behind an open transaction. Callers must follow up with EnsureSchemaAsync() and LoadConfigEnsureSeededAsync() to get a working schema back.</summary>
         Task DropSchemaAsync();
 
         /// <summary>Creates LoadConfig if missing and seeds <paramref name="defaults"/> only if the table is still empty, so dashboard edits survive a later startup.</summary>

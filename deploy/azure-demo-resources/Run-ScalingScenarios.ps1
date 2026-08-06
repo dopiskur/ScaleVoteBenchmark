@@ -1,151 +1,85 @@
 <#
 .SYNOPSIS
-    Automated execution of the five scaling scenarios (A, B, C, VMSS, App Service)
-    and collection of the values needed to fill in the tables in chapter 7.
+    Drives load against the five scaling scenarios (A, B, C, VMSS, App Service) and
+    collects the timing values for chapter 7's tables.
 
 .DESCRIPTION
-    For each scenario, the script:
-      1. benchmarks the target node (POST /api/nodebenchmark/run) and pushes a
-         CpuIterationsPerVote range calibrated to its real throughput (POST
-         /api/loadconfig) - the same "Run benchmark" -> "Set recommended" calculation
-         the dashboard does, just automated per scenario instead of a one-time manual
-         click. Scenario B (SQL) sets a fixed DbCpuIterationsPerVote range instead -
-         there's no "benchmark the database" endpoint to calibrate from,
-      2. starts the load generator (scaleTriggerLoad.py) using the profile from chapter 7.2.1,
-      3. monitors the relevant Azure Monitor metric in the background until it crosses the
-         alert threshold,
-      4. once detected, queries the Log Analytics workspace (KQL, chapter 7.2.2) to retrieve
-         precise timestamps for the actual scaling operation,
-      5. prints the results to the screen and saves them to a CSV file ready to be copied
-         into the corresponding table in the paper.
+    Per scenario: benchmarks the node and calibrates CpuIterationsPerVote via
+    /api/loadconfig (dashboard's "CPU calibration" formula; scenario B sets a fixed
+    DbCpuIterationsPerVote instead - no benchmark endpoint exists for the database),
+    starts scaleTriggerLoad.py, polls Azure Monitor until the alert threshold crosses,
+    queries Log Analytics (KQL) for the exact scaling timestamp, and saves a CSV.
 
-    Every value that's specific to your subscription (each scenario's URL, the two resource
-    names with a random uniqueness suffix, the Log Analytics workspace ID) is auto-detected:
-    the script queries the actually-deployed resources in {ResourceGroupPrefix}-SingleVM/
-    -ScaleSet/-ServicePlan/-Database/-Logs directly, so a fresh deploy needs nothing more
-    than -ResourceGroupPrefix/-ResourcePrefix/-SubscriptionId to just work. The -XxxApiUrl
-    parameters below still work as explicit overrides for anything auto-detection gets
-    wrong, or when you want to point at something other than what's currently deployed.
+    URLs, resource names, and the workspace ID are auto-detected from
+    {ResourceGroupPrefix}-SingleVM/-ScaleSet/-ServicePlan/-Database/-Logs - a fresh
+    deploy needs only -ResourceGroupPrefix/-ResourcePrefix/-SubscriptionId.
+    -XxxApiUrl overrides anything auto-detection gets wrong.
 
-    Every azure-demo-resources deployment sets Auth:Enabled=true and configures the app's
-    AdminUser:Username/Password from the deployment's own -AdminUsername/-AdminPassword
-    (see cloud-init-scaletrigger.bicep / service-plan.bicep) - there is no case where this
-    demo runs without authentication, unlike a plain ScaleTrigger deployment. -AdminPassword
-    is therefore REQUIRED, same as it was at deploy time; it's used both for this script's
-    own benchmark/loadconfig calls and forwarded to scaleTriggerLoad.py (--username/
-    --password) so its login matches what's actually configured instead of the script's
-    admin:admin fallback.
+    Every scenario has Auth:Enabled=true with AdminUser set from the deployment's own
+    -AdminUsername/-AdminPassword, so -AdminPassword is REQUIRED - forwarded to this
+    script's own calls and to scaleTriggerLoad.py's --username/--password.
 
 .PARAMETER Scenario
-    Which scenario to run: A, B, C, VMSS, AppService, or All (in order, one at a time).
-    REQUIRED - there is no default. Running the script with no parameters at all (or
-    without -Scenario/-Path specifically) prints the usage block below and exits instead
-    of guessing.
+    A, B, C, VMSS, AppService, or All. REQUIRED - no parameters at all prints usage instead.
 
 .PARAMETER Path
-    Directory the result CSV/HTML files are saved to. REQUIRED - there is no default, so
-    generated files never land somewhere unexpected.
+    Directory for result CSV/HTML files. REQUIRED.
 
 .PARAMETER ResourceGroupPrefix
-    Which deployment to auto-detect resources from - used to build every resource group
-    name (e.g. "$ResourceGroupPrefix-SingleVM"). Matches -ResourceGroupPrefix in
-    Deploy.ps1 and the automatic Bicep template. Default: ScaleTriggerDemo.
+    Which deployment to auto-detect from. Matches Deploy.ps1's -ResourceGroupPrefix. Default: ScaleTriggerDemo.
 
 .PARAMETER ResourcePrefix
-    Which deployment to auto-detect resources from - used to build every resource name
-    (e.g. "$ResourcePrefix-vm" for the VM). Matches -ResourcePrefix in Deploy.ps1 and the
-    automatic Bicep template. Default: ScaleTrigger.
+    Which deployment to auto-detect from. Matches Deploy.ps1's -ResourcePrefix. Default: ScaleTrigger.
 
 .PARAMETER SubscriptionId
-    Optional. If provided, switches the active Az context to this subscription before
-    running. If omitted, whatever subscription is currently active in the Az context is
-    used.
+    Switches the active Az context if given; otherwise uses whatever's already active.
 
 .PARAMETER VmApiUrl
-    Overrides auto-detection for scenario A's ApiUrl (the VM's public IP or DNS name).
+    Overrides scenario A's auto-detected URL (the VM's public IP/DNS).
 
 .PARAMETER DatabaseApiUrl
-    Overrides auto-detection for scenario B's ApiUrl (the ScaleTrigger instance used for
-    the SQL scenario's DB load test - the App Service by default, since the VM uses local
-    SQLite and doesn't touch the shared Azure SQL database).
+    Overrides scenario B's auto-detected URL (defaults to the App Service - the VM uses local SQLite).
 
 .PARAMETER AppServiceApiUrl
-    Overrides auto-detection for scenario C's and scenario AppService's ApiUrl (both
-    point at the same Web App by default, so one override covers both scenarios).
+    Overrides scenario C's and AppService's URL (same Web App, one override covers both).
 
 .PARAMETER VmssApiUrl
-    Overrides auto-detection for scenario VMSS's ApiUrl (the Scale Set's load balancer
-    public IP).
+    Overrides scenario VMSS's auto-detected URL (the load balancer's public IP).
 
 .PARAMETER AdminUsername
-    Login for POST /api/auth/login - this demo always has Auth:Enabled=true, and the app's
-    AdminUser:Username is set from whatever -AdminUsername was passed to Deploy.ps1/the
-    automatic template at deploy time. Default: demoadmin, matching Deploy.ps1's own
-    default - override this if you deployed with a different -AdminUsername.
+    Login for /api/auth/login - whatever -AdminUsername was passed at deploy time. Default: demoadmin.
 
 .PARAMETER AdminPassword
-    Password for the login above - whatever -AdminPassword was passed at deploy time.
-    REQUIRED: Deploy.ps1 itself has no default for -AdminPassword (it always prompts),
-    and every azure-demo-resources scenario always has Auth:Enabled=true, so there is no
-    "no password needed" case here to fall back on. Used for this script's own benchmark/
-    loadconfig calls and forwarded to scaleTriggerLoad.py's --username/--password so its
-    login matches reality instead of trying the script's own admin:admin default (which
-    this demo never uses).
+    Password for the login above. REQUIRED unless -Scenario Report - every scenario has Auth:Enabled=true.
 
 .PARAMETER DbCpuIterationsMin
-    Fixed Min for scenario B's DbCpuIterationsPerVote, pushed via /api/loadconfig before
-    the load starts. Default: 5000. There's no benchmark to calibrate this from (unlike
-    CpuIterationsPerVote), so it's a flat default rather than computed.
+    Fixed Min for scenario B's DbCpuIterationsPerVote. Default: 5000.
 
 .PARAMETER DbCpuIterationsMax
     Fixed Max for scenario B's DbCpuIterationsPerVote. Default: 5000.
 
 .PARAMETER BenchmarkTargetVotes
-    Target vote count (N) for the CPU calibration formula used by scenarios A/C/VMSS/
-    AppService: Max = 0.8 * (cpuNumbersPerSecond / N), Min = 0.5 * Max. Default: 100,
-    same as the dashboard's own "Set recommended" button.
+    Target vote count (N) for the CPU calibration formula. Default: 100 (matches the dashboard).
 
 .PARAMETER SkipHtmlReport
-    If set, skips generating the HTML report at the end.
+    Skip generating the HTML report at the end.
 
 .PARAMETER AzContextPath
-    Used internally when the script runs scenario C as a background job (Import-AzContext
-    instead of an interactive Connect-AzAccount). You don't need to set this manually for a
-    normal run.
+    Internal - used when scenario C runs as a background job. Don't set manually.
 
 .PARAMETER ScenarioCTimeoutMinutes
-    How long (in minutes) scenario C waits for the Logic App to be triggered manually before
-    giving up. Since scenario C doesn't block the other tests (it runs in the background),
-    the deadline is deliberately generous (default 240 min).
+    Minutes scenario C waits for manual Logic App approval. Default: 240.
 
 .NOTES
-    SCENARIO C DOES NOT BLOCK THE OTHER TESTS
+    Scenario C runs as a background job when multiple scenarios are queued (it waits on
+    manual approval, so it can't block the rest) - fold its result in later with
+    "-Scenario Report".
 
-    When running multiple scenarios at once (-Scenario All), scenario C (App Service plan
-    with human approval) is started as a separate background job (Start-Job) as soon as its
-    turn comes up, while the foreground script immediately continues with the next scenario.
-    Once the other scenarios finish, the script checks whether scenario C's job is done; if
-    it's still waiting for your approval, it prints instructions and does not block - keep
-    the PowerShell window open until you trigger the Logic App, then fold the result into the
-    report afterward with "-Scenario Report".
+    Don't copy this script out of deploy/azure-demo-resources/ - -LoadScriptPath's default
+    depends on the fixed ../../scripts/scaleTriggerLoad.py offset from here.
 
-    DON'T COPY THIS SCRIPT OUT OF deploy/azure-demo-resources/
-
-    -LoadScriptPath's default is anchored to $PSScriptRoot (this file's own folder), which
-    makes it independent of your current directory when you run it - but not independent of
-    where the .ps1 file itself physically lives. It depends on ../../scripts/scaleTriggerLoad.py,
-    a fixed relative offset that only holds true inside a clone of this repo. Run it from
-    deploy/azure-demo-resources/Run-ScalingScenarios.ps1 directly; if you copy it elsewhere,
-    pass -LoadScriptPath pointing at the real scaleTriggerLoad.py location explicitly.
-
-    SELF-SIGNED CERTIFICATES
-
-    The VM and VMSS host ScaleTrigger behind Nginx with a self-signed certificate (see main
-    README). This script disables TLS certificate validation for its own HTTPS calls to
-    /api/nodebenchmark/run and /api/loadconfig accordingly, and scaleTriggerLoad.py does
-    the same for its own requests (--url/--votes/etc.) - without it, every vote request
-    against the VM/VMSS fails instantly with a swallowed SSL error, which looks like
-    nothing is happening rather than a clear failure.
+    VM/VMSS use a self-signed cert. This script and scaleTriggerLoad.py both disable TLS
+    validation for their own requests - otherwise every vote fails silently.
 
 .EXAMPLE
     .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword "MyDeployPassword123!"
@@ -159,9 +93,7 @@
 
 [CmdletBinding()]
 param(
-    # No defaults on purpose - the script refuses to run without both explicit -Scenario
-    # and -Path so generated files never land somewhere unexpected and a run never targets
-    # the wrong scenario by accident. See the usage block below if either is left out.
+    # No defaults - see the usage block below if either is left out.
     [ValidateSet('A', 'B', 'C', 'VMSS', 'AppService', 'All', 'Report')]
     [string]$Scenario,
 
@@ -176,25 +108,17 @@ param(
     [string]$AppServiceApiUrl,
     [string]$VmssApiUrl,
 
-    # Every azure-demo-resources scenario has Auth:Enabled=true and configures
-    # AdminUser:Username/Password from these exact values at deploy time - there is no
-    # "no auth needed" case here, so -AdminPassword is required (below) same as it was
-    # when you ran Deploy.ps1/the automatic template.
+    # Every scenario has Auth:Enabled=true from these exact values - no "no auth" case here.
     [string]$AdminUsername = "demoadmin",
     [string]$AdminPassword,
 
     [int]$DbCpuIterationsMin = 5000,
     [int]$DbCpuIterationsMax = 5000,
 
-    # Target vote count (N) for the CPU calibration formula (main README, "CPU
-    # calibration"): Max = 0.8 * (cpuNumbersPerSecond / N), Min = 0.5 * Max. Same default
-    # as the dashboard's own "Set recommended" button.
+    # Target vote count (N) for the CPU calibration formula - same default as the dashboard.
     [int]$BenchmarkTargetVotes = 100,
 
-    # Path to the Python executable and the load generator script. LoadScriptPath's default
-    # is anchored to $PSScriptRoot (this script's own folder), not the caller's current
-    # directory, so the script works the same regardless of where you run it from - as long
-    # as the script itself hasn't been copied out of deploy/azure-demo-resources/ (see .NOTES).
+    # Anchored to $PSScriptRoot so it works regardless of cwd (see .NOTES for the caveat).
     [string]$PythonExe = "python",
     [string]$LoadScriptPath = (Join-Path $PSScriptRoot "..\..\scripts\scaleTriggerLoad.py"),
 
@@ -242,9 +166,7 @@ if (-not $Scenario -or -not $Path -or ($Scenario -ne 'Report' -and -not $AdminPa
 }
 
 # ============================================================================
-# CONFIGURATION - resource group/name defaults, filled in further by auto-detection
-# (Resolve-DeployedResources, once the Az context is established) and by the -XxxApiUrl
-# overrides below.
+# CONFIGURATION - defaults, filled in by Resolve-DeployedResources/-XxxApiUrl below
 # ============================================================================
 
 # Two resource names include a random uniqueString() suffix at deploy time and can't be
@@ -322,10 +244,7 @@ if ($AppServiceApiUrl)  { $Config.ScenarioC.ApiUrl = $AppServiceApiUrl; $Config.
 if ($VmssApiUrl)        { $Config.ScenarioVMSS.ApiUrl = $VmssApiUrl }
 
 # ============================================================================
-# TLS setup - the VM/VMSS ScaleTrigger endpoints use a self-signed certificate (Nginx,
-# see main README), so certificate validation is disabled for this script's own HTTPS
-# calls; scaleTriggerLoad.py does the same for its own requests. Works on both Windows
-# PowerShell 5.1 and PowerShell 7+.
+# TLS setup - VM/VMSS use a self-signed cert (Nginx); disable validation like scaleTriggerLoad.py does
 # ============================================================================
 
 $script:authTokens = @{}
@@ -352,14 +271,8 @@ public class ScaleTriggerCertBypass : ICertificatePolicy {
 
 function Resolve-DeployedResources {
     <#
-        Fills in anything still left at its placeholder value (no -XxxApiUrl override was
-        given) by querying the actually-deployed resources directly - requires an
-        established Az context, so this only runs for real scenario runs, never for
-        -Scenario Report. Only looks up what $NeededScenarios actually requires, so
-        testing one scenario doesn't require every other one to be deployed. Anything it
-        can't find is left as-is and reported with Write-Warning; the scenario functions
-        will then fail with a clear Azure error when they try to use it, same as before
-        this existed.
+        Fills in unset placeholder values by querying what's actually deployed, scoped to
+        $NeededScenarios; anything it can't find is left as-is with a Write-Warning.
     #>
     param([string[]]$NeededScenarios)
 
@@ -392,11 +305,7 @@ function Resolve-DeployedResources {
         }
     }
 
-    # Scenario B doesn't have its own compute - it drives DB load through whichever app
-    # instance is actually wired to the shared Azure SQL database (the VM uses local
-    # SQLite, so it's VMSS/App Service, and App Service is the simpler single-instance
-    # default). So resolving the App Service also covers scenario B's ApiUrl unless
-    # something already set it explicitly.
+    # Scenario B has no compute of its own - it reuses the App Service URL (VM uses local SQLite).
     $needsAppService = ($NeededScenarios -contains 'C') -or ($NeededScenarios -contains 'AppService') -or
         (($NeededScenarios -contains 'B') -and ($Config.ScenarioB.ApiUrl -match '<'))
     if ($needsAppService) {
@@ -462,9 +371,7 @@ function Assert-AzConnection {
         Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
     }
 
-    # Every scenario builds its resourceId from $Config.SubscriptionId - resolve it once
-    # here now that the Az context is definitely established, from -SubscriptionId if
-    # given, otherwise from whatever ended up active.
+    # Resolve once the Az context is established: -SubscriptionId if given, else whatever's active.
     $Config.SubscriptionId = if ($SubscriptionId) { $SubscriptionId } else { (Get-AzContext).Subscription.Id }
 }
 
@@ -487,12 +394,8 @@ function Get-ScaleTriggerAuthToken {
 
 function Invoke-ScaleTriggerApi {
     <#
-        POSTs to a ScaleTrigger endpoint. Both /api/nodebenchmark/run and /api/loadconfig
-        are optionally-authorized - if the target has Auth:Enabled, the first call gets a
-        401; this logs in with -AdminUsername/-AdminPassword and retries once, caching the
-        token per ApiUrl for the rest of the run. If no -AdminPassword was given, gives up
-        and returns Success=$false so the caller can skip that scenario's auto-tuning step
-        gracefully instead of crashing the whole run.
+        POSTs to a ScaleTrigger endpoint; logs in and retries once on 401, caching the
+        token per ApiUrl. Returns Success=$false (never throws) so callers can skip gracefully.
     #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
@@ -533,14 +436,8 @@ function Invoke-ScaleTriggerApi {
 
 function Set-RecommendedCpuLoad {
     <#
-        Runs the target node's own /api/nodebenchmark/run, applies the same formula the
-        dashboard's "Set recommended" button uses (main README, "CPU calibration": Max =
-        0.8 * (cpuNumbersPerSecond / N), Min = 0.5 * Max, N = -BenchmarkTargetVotes), and
-        POSTs the result to /api/loadconfig as CpuIterationsPerVote - so every scenario's
-        load starts with a range actually calibrated to that node's real throughput,
-        instead of the fixed guess baked into LoadArgs. Failures are non-fatal - warns and
-        leaves whatever CpuIterationsPerVote is already configured rather than blocking
-        the scenario.
+        Benchmarks the node and pushes a calibrated CpuIterationsPerVote via /api/loadconfig
+        (dashboard's "CPU calibration" formula). Non-fatal - warns and leaves it as-is on failure.
     #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl
@@ -567,12 +464,7 @@ function Set-RecommendedCpuLoad {
 }
 
 function Set-DbCpuLoad {
-    <#
-        Sets a fixed DbCpuIterationsPerVote range for scenario B via /api/loadconfig -
-        there's no "benchmark the database" endpoint to calibrate this from, unlike
-        CpuIterationsPerVote, so it's a flat default (-DbCpuIterationsMin/-Max) rather
-        than computed.
-    #>
+    <# Sets a fixed DbCpuIterationsPerVote via /api/loadconfig - no benchmark endpoint exists to calibrate this. #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
         [Parameter(Mandatory)] [int]$MinValue,
@@ -587,11 +479,7 @@ function Set-DbCpuLoad {
 }
 
 function Start-LoadGenerator {
-    <#
-        scaleTriggerLoad.py defaults to admin:admin if --username/--password aren't given,
-        which never matches this demo (Auth:Enabled=true everywhere, AdminUser set from
-        the deployment's own -AdminUsername/-AdminPassword) - always pass the real ones.
-    #>
+    <# scaleTriggerLoad.py defaults to admin:admin, which never matches this demo - always pass the real ones. #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
         [Parameter(Mandatory)] [string]$LoadArgsString
@@ -611,11 +499,7 @@ function Start-LoadGenerator {
 }
 
 function Wait-ForMetricThreshold {
-    <#
-        Polls the given metric at short intervals until the latest data point's average
-        crosses the given threshold. Returns the timestamp of the threshold crossing (the
-        "load threshold crossed" timestamp used in the tables).
-    #>
+    <# Polls the metric until it crosses the threshold; returns the crossing timestamp. #>
     param(
         [Parameter(Mandatory)] [string]$ResourceId,
         [Parameter(Mandatory)] [string]$MetricName,
@@ -648,11 +532,7 @@ function Wait-ForMetricThreshold {
 }
 
 function Get-ScalingActivityLog {
-    <#
-        Runs a KQL query against AzureActivity (identical to the one in chapter 7.2.2) and
-        returns the scaling/resize operation records for the resource within the given time
-        window.
-    #>
+    <# Runs the chapter 7.2.2 KQL query against AzureActivity for scaling/resize ops in the window. #>
     param(
         [Parameter(Mandatory)] [string]$ResourceId,
         [Parameter(Mandatory)] [datetime]$FromUtc,
@@ -675,11 +555,7 @@ AzureActivity
 }
 
 function Wait-ForLogicAppRun {
-    <#
-        Waits for a new Logic App run (used by scenario A - automatic, and scenario C -
-        after the user triggers it manually). Returns the run object (StartTime, EndTime,
-        Status).
-    #>
+    <# Waits for a new Logic App run (automatic for A, manually triggered for C); returns the run object. #>
     param(
         [Parameter(Mandatory)] [string]$ResourceGroup,
         [Parameter(Mandatory)] [string]$LogicAppName,
@@ -960,11 +836,7 @@ function Invoke-ScenarioAppService {
 # ============================================================================
 
 function ConvertTo-HtmlDataTable {
-    <#
-        Converts a single CSV file's contents into an HTML table. If the file doesn't exist
-        (the scenario hasn't been run yet), prints a note instead of an empty table, so the
-        report clearly shows what's still missing.
-    #>
+    <# Converts a CSV into an HTML table; prints a note instead if the file is missing/empty. #>
     param(
         [Parameter(Mandatory)] [string]$Title,
         [Parameter(Mandatory)] [string]$CsvPath
@@ -1089,9 +961,7 @@ if ($Scenario -ne 'Report') {
 
     Resolve-DeployedResources -NeededScenarios $scenariosToRun
 
-    # Scenario C waits for manual human approval and takes an unpredictable amount of time,
-    # so when running multiple scenarios at once it's split off and run in the background
-    # (Start-Job), while the foreground script immediately continues with the rest.
+    # Scenario C waits on manual approval, so it's split off into a background job when running multiple.
     $scenarioCJob = $null
     if ($scenariosToRun -contains 'C' -and $scenariosToRun.Count -gt 1) {
 

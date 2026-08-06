@@ -10,12 +10,7 @@ namespace ScaleTrigger
     {
         private static NodeHardwareInfo? cachedHardwareInfo;
 
-        /// <summary>
-        /// Cached after the first call. Checked env vars before any network
-        /// call, and orchestrator signals (Kubernetes, ECS) before the VM's
-        /// own metadata service, since AKS/EKS nodes and EC2-backed ECS
-        /// tasks would otherwise be misidentified as a bare VM.
-        /// </summary>
+        /// <summary>Cached after the first call. Checks env vars before any network call, and orchestrator signals (Kubernetes, ECS) before the VM's own metadata service, since AKS/EKS nodes and EC2-backed ECS tasks would otherwise be misidentified as a bare VM.</summary>
         public static async Task<NodeHardwareInfo> GetHardwareInfoAsync()
         {
             if (cachedHardwareInfo != null)
@@ -194,16 +189,7 @@ namespace ScaleTrigger
                 || File.Exists("/.dockerenv");
         }
 
-        /// <summary>
-        /// Chained SHA-512 on every logical processor at once for durationSeconds
-        /// - a full-node saturation test, not a single-thread score. Each thread's
-        /// score is the median hashes-per-tick; overall is the sum across threads.
-        /// Uses dedicated Thread objects, not the ThreadPool/Parallel.For: the pool
-        /// throttles how fast it injects new worker threads, and is also shared
-        /// with concurrent HTTP request handling - exactly when someone benchmarks
-        /// mid-load-test, that starves this of the guaranteed one-thread-per-core
-        /// it needs to actually reach 100% CPU.
-        /// </summary>
+        /// <summary>Chained SHA-512 on every logical processor at once for durationSeconds - a full-node saturation test, not a single-thread score. Each thread's score is the median hashes-per-tick; overall is the sum across threads. Uses dedicated Thread objects, not the ThreadPool/Parallel.For: the pool throttles how fast it injects new worker threads and is shared with concurrent HTTP request handling, which would starve this of the guaranteed one-thread-per-core it needs to reach 100% CPU.</summary>
         public static double RunCpuBenchmark(int durationSeconds)
         {
             int threadCount = Environment.ProcessorCount;
@@ -217,10 +203,7 @@ namespace ScaleTrigger
                 {
                     var samples = new List<double>();
 
-                    // Ping-ponged between two buffers instead of reassigning to a fresh
-                    // SHA512.HashData(byte[]) result every iteration, which at millions
-                    // of hashes/sec/thread would otherwise turn this into a GC-pressure
-                    // test as much as a CPU one.
+                    // Ping-ponged between two buffers instead of reassigning to a fresh SHA512.HashData(byte[]) result every iteration - at millions of hashes/sec/thread that would make this a GC-pressure test as much as a CPU one.
                     byte[] bufferA = new byte[64];
                     byte[] bufferB = new byte[64];
                     Random.Shared.NextBytes(bufferA);
@@ -259,10 +242,7 @@ namespace ScaleTrigger
             return perThreadScores.Sum();
         }
 
-        /// <summary>
-        /// Repeatedly overwrites a single blockMegabytes buffer, timing
-        /// each fill; the score is blockMegabytes / median fill time.
-        /// </summary>
+        /// <summary>Repeatedly overwrites a single blockMegabytes buffer, timing each fill; the score is blockMegabytes / median fill time.</summary>
         public static double RunMemoryBenchmark(int blockMegabytes, int repetitions)
         {
             long bufferSizeBytes = (long)blockMegabytes * 1024 * 1024;
@@ -280,12 +260,7 @@ namespace ScaleTrigger
             return blockMegabytes / Median(seconds);
         }
 
-        /// <summary>
-        /// Repeatedly writes a fresh sizeMegabytes file (WriteThrough + flush, so
-        /// it's real disk I/O) and deletes it immediately; the score is
-        /// sizeMegabytes / median write time. Kubernetes gets its own
-        /// working-directory path instead of the temp-path default (see LoadSimulator).
-        /// </summary>
+        /// <summary>Repeatedly writes a fresh sizeMegabytes file (WriteThrough + flush, so it's real disk I/O) and deletes it immediately; the score is sizeMegabytes / median write time. Kubernetes gets its own working-directory path instead of the temp-path default (see LoadSimulator).</summary>
         public static double RunDiskBenchmark(int sizeMegabytes, int repetitions, string environment)
         {
             string dir = environment == "Kubernetes"

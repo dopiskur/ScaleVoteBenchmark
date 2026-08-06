@@ -28,9 +28,7 @@ var webAppName = toLower('${resourcePrefix}-webapp-${uniqueString(servicePlanRes
 var servicePlanName = '${webAppName}-plan'
 var planResourceId = resourceId(subscription().subscriptionId, servicePlanResourceGroup, 'Microsoft.Web/serverfarms', servicePlanName)
 
-// Next occurrence of `autoShutdownHour:00 UTC` that's still in the future relative to
-// deploymentTime - same "today if not passed yet, otherwise tomorrow" logic Deploy.ps1
-// uses in manual/, just computed declaratively instead of with Get-Date.
+// Next `autoShutdownHour:00 UTC` after deploymentTime - same "today or tomorrow" logic as manual/'s Deploy.ps1.
 var todayDate = substring(deploymentTime, 0, 10)
 var paddedShutdownHour = padLeft(string(autoShutdownHour), 2, '0')
 var todayShutdownTime = '${todayDate}T${paddedShutdownHour}:00:00Z'
@@ -262,11 +260,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2023-11-01' 
   }
 }
 
-// publishContentLink both uploads and publishes the runbook content in one
-// step, so no PowerShell Import-/Publish-AzAutomationRunbook follow-up is
-// needed - this is what lets the whole deploy finish inside a single ARM
-// deployment, unlike the manual/ flow (Deploy.ps1 does that upload/publish
-// itself after this template's deployment completes).
+// publishContentLink uploads and publishes in one step - no PowerShell follow-up needed, unlike manual/'s Deploy.ps1.
 resource teardownRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' = {
   parent: automationAccount
   name: 'Remove-DemoResources'
@@ -306,13 +300,8 @@ resource dailyShutdownSchedule 'Microsoft.Automation/automationAccounts/schedule
   }
 }
 
-// Microsoft.Automation/automationAccounts/jobSchedules is NOT idempotent the way almost
-// every other ARM resource type is: PUTting the same deterministic name a second time
-// (e.g. redeploying on top of a resource group from an earlier attempt) fails with
-// Conflict ("A jobSchedule with same id already exists") instead of a no-op. Deploy.ps1
-// already works around this in manual/ by treating "already registered" as success; do
-// the same thing here via a script, since the declarative resource type has no such
-// escape hatch.
+// jobSchedules isn't idempotent - redeploying the same name fails with Conflict instead of a no-op,
+// so this is registered via script (treating "already registered" as success) rather than declared directly.
 var automationContributorRoleId = 'f353d9bd-d4a6-484e-a77a-8050b599b867'
 
 resource jobScheduleScriptIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (autoShutdownEnabled) {

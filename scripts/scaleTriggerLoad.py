@@ -10,12 +10,9 @@ single process's GIL/network overhead doesn't cap the achievable rate.
 
 Authentication is auto-detected: a probe vote with no Authorization header
 is sent first, and if the API responds 401, the script logs in and attaches
-the resulting JWT to every subsequent request. Defaults to admin:admin
-(the API's default AdminUser:Username/Password) - pass --username/--password
-if the target was deployed with different credentials, e.g. the
-azure-demo-resources scenarios, which always set Auth:Enabled=true and
-configure AdminUser:Username/Password from the deployment's own
-adminUsername/adminPassword rather than the admin:admin default.
+the resulting JWT to every subsequent request. Defaults to admin:admin;
+pass --username/--password if the target was deployed with different
+credentials (e.g. any azure-demo-resources scenario).
 
 Ramp-up mode (--ramp true): --votes becomes the starting rate, increasing
 by --ramp-step percent every --ramp-interval seconds for the rest of the
@@ -111,11 +108,7 @@ import random
 import time
 from dataclasses import dataclass, field
 
-# Defaults for --username/--password - match the API's default AdminUser:Username/
-# Password (see appsettings.json.example). Deployments that override AdminUser (e.g.
-# every azure-demo-resources scenario, which always sets Auth:Enabled=true and configures
-# AdminUser from the deployment's own adminUsername/adminPassword) need the real values
-# passed explicitly.
+# Defaults for --username/--password, matching the API's default AdminUser:Username/Password.
 JWT_USERNAME = "admin"
 JWT_PASSWORD = "admin"
 
@@ -190,16 +183,7 @@ class SharedStats:
 
 
 def _new_client_session(timeout: aiohttp.ClientTimeout, **connector_kwargs) -> aiohttp.ClientSession:
-    """
-    Every ScaleTrigger call in this script goes through here so certificate
-    verification stays disabled consistently. The VM/VMSS scenarios (see
-    deploy/azure-demo-resources) serve HTTPS behind Nginx with a self-signed
-    certificate, which aiohttp otherwise rejects outright - every request then fails
-    instantly with an SSL error that the broad "except Exception" blocks below swallow,
-    which looks exactly like nothing is happening: no clear error, no votes recorded,
-    and the auth probe misreads the connection failure as "no auth needed" instead of
-    ever getting a real response.
-    """
+    """Disables cert verification - the VM/VMSS scenarios serve HTTPS with a self-signed cert aiohttp otherwise rejects outright."""
     connector = aiohttp.TCPConnector(ssl=False, **connector_kwargs)
     return aiohttp.ClientSession(connector=connector, timeout=timeout)
 

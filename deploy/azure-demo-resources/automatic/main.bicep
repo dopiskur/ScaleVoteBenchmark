@@ -1,23 +1,16 @@
 // ScaleTrigger Azure Scaling Demo - one-click deployment.
 //
-// Single subscription-scope template combining everything the manual/
-// (Deploy.ps1-driven) flow deploys as seven separate templates: a single VM
-// (vertical scaling), a VM Scale Set (horizontal scaling), an App Service
-// (horizontal + approval-gated vertical scaling), an Azure SQL Serverless
-// database (platform-native vertical scaling), a shared Log Analytics
-// workspace with a monitoring dashboard, and the Automation Account/Logic
-// Apps/alerts that drive the two vertical-scaling scenarios.
+// Subscription-scope template combining what manual/ deploys as seven separate
+// templates: a VM (vertical scaling), a VM Scale Set (horizontal), an App Service
+// (horizontal + approval-gated vertical), Azure SQL Serverless (platform-native
+// vertical), a shared Log Analytics workspace with a dashboard, and the Automation
+// Account/Logic Apps driving the two vertical-scaling scenarios.
 //
-// Every module here is unchanged from manual/scripts/modules - the only
-// rewritten piece is modules/automation.bicep, where the manual flow's
-// PowerShell follow-up (uploading + publishing runbook content, registering
-// a schedule) is replaced with ARM-native equivalents (publishContentLink,
-// Microsoft.Automation .../schedules + .../jobSchedules), so the whole thing
-// finishes inside a single deployment with no script to run afterward.
+// Every module is unchanged from manual/scripts/modules except automation.bicep,
+// rewritten to use ARM-native publishContentLink/schedules instead of Deploy.ps1's
+// PowerShell follow-up, so the whole thing finishes in one deployment.
 //
-// See ../README.md for the full walkthrough, cost breakdown, and first-deploy
-// checklist. Compiled to main.json via `az bicep build` - see "Keeping main.json
-// in sync" in that README.
+// See ../README.md for the full walkthrough. Compiled to main.json via `az bicep build`.
 
 targetScope = 'subscription'
 

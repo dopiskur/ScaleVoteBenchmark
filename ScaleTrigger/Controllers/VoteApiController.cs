@@ -25,12 +25,7 @@ namespace ScaleTrigger.Controllers
             this.loadConfigCache = loadConfigCache;
         }
 
-        /// <summary>
-        /// CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote/DbCpuIterationsPerVote
-        /// run inside the database instead (see IRepository.VoteAddAsync). dbCpuBurnOnly=true isolates
-        /// the database-side CPU cost without inserting a row; LoadEnabled=false skips everything as a
-        /// fast no-op, for the dashboard's "Discard backlog".
-        /// </summary>
+        /// <summary>CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote/DbCpuIterationsPerVote run inside the database instead (see IRepository.VoteAddAsync). dbCpuBurnOnly=true isolates the database-side CPU cost without inserting a row; LoadEnabled=false skips everything as a fast no-op, for the dashboard's "Discard backlog".</summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult> VoteAdd([FromQuery] string option, [FromQuery] bool dbCpuBurnOnly = false)
@@ -85,9 +80,7 @@ namespace ScaleTrigger.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<VoteReport>> VoteReportGet()
         {
-            // With CacheEnabled off (used to benchmark database read load in isolation), skip the
-            // lock entirely - otherwise every concurrent request would serialize on it for nothing,
-            // since GetItem/SetItem are no-ops anyway.
+            // With CacheEnabled off (used to benchmark database read load in isolation), skip the lock entirely - GetItem/SetItem are no-ops anyway.
             if (loadConfigCache.Get("CacheEnabled").Min <= 0)
             {
                 return await FetchReportAsync();
