@@ -66,7 +66,7 @@ camelCase (Bicep convention).
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `adminPassword` | *(required)* | The only required parameter. Must meet Azure's password complexity rules. Avoid `;`, `"`, and backtick - it's interpolated unescaped into a SQL connection string and into command lines built by `Run-ScalingScenarios.ps1`. |
+| `adminPassword` | *(required)* | The only required parameter. Must meet Azure's password complexity rules. Avoid `;`, `"`, and backtick - it's interpolated unescaped into a SQL connection string, into a `systemd` unit's `Environment=` line via `cloud-init-scaletrigger.bicep`, and into command lines built by `Run-ScalingScenarios.ps1`. **Note:** this single value is reused as the VM/VMSS OS admin password, the Azure SQL admin password, *and* ScaleTrigger's own `AdminUser:Password` (JWT login) - a deliberate simplification for a one-click demo, not a production credential-separation model. Don't reuse a password you use anywhere else, and treat compromise of any one of the three surfaces as compromise of all three. |
 | `adminUsername` | `demoadmin` | Admin login for the VM, VMSS, and SQL Server. |
 | `resourceGroupPrefix` | `ScaleTriggerDemo` | Applied to all resource group names, e.g. `ScaleTriggerDemo-SingleVM`. |
 | `resourcePrefix` | `ScaleTrigger` | Applied to resource names inside those groups, e.g. `ScaleTrigger-vm`. |
