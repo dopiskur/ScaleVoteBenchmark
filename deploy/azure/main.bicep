@@ -1,14 +1,6 @@
-// ScaleTrigger - Azure App Service deployment.
-//
-// Provisions a Linux App Service Plan + App Service, wires up GitHub source
-// control (Oryx builds ScaleTrigger.sln directly - see deploy/azure/README.md,
-// scenario 1), and sets every Application Setting appsettings.json.example
-// seeds ScaleTrigger from, via the ':' -> '__' nesting convention.
-//
-// Infrastructure + configuration only; does not need to be re-run per code
-// change (use the GitHub Actions workflow instead, scenario 2).
-//
-// Compiled to main.json via `az bicep build` - see deploy/azure/README.md.
+// ScaleTrigger - single App Service deployment (GitHub source control, Oryx build). Maps
+// every appsettings.json.example setting to an Application Setting via ':' -> '__'. See
+// deploy/azure/README.md; compiled to main.json via `az bicep build`.
 
 @description('Name of the App Service (must be globally unique - becomes <name>.azurewebsites.net).')
 @minLength(2)
@@ -35,8 +27,6 @@ param repositoryUrl string = 'https://github.com/dopiskur/scaleTrigger'
 
 @description('Branch to deploy from.')
 param branch string = 'master'
-
-// --- DatabaseProvider ---------------------------------------------------
 
 @description('Selects the repository implementation - matches appsettings.json.example. Sqlite needs no external database but its file lives on ephemeral App Service storage (wiped on restart/scale) - fine to try the deploy, not for anything you need to keep.')
 @allowed([
@@ -66,8 +56,6 @@ param connectionStringPostgreSql string = ''
 @description('SQLite connection string (a relative file path is fine - see DatabaseProvider above for the ephemeral-storage caveat).')
 param connectionStringSqlite string = 'Data Source=scaletrigger.db'
 
-// --- Auth / Startup / Cache ---------------------------------------------
-
 @description('true = POST /api/vote/add and other admin actions require a JWT from POST /api/auth/login.')
 param authEnabled bool = false
 
@@ -75,8 +63,6 @@ param authEnabled bool = false
 param failFastOnDbCheck bool = false
 
 param cacheSlidingExpirationMinutes int = 5
-
-// --- Load:* (seeds LoadConfig the first time it's created - edit live afterwards) ---
 
 param loadConfigRefreshMinSeconds int = 1
 param loadConfigRefreshMaxSeconds int = 1
@@ -99,15 +85,11 @@ param loadPayloadBytesPerVoteMax int = 0
 param loadDbCpuIterationsPerVoteMin int = 0
 param loadDbCpuIterationsPerVoteMax int = 0
 
-// --- NodeBenchmark:* (one-off hardware benchmark, unrelated to per-vote load) ---
-
 param nodeBenchmarkCpuDurationSeconds int = 20
 param nodeBenchmarkMemoryBlockMegabytes int = 64
 param nodeBenchmarkMemoryRepetitions int = 5
 param nodeBenchmarkDiskSizeMegabytes int = 20
 param nodeBenchmarkDiskRepetitions int = 5
-
-// --- Jwt:* / AdminUser:* -------------------------------------------------
 
 @secure()
 @description('JWT signing key, at least 32 characters. The appsettings.json.example placeholder is reused as the default since this is a stress-test tool with no real secrets to protect by default - replace it if that ever stops being true.')
@@ -124,13 +106,9 @@ param adminUsername string = 'admin'
 @description('POST /api/auth/login password. Default matches appsettings.json.example - change it if Auth:Enabled is ever true outside a throwaway environment.')
 param adminPassword string = 'admin'
 
-// --- Logging / AllowedHosts ----------------------------------------------
-
 param loggingLevelDefault string = 'Information'
 param loggingLevelAspNetCore string = 'Warning'
 param allowedHosts string = '*'
-
-// -------------------------------------------------------------------------
 
 var appServicePlanName = '${appServiceName}-plan'
 

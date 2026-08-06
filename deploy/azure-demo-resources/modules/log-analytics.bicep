@@ -29,8 +29,7 @@ resource vmInsightsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01
   }
 }
 
-// "Succeeded" in ARM doesn't mean InsightsMetrics is queryable yet - real creation lags by minutes,
-// failing DCRs with "InvalidOutputTable". Pure time-burner, no identity needed (makes no API calls).
+// ARM reports "Succeeded" well before InsightsMetrics is actually queryable, failing DCRs with "InvalidOutputTable" - pure time-burner, no identity needed.
 resource waitForVmInsightsTables 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'wait-for-vminsights-tables'
   location: location

@@ -30,7 +30,7 @@ var webAppName = toLower('${resourcePrefix}-webapp-${uniqueString(servicePlanRes
 var servicePlanName = '${webAppName}-plan'
 var planResourceId = resourceId(subscription().subscriptionId, servicePlanResourceGroup, 'Microsoft.Web/serverfarms', servicePlanName)
 
-// Next `autoShutdownHour:00 UTC` after deploymentTime - same "today or tomorrow" logic as manual/'s Deploy.ps1.
+// Next autoShutdownHour:00 UTC after deploymentTime - today if not yet past, otherwise tomorrow.
 var todayDate = substring(deploymentTime, 0, 10)
 var paddedShutdownHour = padLeft(string(autoShutdownHour), 2, '0')
 var todayShutdownTime = '${todayDate}T${paddedShutdownHour}:00:00Z'
@@ -262,7 +262,6 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2023-11-01' 
   }
 }
 
-// publishContentLink uploads and publishes in one step - no PowerShell follow-up needed, unlike manual/'s Deploy.ps1.
 resource teardownRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' = {
   parent: automationAccount
   name: 'Remove-DemoResources'
@@ -302,8 +301,7 @@ resource dailyShutdownSchedule 'Microsoft.Automation/automationAccounts/schedule
   }
 }
 
-// jobSchedules isn't idempotent - redeploying the same name fails with Conflict instead of a no-op,
-// so this is registered via script (treating "already registered" as success) rather than declared directly.
+// jobSchedules isn't idempotent (Conflict on redeploy), so this registers via script instead of a declarative resource.
 var automationContributorRoleId = 'f353d9bd-d4a6-484e-a77a-8050b599b867'
 
 resource jobScheduleScriptIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (autoShutdownEnabled) {
@@ -379,8 +377,7 @@ resource registerStopVmssJobSchedule 'Microsoft.Resources/deploymentScripts@2023
   ]
 }
 
-// Scoped to exactly the 6 resource groups teardown-runbook.ps1 deletes, not the whole
-// subscription - Remove-DemoResources only ever needs Contributor over those.
+// Scoped to the 6 resource groups teardown-runbook.ps1 deletes, not the whole subscription.
 var teardownResourceGroups = [
   singleVmResourceGroup
   servicePlanResourceGroup

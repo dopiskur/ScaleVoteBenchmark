@@ -36,10 +36,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   properties: { reserved: true }
 }
 
-// Same eventual-consistency issue as InsightsMetrics in log-analytics.bicep: ARM reports
-// the plan created before Azure Monitor's metric definitions for it are queryable, failing
-// both this module's own autoscale rule and automation.bicep's alertPlan with "Couldn't
-// find a metric named CpuPercentage".
+// Same issue as InsightsMetrics in log-analytics.bicep: ARM reports the plan created before its CpuPercentage metric is queryable, failing this module's autoscale rule and automation.bicep's alertPlan.
 resource waitForAppServicePlanMetrics 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'wait-for-app-service-plan-metrics'
   location: location

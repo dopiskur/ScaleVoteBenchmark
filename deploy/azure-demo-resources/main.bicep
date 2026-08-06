@@ -1,16 +1,7 @@
-// ScaleTrigger Azure Scaling Demo - one-click deployment.
-//
-// Subscription-scope template combining what manual/ deploys as seven separate
-// templates: a VM (vertical scaling), a VM Scale Set (horizontal), an App Service
-// (horizontal + approval-gated vertical), Azure SQL Serverless (platform-native
-// vertical), a shared Log Analytics workspace with a dashboard, and the Automation
-// Account/Logic Apps driving the two vertical-scaling scenarios.
-//
-// Every module is unchanged from manual/scripts/modules except automation.bicep,
-// rewritten to use ARM-native publishContentLink/schedules instead of Deploy.ps1's
-// PowerShell follow-up, so the whole thing finishes in one deployment.
-//
-// See ../README.md for the full walkthrough. Compiled to main.json via `az bicep build`.
+// ScaleTrigger Azure Scaling Demo - one-click, subscription-scope deployment of five
+// scaling scenarios (VM, VM Scale Set, App Service, Azure SQL Serverless) plus a
+// monitoring dashboard and the Automation Account driving the two vertical-scaling
+// scenarios. See ../README.md; compiled to main.json via `az bicep build`.
 
 targetScope = 'subscription'
 
