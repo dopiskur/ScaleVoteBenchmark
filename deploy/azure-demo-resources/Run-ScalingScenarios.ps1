@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Drives load against the five scaling scenarios (A, B, C, VMSS, App Service) and
-    collects the timing values for chapter 7's tables.
+    collects the timing values needed to write them up.
 
 .DESCRIPTION
     Per scenario: benchmarks the node and calibrates CpuIterationsPerVote via
@@ -926,7 +926,7 @@ function New-HtmlScalingReport {
 </head>
 <body>
   <h1>Scaling scenario execution report</h1>
-  <p class="meta">Scaling applications in the Microsoft Azure cloud - practical part of the paper (chapter 7)<br>
+  <p class="meta">Scaling applications in the Microsoft Azure cloud<br>
   Report generated: $generatedAt</p>
 
 $reportSections
