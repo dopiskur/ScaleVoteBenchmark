@@ -5,14 +5,14 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "16350750682723153586"
+      "templateHash": "5640929663289262531"
     }
   },
   "parameters": {
     "adminPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Administrator password for the VM, VM Scale Set, and SQL Server. The only required parameter - must meet Azure password complexity rules (12+ characters, 3 of 4 character classes)."
+        "description": "Administrator password for the VM, VM Scale Set, and SQL Server. The only required parameter - must meet Azure password complexity rules (12+ characters, 3 of 4 character classes). Avoid `;`, `\"`, and backtick: this value is interpolated unescaped into a SQL connection string and into shell/PowerShell command lines by Run-ScalingScenarios.ps1, so those characters can break parsing."
       }
     },
     "adminUsername": {
@@ -2258,6 +2258,12 @@
           "scaleSetResourceGroup": {
             "value": "[variables('scaleSetResourceGroupName')]"
           },
+          "sqlResourceGroupName": {
+            "value": "[variables('sqlResourceGroupName')]"
+          },
+          "logsResourceGroupName": {
+            "value": "[variables('logsResourceGroupName')]"
+          },
           "approvalNotificationUpn": {
             "value": "[parameters('approvalNotificationUpn')]"
           },
@@ -2278,7 +2284,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "9425342774466632847"
+              "templateHash": "12555088264203011725"
             }
           },
           "parameters": {
@@ -2297,6 +2303,12 @@
               "type": "string"
             },
             "scaleSetResourceGroup": {
+              "type": "string"
+            },
+            "sqlResourceGroupName": {
+              "type": "string"
+            },
+            "logsResourceGroupName": {
               "type": "string"
             },
             "approvalNotificationUpn": {
@@ -2357,7 +2369,15 @@
             "paddedShutdownHour": "[padLeft(string(parameters('autoShutdownHour')), 2, '0')]",
             "todayShutdownTime": "[format('{0}T{1}:00:00Z', variables('todayDate'), variables('paddedShutdownHour'))]",
             "scheduleStartTime": "[if(greater(dateTimeToEpoch(variables('todayShutdownTime')), dateTimeToEpoch(parameters('deploymentTime'))), variables('todayShutdownTime'), dateTimeAdd(variables('todayShutdownTime'), 'P1D'))]",
-            "automationContributorRoleId": "f353d9bd-d4a6-484e-a77a-8050b599b867"
+            "automationContributorRoleId": "f353d9bd-d4a6-484e-a77a-8050b599b867",
+            "teardownResourceGroups": [
+              "[parameters('singleVmResourceGroup')]",
+              "[parameters('servicePlanResourceGroup')]",
+              "[parameters('scaleSetResourceGroup')]",
+              "[parameters('sqlResourceGroupName')]",
+              "[parameters('logsResourceGroupName')]",
+              "[resourceGroup().name]"
+            ]
           },
           "resources": [
             {
@@ -2867,11 +2887,14 @@
               ]
             },
             {
+              "copy": {
+                "name": "automationAccountRoleGrant",
+                "count": "[length(variables('teardownResourceGroups'))]"
+              },
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
-              "name": "grant-role-automation-account",
-              "subscriptionId": "[subscription().subscriptionId]",
-              "location": "[resourceGroup().location]",
+              "name": "[format('grant-role-automation-{0}', variables('teardownResourceGroups')[copyIndex()])]",
+              "resourceGroup": "[variables('teardownResourceGroups')[copyIndex()]]",
               "properties": {
                 "expressionEvaluationOptions": {
                   "scope": "inner"
@@ -2883,13 +2906,13 @@
                   }
                 },
                 "template": {
-                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "12141154995807114082"
+                      "templateHash": "7964489757026882449"
                     }
                   },
                   "parameters": {
@@ -2905,7 +2928,7 @@
                     {
                       "type": "Microsoft.Authorization/roleAssignments",
                       "apiVersion": "2022-04-01",
-                      "name": "[guid(subscription().id, parameters('principalId'), parameters('roleDefinitionId'))]",
+                      "name": "[guid(resourceGroup().id, parameters('principalId'), parameters('roleDefinitionId'))]",
                       "properties": {
                         "principalId": "[parameters('principalId')]",
                         "principalType": "ServicePrincipal",

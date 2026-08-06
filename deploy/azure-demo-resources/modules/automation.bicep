@@ -3,6 +3,8 @@ param resourcePrefix string = 'ScaleTrigger'
 param singleVmResourceGroup string
 param servicePlanResourceGroup string
 param scaleSetResourceGroup string
+param sqlResourceGroupName string
+param logsResourceGroupName string
 param approvalNotificationUpn string = 'dummy@somemail.com'
 param vmCpuThreshold int = 80
 param planCpuThreshold int = 80
@@ -377,13 +379,24 @@ resource registerStopVmssJobSchedule 'Microsoft.Resources/deploymentScripts@2023
   ]
 }
 
-module automationAccountRoleGrant 'grant-role-subscription.bicep' = {
-  name: 'grant-role-automation-account'
-  scope: subscription()
+// Scoped to exactly the 6 resource groups teardown-runbook.ps1 deletes, not the whole
+// subscription - Remove-DemoResources only ever needs Contributor over those.
+var teardownResourceGroups = [
+  singleVmResourceGroup
+  servicePlanResourceGroup
+  scaleSetResourceGroup
+  sqlResourceGroupName
+  logsResourceGroupName
+  resourceGroup().name
+]
+
+module automationAccountRoleGrant 'grant-role-resourcegroup.bicep' = [for rg in teardownResourceGroups: {
+  name: 'grant-role-automation-${rg}'
+  scope: resourceGroup(rg)
   params: {
     principalId: automationAccount.identity.principalId
   }
-}
+}]
 
 output logicAppVmName string = logicAppVm.name
 output logicAppPlanName string = logicAppPlan.name

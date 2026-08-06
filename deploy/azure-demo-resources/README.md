@@ -66,7 +66,7 @@ camelCase (Bicep convention).
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `adminPassword` | *(required)* | The only required parameter. Must meet Azure's password complexity rules. |
+| `adminPassword` | *(required)* | The only required parameter. Must meet Azure's password complexity rules. Avoid `;`, `"`, and backtick - it's interpolated unescaped into a SQL connection string and into command lines built by `Run-ScalingScenarios.ps1`. |
 | `adminUsername` | `demoadmin` | Admin login for the VM, VMSS, and SQL Server. |
 | `resourceGroupPrefix` | `ScaleTriggerDemo` | Applied to all resource group names, e.g. `ScaleTriggerDemo-SingleVM`. |
 | `resourcePrefix` | `ScaleTrigger` | Applied to resource names inside those groups, e.g. `ScaleTrigger-vm`. |

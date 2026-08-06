@@ -15,7 +15,7 @@
 targetScope = 'subscription'
 
 @secure()
-@description('Administrator password for the VM, VM Scale Set, and SQL Server. The only required parameter - must meet Azure password complexity rules (12+ characters, 3 of 4 character classes).')
+@description('Administrator password for the VM, VM Scale Set, and SQL Server. The only required parameter - must meet Azure password complexity rules (12+ characters, 3 of 4 character classes). Avoid `;`, `"`, and backtick: this value is interpolated unescaped into a SQL connection string and into shell/PowerShell command lines by Run-ScalingScenarios.ps1, so those characters can break parsing.')
 param adminPassword string
 
 @description('Administrator username for the VM, VMSS, and SQL Server.')
@@ -149,6 +149,8 @@ module automation 'modules/automation.bicep' = {
     singleVmResourceGroup: singleVmResourceGroupName
     servicePlanResourceGroup: servicePlanResourceGroupName
     scaleSetResourceGroup: scaleSetResourceGroupName
+    sqlResourceGroupName: sqlResourceGroupName
+    logsResourceGroupName: logsResourceGroupName
     approvalNotificationUpn: approvalNotificationUpn
     autoShutdownEnabled: autoShutdownEnabled
     autoShutdownHour: autoShutdownHour

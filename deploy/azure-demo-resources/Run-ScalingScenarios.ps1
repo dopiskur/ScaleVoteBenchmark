@@ -600,6 +600,18 @@ function Export-ScenarioResult {
     [PSCustomObject]$Data | Format-List
 }
 
+function Export-ActivityLog {
+    <# Saves Get-ScalingActivityLog's rows to their own CSV; returns $null if there's nothing to save. #>
+    param(
+        [Parameter(Mandatory)] [string]$ScenarioName,
+        $Activity
+    )
+    if (-not $Activity) { return $null }
+    $file = Join-Path $Path "$ScenarioName`_ActivityLog.csv"
+    $Activity | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8
+    return $file
+}
+
 # ============================================================================
 # SCENARIO A - VIRTUAL MACHINE (fully automatic, chapter 7.3.2)
 # ============================================================================
@@ -628,6 +640,7 @@ function Invoke-ScenarioA {
     $activity = if ($thresholdTime) {
         Get-ScalingActivityLog -ResourceId $resourceId -FromUtc $thresholdTime.AddMinutes(-1)
     } else { $null }
+    $activityLogFile = Export-ActivityLog -ScenarioName "ScenarioA" -Activity $activity
 
     $vmAfter = Get-AzVM -ResourceGroupName $cfg.ResourceGroup -Name $cfg.VMName
     $endingSize = $vmAfter.HardwareProfile.VmSize
@@ -646,6 +659,7 @@ function Invoke-ScenarioA {
         OperationCompletedTime    = $completionTime
         TotalScalingTimeSeconds   = $totalSeconds
         LoadGeneratorLogFile      = $load.LogFile
+        ActivityLogFile           = $activityLogFile
     }
 }
 
@@ -707,7 +721,7 @@ function Invoke-ScenarioC {
     Set-RecommendedCpuLoad -ApiUrl $cfg.ApiUrl
     $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
     $thresholdTime = Wait-ForMetricThreshold -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
-        -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 40
+        -ThresholdValue $cfg.ThresholdValue -TimeoutMinutes 45
 
     Write-Host "" -ForegroundColor Yellow
     Write-Host "The alert should send a push notification. Manually trigger the Logic App '$($cfg.LogicAppName)' in the Azure Portal ('Run Trigger' button) once you receive the notification." -ForegroundColor Yellow
@@ -777,6 +791,7 @@ function Invoke-ScenarioVMSS {
     $activity = if ($capacityIncreaseTime) {
         Get-ScalingActivityLog -ResourceId $resourceId -FromUtc $startUtc -ToUtc $capacityIncreaseTime
     } else { $null }
+    $activityLogFile = Export-ActivityLog -ScenarioName "ScenarioVMSS" -Activity $activity
 
     $vmssFinal = Get-AzVmss -ResourceGroupName $cfg.ResourceGroup -VMScaleSetName $cfg.VMSSName
 
@@ -787,6 +802,7 @@ function Invoke-ScenarioVMSS {
         TimeToNewInstanceSeconds    = if ($capacityIncreaseTime) { [math]::Round(($capacityIncreaseTime - $startUtc).TotalSeconds, 0) } else { $null }
         FinalInstanceCount          = $vmssFinal.Sku.Capacity
         LoadGeneratorLogFile        = $load.LogFile
+        ActivityLogFile             = $activityLogFile
         Note                        = "Read the achieved request rate before/after from LoadGeneratorLogFile (the --report output)."
     }
 }
