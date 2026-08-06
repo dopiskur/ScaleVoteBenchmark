@@ -10,30 +10,15 @@ plus a live monitoring dashboard covering all five and a PowerShell script
 ([`Run-ScalingScenarios.ps1`](Run-ScalingScenarios.ps1), see below) that drives load
 against each one and collects the timing data needed to write it up.
 
-There are two ways to deploy it - same resources, same defaults, different
-orchestration:
+One subscription-scope Bicep template deploys everything - resource groups, all five
+scenarios, the monitoring dashboard, and an Automation Account with teardown/shutdown
+runbooks - in a single deployment. No script to run afterward.
 
-## Choosing a deployment method
-
-| | [`automatic/`](#automatic-deployment-one-click) | [`manual/`](#manual-deployment-deployps1) |
-|---|---|---|
-| Entry point | One Bicep template, one click | `Deploy.ps1` (PowerShell) |
-| Templates | 1 deployment, dependency order inferred by Bicep | 7 separate deployments, ordered by the script |
-| Runbook content | Published natively at deploy time (`publishContentLink` pointing at this repo's raw runbook scripts) | Uploaded + published by `Deploy.ps1` after the fact (`Import-`/`Publish-AzAutomationRunbook`) |
-| Daily VMSS shutdown schedule | The `schedules` resource is native ARM; the runbook↔schedule link is registered by a `deploymentScripts` resource, computed in **UTC** | Registered by `Deploy.ps1` (`New-AzAutomationSchedule` + `Register-AzAutomationScheduledRunbook`), in your local time zone |
-| SQL connectivity check | Not needed - nobody's local machine needs DB access for a portal-driven deploy, and the VM/VMSS/App Service already retry their own DB connection independently | `Deploy.ps1` waits (up to 10 min) for the freshly created SQL Server to accept a connection, adding a firewall rule for your own IP first |
-| Az PowerShell / Bicep CLI install | Not needed - the portal (or `az deployment`) handles this | `Deploy.ps1` installs both automatically if missing |
-| Deploying one scenario at a time | Not supported - always deploys everything | `-Mode Single -Module <01-07>` |
-
-Pick `automatic/` for the fastest path to "everything is up," no PowerShell needed. Pick
-`manual/` if you want more control (deploy one scenario at a time, tune every parameter,
-re-run pieces independently) or you're scripting this into something else.
-
-**Either way, budget 30-40 minutes.** That's dominated by two things neither method can
-skip: Log Analytics deliberately waits ~10 minutes after enabling the VM Insights
-solution before anything can reference the `InsightsMetrics` table it provisions (see
-"First-deploy checklist and known issues" below), and Azure SQL Serverless provisioning
-alone typically takes 5-10 minutes.
+**Budget 30-40 minutes.** That's dominated by two things the template can't skip: Log
+Analytics deliberately waits ~10 minutes after enabling the VM Insights solution before
+anything can reference the `InsightsMetrics` table it provisions (see "First-deploy
+checklist and known issues" below), and Azure SQL Serverless provisioning alone
+typically takes 5-10 minutes.
 
 ## What gets deployed
 
@@ -52,25 +37,22 @@ port 443 (self-signed certificate), with port 80 redirecting to it. The App Serv
 deploys the app directly from the public GitHub repository.
 
 Two resource names are made globally unique automatically (the SQL Server and the Web
-App), since Azure requires this regardless of which method deploys them.
+App), since Azure requires this regardless of how they're deployed.
 
 ---
 
-## Automatic deployment (one-click)
+## Deploying
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fmain.json)
 
-Click it, fill in a password (the only required field), and deploy. Everything -
-resource groups, the VM/VMSS/App Service/SQL scenarios, the monitoring dashboard, and
-the Automation Account with its teardown/shutdown runbooks - finishes inside that one
-deployment. No script to run afterward.
+Click it, fill in a password (the only required field), and deploy.
 
 ### Deploying by hand instead of the button
 
 ```bash
 az deployment sub create \
   --location eastus \
-  --template-file automatic/main.bicep \
+  --template-file main.bicep \
   --parameters adminPassword='<a-strong-password>'
 ```
 
@@ -80,8 +62,7 @@ There's no `location` parameter in the template itself: every resource deploys t
 
 ### Parameters
 
-camelCase (Bicep convention), same defaults as `manual/`'s `Deploy.ps1`, and no
-`-Mode`/`-Module` (this template always deploys everything).
+camelCase (Bicep convention).
 
 | Parameter | Default | Notes |
 |---|---|---|
@@ -96,13 +77,12 @@ camelCase (Bicep convention), same defaults as `manual/`'s `Deploy.ps1`, and no
 ### Structure
 
 ```
-automatic/
-  main.bicep - entry point (subscription scope), what the button deploys
-  main.json  - compiled from main.bicep, what the button URL points at
-  modules/   - same modules as manual/scripts/modules, except automation.bicep
-               (rewritten to publish runbooks / register the schedule natively)
-  scripts/   - the same two runbook scripts as manual/, published from here by URL
-  README.md  - deployment-method-specific detail kept in automatic/ itself
+deploy/azure-demo-resources/
+  main.bicep              - entry point (subscription scope), what the button deploys
+  main.json               - compiled from main.bicep, what the button URL points at
+  modules/                - one module per resource group above
+  scripts/                - the two runbook scripts, published from here by URL
+  Run-ScalingScenarios.ps1 - see "Measuring scaling scenarios" below
 ```
 
 ### Keeping main.json in sync
@@ -111,22 +91,21 @@ automatic/
 `az bicep build` against `main.bicep` on every push that touches it (or any module under
 `modules/`) and commits the regenerated `main.json` back to the branch automatically -
 you never need to run `az bicep build` by hand after editing the template, though
-`az bicep build --file automatic/main.bicep` locally is the fastest way to check an edit
-before pushing.
+`az bicep build --file main.bicep` locally is the fastest way to check an edit before
+pushing.
 
 ### Why there's no portal wizard
 
 A nicer, multi-step deploy wizard (instead of the portal's default flat, alphabetical
 parameter list) was attempted and abandoned after repeated portal-side failures. Both
 the classic `createUiDefinition.json` format (Azure Managed Applications) and the newer
-`uiFormDefinition.schema.json` Form view format (delivered via the `uiFormDefinitionUri`
-portal URL parameter) were tried against the generic "Deploy a custom template" blade
-for this *subscription-scope* template; the Form view attempt got as far as the Review
-step before crashing identically twice in a row -
-`getFormTemplateDeploymentOptions: Cannot read properties of undefined (reading
-'location')` in `Microsoft_Azure_CreateUIDef` - once with standalone
-`SubscriptionSelector`/`LocationSelector` elements and again after switching to the
-composite `Microsoft.Common.ResourceScope` control (the one pattern an official
+`uiFormDefinitionUri` Form view format (delivered via the portal URL parameter) were
+tried against the generic "Deploy a custom template" blade for this *subscription-scope*
+template; the Form view attempt got as far as the Review step before crashing
+identically twice in a row - `getFormTemplateDeploymentOptions: Cannot read properties
+of undefined (reading 'location')` in `Microsoft_Azure_CreateUIDef` - once with
+standalone `SubscriptionSelector`/`LocationSelector` elements and again after switching
+to the composite `Microsoft.Common.ResourceScope` control (the one pattern an official
 Microsoft tutorial demonstrates working end-to-end). The identical error surviving that
 change points at a bug or unsupported combination in how the portal handles
 `view.outputs.kind: "Subscription"` outside an actual Template Spec resource, not at
@@ -140,97 +119,6 @@ around actual `Microsoft.Resources/templateSpecs` resources (`az ts create
 --ui-form-definition ...`), which is a genuinely different delivery mechanism from the
 raw-URI button and untested here - that's the more promising starting point than
 retrying the raw-URI path again.
-
----
-
-## Manual deployment (Deploy.ps1)
-
-### Prerequisites
-
-- An Azure subscription
-- PowerShell 5.1 or later
-- Internet access from the machine running `Deploy.ps1` (it installs the Az PowerShell
-  modules and the Bicep CLI automatically if they are missing)
-
-### Structure
-
-```
-manual/
-  Deploy.ps1
-  config.json.example
-  scripts/
-    01-log-analytics.bicep
-    02-single-vm.bicep
-    03-scale-set.bicep
-    04-service-plan.bicep
-    05-sql-database.bicep
-    06-automation.bicep
-    07-dashboard.bicep
-    07-teardown.sh
-    modules/
-    teardown-runbook.ps1
-    stop-vmss-runbook.ps1
-```
-
-`Deploy.ps1` is the only file meant to be run directly; everything it depends on (the
-Bicep templates, their shared modules, the teardown script, and the two Automation
-runbooks) lives under `scripts/` to keep that distinction obvious.
-
-Each numbered template provisions its own resource group and everything inside it,
-except 07, which deploys into 01's resource group (`{prefix}-Logs`) since the dashboard
-is a view over that shared Log Analytics workspace, not a resource of its own. They can
-be deployed independently, but 05 must run before 03 and 04 (both connect to the SQL
-database on first boot), 06 must run after 02 and 04 (it references their resources by
-name), and 07 should run last, once the resources it charts exist (it will still deploy
-successfully before that, the affected charts just show no data until their resource
-exists).
-
-### Deploying
-
-```powershell
-.\Deploy.ps1 -AdminPassword (Read-Host -Prompt "Password" -AsSecureString)
-```
-
-Run without `-Mode` and you'll get an interactive menu (deploy everything, or one
-template at a time). `AdminPassword` is the only required parameter; everything else has
-a sensible default.
-
-```powershell
-.\Deploy.ps1 -Mode All -AdminPassword $securePassword
-.\Deploy.ps1 -Mode Single -Module 04 -AdminPassword $securePassword
-```
-
-Running `.\Deploy.ps1` with no arguments prints a short usage summary (one real example
-plus a one-line-per-parameter reference) instead of parameters and defaults - the full
-`Get-Help .\Deploy.ps1 -Full` reference is still available on request.
-
-#### config.json
-
-Copy `config.json.example` to `config.json` (same folder as `Deploy.ps1`) and fill in
-your usual values to skip retyping them every run - `config.json` is gitignored, so it's
-safe to leave your real prefixes, subscription, etc. in it locally. It never holds the
-admin password: when `.\Deploy.ps1` is run with no arguments and finds a `config.json`,
-it asks `Load config.json and proceed?`; answering yes loads every other parameter from
-the file and then prompts for the password separately, same as always. Answering no (or
-having no `config.json` at all) falls back to the usage summary above.
-
-### Parameters
-
-PascalCase (PowerShell convention).
-
-| Parameter | Default | Notes |
-|---|---|---|
-| `AdminUsername` | `demoadmin` | Admin login for the VM, VMSS, and SQL Server |
-| `AdminPassword` | *(required)* | No default. Must meet Azure's complexity rules |
-| `ResourceGroupPrefix` | `ScaleTriggerDemo` | Applied to all resource group names, e.g. `ScaleTriggerDemo-SingleVM` |
-| `ResourcePrefix` | `ScaleTrigger` | Applied to resource names inside those groups, e.g. `ScaleTrigger-vm` |
-| `SubscriptionId` | *(current context)* | Only switches context if explicitly provided |
-| `Location` | `eastus` | Any Azure region |
-| `ApprovalNotificationUpn` | `dummy@somemail.com` | Azure AD account that receives the push notification for the approval-gated scaling scenario. **Replace this** with a real account UPN, or that scenario will notify no one. |
-| `AutoShutdownEnabled` | `$true` | Pass `$false` to skip module 06's daily VMSS-stop schedule if you want the Scale Set running continuously (module 02's own VM shutdown schedule is separate and unaffected) |
-
-Modules 02-05 also take a `-Mode Single -Module <NN>` for deploying/redeploying one
-scenario at a time - see `Get-Help .\Deploy.ps1 -Full`.
 
 ---
 
@@ -296,7 +184,7 @@ closer to instant but still only update when the workbook itself refreshes.
 ## First-deploy checklist and known issues
 
 This workbook is hand-authored JSON, not built through the Portal UI, so verify these
-once after the first deploy (either method) and adjust the affected KQL queries in
+once after the first deploy and adjust the affected KQL queries in
 `modules/dashboard.bicep` if needed:
 
 - Open the `InsightsMetrics` table in Log Analytics and confirm the `Namespace`/`Name`
@@ -307,33 +195,6 @@ once after the first deploy (either method) and adjust the affected KQL queries 
   `AutoscaleScaleActionsLog` table.
 - Trigger the VM or App Service resize Logic App and confirm a row shows up in
   `AzureDiagnostics` with `Category == "WorkflowRuntime"` for that resource.
-
-**Deploy takes ~10 minutes longer than it looks like it should (both methods):** the
-Log Analytics module enables the VM Insights solution, then deliberately waits before
-letting anything create a data collection rule against the workspace. The wait exists
-because the solution reports "Succeeded" in ARM well before the `InsightsMetrics` table
-it provisions is actually queryable - without it, the VM/VMSS modules fail with
-`InvalidOutputTable`. If you ever see that error, the wait
-(`vmInsightsPropagationWaitSeconds` in `modules/log-analytics.bicep`, default 600s)
-wasn't long enough for that region/run; increase it and redeploy.
-
-**`automatic/` only - redeploying on top of a previous failed attempt can fail with
-`Conflict` / `A jobSchedule with same id already exists`:** the daily VMSS-stop job
-schedule is registered by a `deploymentScripts` resource instead of the declarative
-`jobSchedules` ARM resource type, specifically because that type isn't idempotent - a
-second PUT with the same deterministic name fails instead of no-op'ing. The script
-treats "already registered" as success, so this shouldn't recur; if it somehow does,
-delete `{prefix}-Automation` and redeploy.
-
-**`manual/` only:**
-- `Deploy.ps1` retries automatically on two known transient conditions: a metric not yet
-  reported on a freshly created resource, and Azure SQL Serverless taking a short time to
-  become reachable after creation. All other errors are surfaced immediately.
-- The admin password is only ever passed as a script parameter, never stored in the
-  Bicep templates themselves.
-
-**Specific to `automatic/`'s ARM-native automation** (the one part with no `manual/`
-equivalent to have already exercised):
 - Confirm both runbooks (`Remove-DemoResources`, `Stop-ScaleSetInstances`) show as
   **Published**, not just created, in the Automation Account - `publishContentLink`
   should handle this automatically at deploy time, but it's worth a first check.
@@ -341,11 +202,27 @@ equivalent to have already exercised):
   `Stop-ScaleSetInstances` runbook with the right `VmssResourceGroup`/`VmssName`
   parameters at its first scheduled run.
 
-**Shutdown behavior:** the VM and VMSS shut down automatically at 05:00 (local time in
-`manual/`, UTC in `automatic/`) to limit cost when idle. Autoscale settings are
-untouched, so scaling still works correctly the next time they are started. The App
-Service plan has no automatic shutdown; PaaS plans cannot be deallocated the way a VM
-can, only deleted and recreated.
+**Deploy takes ~10 minutes longer than it looks like it should:** the Log Analytics
+module enables the VM Insights solution, then deliberately waits before letting anything
+create a data collection rule against the workspace. The wait exists because the
+solution reports "Succeeded" in ARM well before the `InsightsMetrics` table it
+provisions is actually queryable - without it, the VM/VMSS modules fail with
+`InvalidOutputTable`. If you ever see that error, the wait
+(`vmInsightsPropagationWaitSeconds` in `modules/log-analytics.bicep`, default 600s)
+wasn't long enough for that region/run; increase it and redeploy.
+
+**Redeploying on top of a previous failed attempt can fail with `Conflict` / `A
+jobSchedule with same id already exists`:** the daily VMSS-stop job schedule is
+registered by a `deploymentScripts` resource instead of the declarative `jobSchedules`
+ARM resource type, specifically because that type isn't idempotent - a second PUT with
+the same deterministic name fails instead of no-op'ing. The script treats "already
+registered" as success, so this shouldn't recur; if it somehow does, delete
+`{prefix}-Automation` and redeploy.
+
+**Shutdown behavior:** the VM and VMSS shut down automatically at 05:00 UTC to limit
+cost when idle. Autoscale settings are untouched, so scaling still works correctly the
+next time they are started. The App Service plan has no automatic shutdown; PaaS plans
+cannot be deallocated the way a VM can, only deleted and recreated.
 
 ---
 
@@ -354,8 +231,7 @@ can, only deleted and recreated.
 Pay-as-you-go, East US, retail prices (no reserved instances/savings plans, no free
 subscription credit), all default parameter values. This is the **baseline while
 everything is actively deployed and in use** - the biggest lever you have to reduce it
-is simply not leaving resources up when you're not demoing (see "Tearing down" below),
-or (manual/ only) deploying just the modules for the scenario you're actually showing.
+is simply not leaving resources up when you're not demoing (see "Tearing down" below).
 
 | Resource | Daily | Monthly | Notes |
 |---|---:|---:|---|
@@ -372,9 +248,9 @@ A few things worth knowing before treating this as a budget:
 - Not in the table because it's one-time, not recurring: the Log Analytics module
   briefly spins up a Container Instance and a storage account (auto-deleted after the
   run) to wait out the VM Insights table propagation delay described above - a few
-  cents at most. `automatic/` also creates a small user-assigned managed identity for
-  the job-schedule registration script, kept permanently (it's free) so it can be
-  reused on redeploy.
+  cents at most. Also creates a small user-assigned managed identity for the
+  job-schedule registration script, kept permanently (it's free) so it can be reused on
+  redeploy.
 - SQL Serverless dominates the total specifically because the $191.02 figure assumes the
   database runs 24/7 with no idle gap over 24h. It doesn't have to: by default it
   auto-pauses itself once nothing has queried it for `autoPauseDelayMinutes` (1440 = 24h
@@ -392,19 +268,17 @@ A few things worth knowing before treating this as a budget:
 
 ## Tearing down
 
-**Either method:** run the `Remove-DemoResources` Automation runbook from the Azure
-Portal (Automation Account → Runbooks) - published by the deploy itself in `automatic/`,
-uploaded by `Deploy.ps1` as part of module 06 in `manual/`.
+Run the `Remove-DemoResources` Automation runbook from the Azure Portal (Automation
+Account → Runbooks) - published automatically as part of the deploy.
 
 **Or delete the resource groups directly** (`{prefix}-Logs`, `{prefix}-SingleVM`,
-`{prefix}-ScaleSet`, `{prefix}-ServicePlan`, `{prefix}-Database`, `{prefix}-Automation`).
-[`manual/scripts/07-teardown.sh`](manual/scripts/07-teardown.sh) does this for either
-method (both use the same resource group naming convention) if you have the Azure CLI
-handy:
+`{prefix}-ScaleSet`, `{prefix}-ServicePlan`, `{prefix}-Database`, `{prefix}-Automation`),
+e.g. via the Azure CLI:
 
 ```bash
-./manual/scripts/07-teardown.sh --prefix ScaleTriggerDemo
-./manual/scripts/07-teardown.sh --prefix ScaleTriggerDemo --force --no-wait
+for rg in Logs SingleVM ScaleSet ServicePlan Database Automation; do
+  az group delete --name "ScaleTriggerDemo-$rg" --yes --no-wait
+done
 ```
 
 This permanently deletes all six resource groups and everything inside them.
@@ -413,9 +287,9 @@ This permanently deletes all six resource groups and everything inside them.
 
 ## Measuring scaling scenarios (Run-ScalingScenarios.ps1)
 
-[`Run-ScalingScenarios.ps1`](Run-ScalingScenarios.ps1) drives load against an already-
-deployed environment (either method above) and collects the exact numbers a write-up of
-this demo needs: how long each scenario actually took to scale, and when.
+[`Run-ScalingScenarios.ps1`](Run-ScalingScenarios.ps1) drives load against an
+already-deployed environment and collects the exact numbers a write-up of this demo
+needs: how long each scenario actually took to scale, and when.
 
 For each scenario, it:
 
@@ -486,10 +360,9 @@ deployed:
 .\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword "MyDeployPassword123!" -VmApiUrl "https://20.1.2.3"
 ```
 
-`-AdminPassword` is a plain string here (unlike `Deploy.ps1`'s `-AdminPassword`, which is a
-`SecureString`) - this script is a repeatable testing tool, not a one-time provisioning
-step, so it favors typing the password directly over `ConvertTo-SecureString`/`Read-Host`
-ceremony every run.
+`-AdminPassword` is a plain string here - this script is a repeatable testing tool, not
+a one-time provisioning step, so it favors typing the password directly over
+`ConvertTo-SecureString`/`Read-Host` ceremony every run.
 
 | Parameter | Default | Notes |
 |---|---|---|

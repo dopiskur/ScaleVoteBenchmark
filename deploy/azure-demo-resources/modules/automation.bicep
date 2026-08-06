@@ -2,19 +2,37 @@ param location string = resourceGroup().location
 param resourcePrefix string = 'ScaleTrigger'
 param singleVmResourceGroup string
 param servicePlanResourceGroup string
+param scaleSetResourceGroup string
 param approvalNotificationUpn string = 'dummy@somemail.com'
 param vmCpuThreshold int = 80
 param planCpuThreshold int = 80
 param autoShutdownEnabled bool = true
 param logAnalyticsWorkspaceId string
 
+@description('UTC hour (0-23) the daily VMSS shutdown schedule fires at. Kept in UTC (rather than a named time zone) so the schedule start time can be computed declaratively without a timezone/DST-aware function.')
+param autoShutdownHour int = 5
+
+@description('Raw GitHub URLs the two runbooks are published from - override if deploying from a fork/branch.')
+param teardownRunbookUri string = 'https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/teardown-runbook.ps1'
+param stopVmssRunbookUri string = 'https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/stop-vmss-runbook.ps1'
+
+@description('Used only to compute a schedule start time in the future - not a meaningful user-facing parameter.')
+param deploymentTime string = utcNow('yyyy-MM-ddTHH:mm:ssZ')
+
 var armEndpoint = environment().resourceManager
 var vmName = '${resourcePrefix}-vm'
+var vmssName = '${resourcePrefix}-vmss'
 var vmResourceId = resourceId(subscription().subscriptionId, singleVmResourceGroup, 'Microsoft.Compute/virtualMachines', vmName)
 var servicePlanResourceGroupId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${servicePlanResourceGroup}'
 var webAppName = toLower('${resourcePrefix}-webapp-${uniqueString(servicePlanResourceGroupId)}')
 var servicePlanName = '${webAppName}-plan'
 var planResourceId = resourceId(subscription().subscriptionId, servicePlanResourceGroup, 'Microsoft.Web/serverfarms', servicePlanName)
+
+// Next `autoShutdownHour:00 UTC` after deploymentTime - same "today or tomorrow" logic as manual/'s Deploy.ps1.
+var todayDate = substring(deploymentTime, 0, 10)
+var paddedShutdownHour = padLeft(string(autoShutdownHour), 2, '0')
+var todayShutdownTime = '${todayDate}T${paddedShutdownHour}:00:00Z'
+var scheduleStartTime = dateTimeToEpoch(todayShutdownTime) > dateTimeToEpoch(deploymentTime) ? todayShutdownTime : dateTimeAdd(todayShutdownTime, 'P1D')
 
 resource logicAppVm 'Microsoft.Logic/workflows@2019-05-01' = {
   name: '${resourcePrefix}-la-vm-resize'
@@ -242,6 +260,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2023-11-01' 
   }
 }
 
+// publishContentLink uploads and publishes in one step - no PowerShell follow-up needed, unlike manual/'s Deploy.ps1.
 resource teardownRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' = {
   parent: automationAccount
   name: 'Remove-DemoResources'
@@ -250,6 +269,9 @@ resource teardownRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-
     runbookType: 'PowerShell'
     logProgress: false
     logVerbose: false
+    publishContentLink: {
+      uri: teardownRunbookUri
+    }
   }
 }
 
@@ -261,7 +283,98 @@ resource stopVmssRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-
     runbookType: 'PowerShell'
     logProgress: false
     logVerbose: false
+    publishContentLink: {
+      uri: stopVmssRunbookUri
+    }
   }
+}
+
+resource dailyShutdownSchedule 'Microsoft.Automation/automationAccounts/schedules@2023-11-01' = if (autoShutdownEnabled) {
+  parent: automationAccount
+  name: 'daily-vmss-shutdown'
+  properties: {
+    startTime: scheduleStartTime
+    frequency: 'Day'
+    interval: 1
+    timeZone: 'UTC'
+  }
+}
+
+// jobSchedules isn't idempotent - redeploying the same name fails with Conflict instead of a no-op,
+// so this is registered via script (treating "already registered" as success) rather than declared directly.
+var automationContributorRoleId = 'f353d9bd-d4a6-484e-a77a-8050b599b867'
+
+resource jobScheduleScriptIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (autoShutdownEnabled) {
+  name: '${resourcePrefix}-jobschedule-script-identity'
+  location: location
+}
+
+resource jobScheduleScriptRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (autoShutdownEnabled) {
+  scope: automationAccount
+  name: guid(automationAccount.id, jobScheduleScriptIdentity.id, automationContributorRoleId)
+  properties: {
+    #disable-next-line BCP318
+    principalId: jobScheduleScriptIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', automationContributorRoleId)
+  }
+}
+
+resource registerStopVmssJobSchedule 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (autoShutdownEnabled) {
+  name: 'register-stop-vmss-job-schedule'
+  location: location
+  kind: 'AzurePowerShell'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${jobScheduleScriptIdentity.id}': {}
+    }
+  }
+  properties: {
+    azPowerShellVersion: '14.0'
+    retentionInterval: 'PT1H'
+    cleanupPreference: 'OnSuccess'
+    timeout: 'PT10M'
+    arguments: '-resourceGroupName ${resourceGroup().name} -automationAccountName ${automationAccount.name} -runbookName ${stopVmssRunbook.name} -scheduleName ${dailyShutdownSchedule.name} -vmssResourceGroup ${scaleSetResourceGroup} -vmssName ${vmssName}'
+    scriptContent: '''
+      param(
+        [string] $resourceGroupName,
+        [string] $automationAccountName,
+        [string] $runbookName,
+        [string] $scheduleName,
+        [string] $vmssResourceGroup,
+        [string] $vmssName
+      )
+      $maxAttempts = 5
+      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+          Register-AzAutomationScheduledRunbook `
+            -ResourceGroupName $resourceGroupName `
+            -AutomationAccountName $automationAccountName `
+            -RunbookName $runbookName `
+            -ScheduleName $scheduleName `
+            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `
+            -ErrorAction Stop | Out-Null
+          Write-Host "Job schedule registered for $runbookName / $scheduleName."
+          break
+        }
+        catch {
+          if ($_.Exception.Message -like '*already*') {
+            Write-Host "Job schedule already registered for $runbookName / $scheduleName - nothing to do."
+            break
+          }
+          if ($attempt -eq $maxAttempts) {
+            throw
+          }
+          Write-Host "Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet."
+          Start-Sleep -Seconds 15
+        }
+      }
+    '''
+  }
+  dependsOn: [
+    jobScheduleScriptRoleAssignment
+  ]
 }
 
 module automationAccountRoleGrant 'grant-role-subscription.bicep' = {

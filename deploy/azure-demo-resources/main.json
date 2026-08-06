@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "9080008703054004684"
+      "version": "0.46.1.21595",
+      "templateHash": "16350750682723153586"
     }
   },
   "parameters": {
@@ -128,8 +128,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "10834329744681662715"
+              "version": "0.46.1.21595",
+              "templateHash": "17818485107085693468"
             }
           },
           "parameters": {
@@ -149,7 +149,7 @@
               "type": "int",
               "defaultValue": 600,
               "metadata": {
-                "description": "Seconds to wait after enabling the VM Insights solution before anything creates a data collection rule against this workspace. The solution resource reports success in ARM well before the InsightsMetrics table it provisions is actually queryable - this is a fixed wait, not a poll, because confirming table readiness would need an authenticated identity/RBAC for no real gain in reliability over a generous fixed delay."
+                "description": "Seconds to wait after enabling VM Insights before any DCR references the workspace - ARM reports success before InsightsMetrics is actually queryable."
               }
             }
           },
@@ -196,7 +196,7 @@
                 "cleanupPreference": "OnSuccess",
                 "timeout": "PT20M",
                 "arguments": "[format('-waitSeconds {0}', parameters('vmInsightsPropagationWaitSeconds'))]",
-                "scriptContent": "      param([int] $waitSeconds)\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\n      Start-Sleep -Seconds $waitSeconds\n    "
+                "scriptContent": "      param([int] $waitSeconds)\r\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\r\n      Start-Sleep -Seconds $waitSeconds\r\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.OperationsManagement/solutions', format('VMInsights({0})', format('{0}-logs', parameters('resourcePrefix'))))]"
@@ -252,8 +252,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "4918162592299969270"
+              "version": "0.46.1.21595",
+              "templateHash": "1435383784922209741"
             }
           },
           "parameters": {
@@ -426,8 +426,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "2673930557637550015"
+              "version": "0.46.1.21595",
+              "templateHash": "16678456664113341721"
             }
           },
           "parameters": {
@@ -726,8 +726,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "15954445204828138495"
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
                     }
                   },
                   "parameters": {
@@ -897,8 +897,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "10020620854865062547"
+                      "version": "0.46.1.21595",
+                      "templateHash": "15168210559216555068"
                     }
                   },
                   "parameters": {
@@ -1030,8 +1030,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "6033762838629002543"
+              "version": "0.46.1.21595",
+              "templateHash": "9373184094506864228"
             }
           },
           "parameters": {
@@ -1509,8 +1509,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "15954445204828138495"
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
                     }
                   },
                   "parameters": {
@@ -1692,8 +1692,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "10020620854865062547"
+                      "version": "0.46.1.21595",
+                      "templateHash": "15168210559216555068"
                     }
                   },
                   "parameters": {
@@ -1826,8 +1826,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "733773898405304413"
+              "version": "0.46.1.21595",
+              "templateHash": "7930856682838280384"
             }
           },
           "parameters": {
@@ -2277,8 +2277,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "13658299449308221083"
+              "version": "0.46.1.21595",
+              "templateHash": "9425342774466632847"
             }
           },
           "parameters": {
@@ -2327,14 +2327,14 @@
             },
             "teardownRunbookUri": {
               "type": "string",
-              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/automatic/scripts/teardown-runbook.ps1",
+              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/teardown-runbook.ps1",
               "metadata": {
                 "description": "Raw GitHub URLs the two runbooks are published from - override if deploying from a fork/branch."
               }
             },
             "stopVmssRunbookUri": {
               "type": "string",
-              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/automatic/scripts/stop-vmss-runbook.ps1"
+              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/stop-vmss-runbook.ps1"
             },
             "deploymentTime": {
               "type": "string",
@@ -2746,7 +2746,7 @@
                 "cleanupPreference": "OnSuccess",
                 "timeout": "PT10M",
                 "arguments": "[format('-resourceGroupName {0} -automationAccountName {1} -runbookName {2} -scheduleName {3} -vmssResourceGroup {4} -vmssName {5}', resourceGroup().name, format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances', 'daily-vmss-shutdown', parameters('scaleSetResourceGroup'), variables('vmssName'))]",
-                "scriptContent": "      param(\n        [string] $resourceGroupName,\n        [string] $automationAccountName,\n        [string] $runbookName,\n        [string] $scheduleName,\n        [string] $vmssResourceGroup,\n        [string] $vmssName\n      )\n      $maxAttempts = 5\n      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {\n        try {\n          Register-AzAutomationScheduledRunbook `\n            -ResourceGroupName $resourceGroupName `\n            -AutomationAccountName $automationAccountName `\n            -RunbookName $runbookName `\n            -ScheduleName $scheduleName `\n            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `\n            -ErrorAction Stop | Out-Null\n          Write-Host \"Job schedule registered for $runbookName / $scheduleName.\"\n          break\n        }\n        catch {\n          if ($_.Exception.Message -like '*already*') {\n            Write-Host \"Job schedule already registered for $runbookName / $scheduleName - nothing to do.\"\n            break\n          }\n          if ($attempt -eq $maxAttempts) {\n            throw\n          }\n          Write-Host \"Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet.\"\n          Start-Sleep -Seconds 15\n        }\n      }\n    "
+                "scriptContent": "      param(\r\n        [string] $resourceGroupName,\r\n        [string] $automationAccountName,\r\n        [string] $runbookName,\r\n        [string] $scheduleName,\r\n        [string] $vmssResourceGroup,\r\n        [string] $vmssName\r\n      )\r\n      $maxAttempts = 5\r\n      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {\r\n        try {\r\n          Register-AzAutomationScheduledRunbook `\r\n            -ResourceGroupName $resourceGroupName `\r\n            -AutomationAccountName $automationAccountName `\r\n            -RunbookName $runbookName `\r\n            -ScheduleName $scheduleName `\r\n            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `\r\n            -ErrorAction Stop | Out-Null\r\n          Write-Host \"Job schedule registered for $runbookName / $scheduleName.\"\r\n          break\r\n        }\r\n        catch {\r\n          if ($_.Exception.Message -like '*already*') {\r\n            Write-Host \"Job schedule already registered for $runbookName / $scheduleName - nothing to do.\"\r\n            break\r\n          }\r\n          if ($attempt -eq $maxAttempts) {\r\n            throw\r\n          }\r\n          Write-Host \"Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet.\"\r\n          Start-Sleep -Seconds 15\r\n        }\r\n      }\r\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
@@ -2780,8 +2780,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "14191232230613819004"
+                      "version": "0.46.1.21595",
+                      "templateHash": "11566062173068089823"
                     }
                   },
                   "parameters": {
@@ -2835,8 +2835,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "9868870602989722924"
+                      "version": "0.46.1.21595",
+                      "templateHash": "8106311303023005978"
                     }
                   },
                   "parameters": {
@@ -2888,8 +2888,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "2181737516651544412"
+                      "version": "0.46.1.21595",
+                      "templateHash": "12141154995807114082"
                     }
                   },
                   "parameters": {
@@ -3008,8 +3008,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "15389854803440133450"
+              "version": "0.46.1.21595",
+              "templateHash": "9097186275397359085"
             }
           },
           "functions": [

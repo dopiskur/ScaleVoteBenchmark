@@ -6,8 +6,8 @@ on:
       - master
     paths:
       - 'deploy/azure/main.bicep'
-      - 'deploy/azure-demo-resources/automatic/main.bicep'
-      - 'deploy/azure-demo-resources/automatic/modules/**.bicep'
+      - 'deploy/azure-demo-resources/main.bicep'
+      - 'deploy/azure-demo-resources/modules/**.bicep'
       - '.github/workflows/build-bicep.yml'
   workflow_dispatch:
 
@@ -30,18 +30,18 @@ jobs:
       - name: Build deploy/azure/main.json from main.bicep
         run: az bicep build --file deploy/azure/main.bicep --outfile deploy/azure/main.json
 
-      - name: Build deploy/azure-demo-resources/automatic/main.json from main.bicep
-        run: az bicep build --file deploy/azure-demo-resources/automatic/main.bicep --outfile deploy/azure-demo-resources/automatic/main.json
+      - name: Build deploy/azure-demo-resources/main.json from main.bicep
+        run: az bicep build --file deploy/azure-demo-resources/main.bicep --outfile deploy/azure-demo-resources/main.json
 
       - name: Commit regenerated main.json files if they changed
         run: |
-          if git diff --quiet -- deploy/azure/main.json deploy/azure-demo-resources/automatic/main.json; then
+          if git diff --quiet -- deploy/azure/main.json deploy/azure-demo-resources/main.json; then
             echo "main.json files already up to date - nothing to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add deploy/azure/main.json deploy/azure-demo-resources/automatic/main.json
+          git add deploy/azure/main.json deploy/azure-demo-resources/main.json
           git commit -m "chore: regenerate main.json from main.bicep [skip ci]"
           git push

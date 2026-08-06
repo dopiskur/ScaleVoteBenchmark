@@ -69,7 +69,7 @@ With the example config's default `DatabaseProvider: "Sqlite"`, this needs nothi
 
 ## Azure demo infrastructure: one click, provisions and deploys everything
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fautomatic%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fmain.json)
 
 Beyond the single-App-Service Quickstart button above, this provisions the full scaling
 demo environment: five Azure scaling scenarios (VM, VM Scale Set, App Service, Azure SQL
@@ -82,9 +82,7 @@ Log Analytics table propagation and Azure SQL Serverless provisioning dominate t
 not anything ScaleTrigger-specific; see the linked README for the full breakdown.
 
 See [deploy/azure-demo-resources/README.md](deploy/azure-demo-resources/README.md) for
-the full walkthrough and cost breakdown, including a PowerShell-driven alternative
-(`manual/Deploy.ps1`) with more control — deploy one scenario at a time, tune every
-parameter.
+the full walkthrough and cost breakdown.
 
 Once it's up, [`deploy/azure-demo-resources/Run-ScalingScenarios.ps1`](deploy/azure-demo-resources/Run-ScalingScenarios.ps1)
 drives load against each scaling scenario in turn and collects exactly when it scaled
