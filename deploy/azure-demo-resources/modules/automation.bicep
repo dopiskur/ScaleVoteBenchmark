@@ -138,7 +138,7 @@ resource alertVm 'Microsoft.Insights/metricAlerts@2018-03-01' = {
     enabled: true
     scopes: [vmResourceId]
     evaluationFrequency: 'PT1M'
-    windowSize: 'PT5M'
+    windowSize: 'PT1M'
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
       allOf: [
@@ -232,8 +232,8 @@ resource alertPlan 'Microsoft.Insights/metricAlerts@2018-03-01' = {
     severity: 1
     enabled: true
     scopes: [planResourceId]
-    evaluationFrequency: 'PT5M'
-    windowSize: 'PT15M'
+    evaluationFrequency: 'PT1M'
+    windowSize: 'PT1M'
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
       allOf: [

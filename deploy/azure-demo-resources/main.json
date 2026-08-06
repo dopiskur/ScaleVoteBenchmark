@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "4220909611208483922"
+      "templateHash": "8128717759693293230"
     }
   },
   "parameters": {
@@ -2310,7 +2310,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "12555088264203011725"
+              "templateHash": "88862433512353884"
             }
           },
           "parameters": {
@@ -2541,7 +2541,7 @@
                   "[variables('vmResourceId')]"
                 ],
                 "evaluationFrequency": "PT1M",
-                "windowSize": "PT5M",
+                "windowSize": "PT1M",
                 "criteria": {
                   "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
                   "allOf": [
@@ -2659,8 +2659,8 @@
                 "scopes": [
                   "[variables('planResourceId')]"
                 ],
-                "evaluationFrequency": "PT5M",
-                "windowSize": "PT15M",
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT1M",
                 "criteria": {
                   "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
                   "allOf": [
