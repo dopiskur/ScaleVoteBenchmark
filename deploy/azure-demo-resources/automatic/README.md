@@ -229,7 +229,7 @@ breakdown and caveats. Summary:
 | VM — `Standard_B1s` + 30GB disk + Standard public IP | $0.43 | $12.78 | Roughly doubles while resized to `Standard_B1ms` during the vertical-scaling demo. |
 | VM Scale Set — 1× `Standard_B1s` + disk + Standard Load Balancer + public IP | $1.03 | $31.03 | Scales close to linearly up to 4 instances under load. |
 | App Service Plan — `P0v3` | $1.89 | $56.58 | PaaS — bills 24/7 regardless of traffic. |
-| Azure SQL Database — Serverless GP Gen5, 0.5–4 vCore | $6.37 | $191.02 | **Largest line item** — assumes the database stays active (24h auto-pause by default). |
+| Azure SQL Database — Serverless GP Gen5, 0.5–4 vCore | $6.37 | $191.02 | **Largest line item, and only correct if the database is queried 24/7.** By default it **auto-pauses itself** after 24h with no activity — while paused, cost drops to storage only (well under $1/month). |
 | Log Analytics workspace | $0.69 | $20.70 | Estimated ingestion; scales with instance count and load-testing intensity. |
 | Automation Account + Logic Apps + metric alerts | $0.00 | $0.00 | Within free monthly allowances at this usage level. |
 | Azure Workbook dashboard | $0.00 | $0.00 | Free; reads the Log Analytics data already counted above. |

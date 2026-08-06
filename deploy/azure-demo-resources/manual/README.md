@@ -224,16 +224,18 @@ you're actually showing (`-Mode Single`).
 | VM (02) — `Standard_B1s` + 30GB disk + Standard public IP | $0.43 | $12.78 | Roughly doubles while resized to `Standard_B1ms` during the vertical-scaling demo; that's a short-lived spike, not a sustained cost. |
 | VM Scale Set (03) — 1× `Standard_B1s` + disk + Standard Load Balancer + public IP | $1.03 | $31.03 | Scales close to linearly up to 4 instances under load — the Load Balancer and public IP are flat regardless of instance count, only compute+disk multiply. |
 | App Service Plan (04) — `P0v3` | $1.89 | $56.58 | PaaS — bills 24/7 regardless of traffic, can't be deallocated like a VM. Also scales toward 4× under load (and briefly to `P1v3` for the approval-gated scenario). |
-| Azure SQL Database (05) — Serverless GP Gen5, 0.5–4 vCore | $6.37 | $191.02 | **Largest line item.** Assumes the database stays active (default `autoPauseDelay` is 24h of inactivity before it pauses) — a demo in regular use rarely goes 24h idle. If it does auto-pause, this drops to just storage cost (well under $1/month). |
+| Azure SQL Database (05) — Serverless GP Gen5, 0.5–4 vCore | $6.37 | $191.02 | **Largest line item, and only correct if the database is queried 24/7.** By default (`autoPauseDelay` = 1440 min = 24h), it **auto-pauses itself** after 24h with no activity — while paused, cost drops to storage only (well under $1/month). This row is the ceiling, not the typical case. |
 | Log Analytics workspace (01) | $0.69 | $20.70 | Estimated ingestion (~0.3 GB/day) from `AllMetrics` on every resource, the two Autoscale/Logic App diagnostic logs, and the Azure Monitor Agent counters — scales up with instance count and how much load-testing you actually run. |
 | Automation Account + Logic Apps + metric alerts (06) | $0.00 | $0.00 | Free-tier Automation SKU and low execution volume keep this inside the free monthly allowances. |
 | Azure Workbook dashboard (07) | $0.00 | $0.00 | The Workbook resource itself is free; it only reads the Log Analytics data already counted above. |
 | **Total** | **~$10.40** | **~$312** | |
 
 A few things worth knowing before treating this as a budget:
-- SQL Serverless dominates the total specifically because it's assumed to stay active.
-  If you're demoing intermittently, letting it auto-pause (or lowering
-  `autoPauseDelayMinutes`) is the single biggest cost lever here.
+- SQL Serverless dominates the total specifically because the $191.02 figure assumes the
+  database runs 24/7 with no idle gap over 24h. It doesn't have to: by default it
+  auto-pauses itself automatically once nothing has queried it for `autoPauseDelayMinutes`
+  (1440 = 24h out of the box). Letting it auto-pause between demo sessions (or lowering
+  `autoPauseDelayMinutes` so it pauses sooner) is the single biggest cost lever here.
 - If everything is left running continuously at **maximum** scale (VMSS and App Service
   both at 4 instances, VM parked at `B1ms`), the realistic ceiling is roughly
   **1.5–1.7× this total** (~$500/month) — but autoscale only holds that ceiling while
