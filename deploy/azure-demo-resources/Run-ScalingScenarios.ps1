@@ -68,7 +68,7 @@
     Internal - used when scenario C runs as a background job. Don't set manually.
 
 .PARAMETER ScenarioCTimeoutMinutes
-    Minutes scenario C waits for manual Logic App approval. Default: 240.
+    Minutes scenario C waits for manual Logic App approval before giving up on the scale-up. Default: 15.
 
 .NOTES
     Scenario C runs as a background job when multiple scenarios are queued (it waits on
@@ -123,7 +123,7 @@ param(
 
     [string]$AzContextPath = "",
 
-    [int]$ScenarioCTimeoutMinutes = 240
+    [int]$ScenarioCTimeoutMinutes = 15
 )
 
 function Show-UsageHelp {
@@ -149,7 +149,7 @@ function Show-UsageHelp {
     Write-Host "  -PythonExe <string>                      [optional] Path to the Python executable. Default: python."
     Write-Host "  -LoadScriptPath <string>                 [optional] Path to scaleTriggerLoad.py. Default: resolved next to this script."
     Write-Host "  -SkipHtmlReport                          [optional] Switch - skip generating the HTML report at the end."
-    Write-Host "  -ScenarioCTimeoutMinutes <int>           [optional] Minutes scenario C waits for manual approval. Default: 240."
+    Write-Host "  -ScenarioCTimeoutMinutes <int>           [optional] Minutes scenario C waits for manual approval before giving up. Default: 15."
     Write-Host ""
     Write-Host "Full parameter reference: Get-Help .\Run-ScalingScenarios.ps1 -Full"
     Write-Host "Tip: URLs and resource names are auto-detected from what's actually deployed - the flags"
@@ -998,11 +998,6 @@ if ($Scenario -ne 'Report') {
             'C'          { Invoke-ScenarioC }
             'VMSS'       { Invoke-ScenarioVMSS }
             'AppService' { Invoke-ScenarioAppService }
-        }
-
-        if ($scenariosToRun.Count -gt 1 -and $s -ne $scenariosToRun[-1]) {
-            Write-Host "`nScenario '$s' finished. Press Enter to continue to the next scenario (or Ctrl+C to abort)..." -ForegroundColor Yellow
-            Read-Host | Out-Null
         }
     }
 
