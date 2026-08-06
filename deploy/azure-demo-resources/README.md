@@ -94,34 +94,6 @@ you never need to run `az bicep build` by hand after editing the template, thoug
 `az bicep build --file main.bicep` locally is the fastest way to check an edit before
 pushing.
 
-### Why there's no portal wizard
-
-A nicer, multi-step deploy wizard (instead of the portal's default flat, alphabetical
-parameter list) was attempted and abandoned after repeated portal-side failures. Both
-the classic `createUiDefinition.json` format (Azure Managed Applications) and the newer
-`uiFormDefinitionUri` Form view format (delivered via the portal URL parameter) were
-tried against the generic "Deploy a custom template" blade for this *subscription-scope*
-template; the Form view attempt got as far as the Review step before crashing
-identically twice in a row - `getFormTemplateDeploymentOptions: Cannot read properties
-of undefined (reading 'location')` in `Microsoft_Azure_CreateUIDef` - once with
-standalone `SubscriptionSelector`/`LocationSelector` elements and again after switching
-to the composite `Microsoft.Common.ResourceScope` control (the one pattern an official
-Microsoft tutorial demonstrates working end-to-end). The identical error surviving that
-change points at a bug or unsupported combination in how the portal handles
-`view.outputs.kind: "Subscription"` outside an actual Template Spec resource, not at
-anything fixable by further editing.
-
-The button points at `main.json` alone (`Microsoft.Template/uri/...`, no
-`createUIDefinitionUri`/`uiFormDefinitionUri` suffix) - the portal's standard,
-always-reliable flat parameter list. Not much of a downside for 7 parameters, 1 of them
-required. If someone wants to revisit this: Form view is documented almost entirely
-around actual `Microsoft.Resources/templateSpecs` resources (`az ts create
---ui-form-definition ...`), which is a genuinely different delivery mechanism from the
-raw-URI button and untested here - that's the more promising starting point than
-retrying the raw-URI path again.
-
----
-
 ## Monitoring dashboard
 
 Deploys an Azure Workbook (`{prefix} Scaling Dashboard`, in the Azure Portal under
