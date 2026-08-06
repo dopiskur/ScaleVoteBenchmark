@@ -266,7 +266,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-vm-resize"
         ApiUrl          = "https://<vm-public-ip-or-dns>"
-        LoadArgs        = "--ramp true --votes 100 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
+        LoadArgs        = "--ramp true --votes 100 --duration 1200"
     }
 
     # --- Scenario B: Azure SQL Serverless (chapter 7.3.3) ---
@@ -277,7 +277,7 @@ $Config = @{
         MetricName      = "cpu_percent"
         MetricNamespace = "Microsoft.Sql/servers/databases"
         ApiUrl          = "https://<scaletrigger-instance-url-for-db-test>"
-        LoadArgs        = "--ramp true --votes 100 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
+        LoadArgs        = "--ramp true --votes 100 --duration 1200"
     }
 
     # --- Scenario C: App Service plan with human approval (chapter 7.3.4) ---
@@ -289,7 +289,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-plan-resize-approval"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 100 --ramp-step 15 --ramp-interval 60 --ramp-max 300 --duration 2400 --report 30"
+        LoadArgs        = "--ramp true --votes 100 --duration 2400"
     }
 
     # --- Horizontal scaling: VMSS (chapter 7.4) ---
@@ -299,7 +299,7 @@ $Config = @{
         MetricName      = "Percentage CPU"
         MetricNamespace = "Microsoft.Compute/virtualMachineScaleSets"
         ApiUrl          = "http://<scaleset-lb-public-ip>"
-        LoadArgs        = "--ramp true --votes 100 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
+        LoadArgs        = "--ramp true --votes 100 --duration 900"
     }
 
     # --- Horizontal scaling: App Service plan (chapter 7.5) ---
@@ -309,7 +309,7 @@ $Config = @{
         MetricName      = "CpuPercentage"
         MetricNamespace = "Microsoft.Web/serverfarms"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 100 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
+        LoadArgs        = "--ramp true --votes 100 --duration 900"
     }
 }
 
