@@ -300,7 +300,9 @@ For each scenario, it:
    manual click. Scenario B (SQL) skips this and instead zeroes `CpuIterationsPerVote`
    and sets a fixed `DbCpuIterationsPerVote` range, so its load is pure database CPU
    with no app-side contribution muddying the curve - there's no "benchmark the
-   database" endpoint to calibrate the latter from,
+   database" endpoint to calibrate the latter from. Once its load generator stops,
+   Scenario B resets `DbCpuIterationsPerVote` back to 0 so it doesn't linger into
+   whatever scenario runs next,
 2. starts the load generator (`../../scripts/scaleTriggerLoad.py`) against the live
    endpoint,
 3. polls the relevant Azure Monitor metric until it crosses the alert threshold,

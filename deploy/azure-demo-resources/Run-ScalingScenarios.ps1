@@ -667,6 +667,7 @@ function Invoke-ScenarioB {
     Start-Sleep -Seconds 1200
 
     Stop-Process -Id $load.Process.Id -Force -ErrorAction SilentlyContinue
+    Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'DbCpuIterationsPerVote' -MinValue 0 -MaxValue 0
     $endUtc = (Get-Date).ToUniversalTime()
 
     $series = Get-AzMetric -ResourceId $resourceId -MetricName $cfg.MetricName -MetricNamespace $cfg.MetricNamespace `
