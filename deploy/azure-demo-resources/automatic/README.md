@@ -52,13 +52,20 @@ Same defaults as `manual/`'s `Deploy.ps1`, just camelCase (Bicep convention) ins
 PowerShell's PascalCase, and no `-Mode`/`-Module` (this template always deploys
 everything — see `manual/` for deploying one scenario at a time).
 
+There's no `location` parameter: every resource deploys to `deployment().location`, i.e.
+whatever region is picked in the portal blade's own "Region" selector (or `--location` on
+the `az deployment sub create` command below). Earlier versions of this template exposed
+a separate `location` parameter defaulting to `eastus`, which meant the region picker and
+the parameter could silently disagree — removed rather than just re-defaulted, since a
+flat parameter list (see "Why there's no portal wizard" below) has no way to hide a field
+that still exists.
+
 | Parameter | Default | Notes |
 |---|---|---|
 | `adminPassword` | *(required)* | The only required parameter. Must meet Azure's password complexity rules. |
 | `adminUsername` | `demoadmin` | Admin login for the VM, VMSS, and SQL Server. |
 | `resourceGroupPrefix` | `ScaleTriggerDemo` | Applied to all resource group names, e.g. `ScaleTriggerDemo-SingleVM`. |
 | `resourcePrefix` | `ScaleTrigger` | Applied to resource names inside those groups, e.g. `ScaleTrigger-vm`. |
-| `location` | region picked in the portal's own "Region" selector | Any Azure region. Defaults to `deployment().location`, so it normally needs no separate input — override it explicitly only if you want resources in a different region than the deployment's own metadata region (rare). |
 | `approvalNotificationUpn` | `dummy@somemail.com` | Azure AD account that receives the push notification for the approval-gated scaling scenario. **Replace this**, or that scenario notifies no one. |
 | `autoShutdownHour` | `5` | UTC hour (0–23) the VM/VMSS auto-shut down. |
 | `autoShutdownEnabled` | `true` | Whether to create the daily VMSS shutdown schedule at all. |

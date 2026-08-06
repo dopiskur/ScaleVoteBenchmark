@@ -34,9 +34,6 @@ param resourceGroupPrefix string = 'ScaleTriggerDemo'
 @description('Prefix applied to all resource names inside those groups, e.g. "ScaleTrigger-vm". Globally unique resources (the SQL Server and the Web App) additionally get a random suffix.')
 param resourcePrefix string = 'ScaleTrigger'
 
-@description('Azure region for every resource. Defaults to whatever region is picked in the deployment blade\'s own "Region" selector, so this field normally needs no separate input.')
-param location string = deployment().location
-
 @description('Azure AD account that receives a push notification (via the Azure mobile app) when the App Service plan approval-gated vertical scaling alert fires. The default will not notify anyone useful - replace it with a real account UPN.')
 param approvalNotificationUpn string = 'dummy@somemail.com'
 
@@ -56,32 +53,32 @@ var autoShutdownTime = '${padLeft(string(autoShutdownHour), 2, '0')}00'
 
 resource logsRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: logsResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 resource singleVmRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: singleVmResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 resource scaleSetRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: scaleSetResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 resource servicePlanRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: servicePlanResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 resource sqlRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: sqlResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 resource automationRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: automationResourceGroupName
-  location: location
+  location: deployment().location
 }
 
 module logAnalytics 'modules/log-analytics.bicep' = {
@@ -89,7 +86,7 @@ module logAnalytics 'modules/log-analytics.bicep' = {
   scope: logsRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
   }
 }
 
@@ -98,7 +95,7 @@ module sqlDatabase 'modules/sql-database.bicep' = {
   scope: sqlRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
     adminUsername: adminUsername
     adminPassword: adminPassword
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
@@ -110,7 +107,7 @@ module singleVm 'modules/single-vm.bicep' = {
   scope: singleVmRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
     adminUsername: adminUsername
     adminPassword: adminPassword
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
@@ -123,7 +120,7 @@ module scaleSet 'modules/scale-set.bicep' = {
   scope: scaleSetRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
     adminUsername: adminUsername
     adminPassword: adminPassword
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
@@ -139,7 +136,7 @@ module servicePlan 'modules/service-plan.bicep' = {
   scope: servicePlanRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
     sqlResourceGroupName: sqlResourceGroupName
     adminUsername: adminUsername
@@ -154,7 +151,7 @@ module automation 'modules/automation.bicep' = {
   name: 'deploy-automation'
   scope: automationRg
   params: {
-    location: location
+    location: deployment().location
     resourcePrefix: resourcePrefix
     singleVmResourceGroup: singleVmResourceGroupName
     servicePlanResourceGroup: servicePlanResourceGroupName
@@ -176,7 +173,7 @@ module dashboard 'modules/dashboard.bicep' = {
   scope: logsRg
   params: {
     resourcePrefix: resourcePrefix
-    location: location
+    location: deployment().location
     vmResourceId: singleVm.outputs.vmResourceId
     vmssResourceId: scaleSet.outputs.vmssResourceId
     appServicePlanResourceId: servicePlan.outputs.appServicePlanResourceId
