@@ -276,9 +276,11 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with _new_client_session(timeout, limit=max_in_flight_requests + 10) as session:
 
-        async def bounded_send(option: str):
-            async with semaphore:
+        async def release_after_send(option: str):
+            try:
                 await send_vote_request(session, api_url, option, headers, stats)
+            finally:
+                semaphore.release()
 
         next_tick = time.perf_counter()
         while time.perf_counter() < end_time:
@@ -298,14 +300,22 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
 
             interval_seconds = 1.0 / current_rate if current_rate > 0 else 0.1
             option = pick_random_option()
-            asyncio.create_task(bounded_send(option))
+
+            # Blocks here once max_in_flight_requests is reached, instead of piling up
+            # tasks the semaphore hasn't let run yet - caps memory at concurrency, not
+            # at however far the ramped target has raced ahead of actual throughput.
+            await semaphore.acquire()
+            asyncio.create_task(release_after_send(option))
 
             next_tick += interval_seconds
             sleep_for = next_tick - time.perf_counter()
             if sleep_for > 0:
                 await asyncio.sleep(sleep_for)
             else:
-                # Resync instead of firing a burst of catch-up requests.
+                # Always yield - without this, once the target rate outruns real
+                # throughput the loop never awaits, starving the event loop so no
+                # task (including the semaphore-gated ones) ever gets to run.
+                await asyncio.sleep(0)
                 next_tick = time.perf_counter()
 
         # wait for remaining in-flight requests to drain
