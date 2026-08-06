@@ -15,9 +15,9 @@
 // Microsoft.Automation .../schedules + .../jobSchedules), so the whole thing
 // finishes inside a single deployment with no script to run afterward.
 //
-// See README.md in this folder for the full walkthrough, cost breakdown,
-// and first-deploy checklist. Compiled to main.json via `az bicep build` -
-// see "Keeping main.json in sync" in that README.
+// See ../README.md for the full walkthrough, cost breakdown, and first-deploy
+// checklist. Compiled to main.json via `az bicep build` - see "Keeping main.json
+// in sync" in that README.
 
 targetScope = 'subscription'
 

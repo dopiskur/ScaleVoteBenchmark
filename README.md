@@ -81,11 +81,19 @@ Expect it to take **30–40 minutes**, not the few minutes the resource list wou
 Log Analytics table propagation and Azure SQL Serverless provisioning dominate that time,
 not anything ScaleTrigger-specific; see the linked README for the full breakdown.
 
-See [deploy/azure-demo-resources/automatic/README.md](deploy/azure-demo-resources/automatic/README.md)
-for the full walkthrough and cost breakdown, or
-[deploy/azure-demo-resources/manual/README.md](deploy/azure-demo-resources/manual/README.md)
-for a PowerShell-driven alternative with more control (deploy one scenario at a time,
-tune every parameter).
+See [deploy/azure-demo-resources/README.md](deploy/azure-demo-resources/README.md) for
+the full walkthrough and cost breakdown, including a PowerShell-driven alternative
+(`manual/Deploy.ps1`) with more control — deploy one scenario at a time, tune every
+parameter.
+
+Once it's up, [`deploy/azure-demo-resources/Run-ScalingScenarios.ps1`](deploy/azure-demo-resources/Run-ScalingScenarios.ps1)
+drives load against each scaling scenario in turn and collects exactly when it scaled
+and how long it took, as CSVs plus an HTML report — useful if you need to write up or
+benchmark the results rather than just watch the dashboard:
+
+```powershell
+.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results
+```
 
 ## Configuration
 
