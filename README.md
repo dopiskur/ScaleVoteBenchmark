@@ -77,6 +77,10 @@ Serverless) plus a live monitoring dashboard, each running ScaleTrigger and wire
 autoscale/resize automatically under load. Click it, fill in a password (the only
 required field), and deploy — no PowerShell, no follow-up script.
 
+Expect it to take **30–40 minutes**, not the few minutes the resource list would suggest —
+Log Analytics table propagation and Azure SQL Serverless provisioning dominate that time,
+not anything ScaleTrigger-specific; see the linked README for the full breakdown.
+
 See [deploy/azure-demo-resources/automatic/README.md](deploy/azure-demo-resources/automatic/README.md)
 for the full walkthrough and cost breakdown, or
 [deploy/azure-demo-resources/manual/README.md](deploy/azure-demo-resources/manual/README.md)

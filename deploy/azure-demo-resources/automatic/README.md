@@ -12,6 +12,14 @@ resource groups, the VM/VMSS/App Service/SQL scenarios, the monitoring dashboard
 the Automation Account with its teardown/shutdown runbooks — finishes inside that one
 deployment. No script to run afterward.
 
+**Expect it to take 30–40 minutes, not the few minutes you'd guess from the resource
+list.** Two things dominate that time, neither of them optional: module 01 deliberately
+waits ~10 minutes for Log Analytics to finish provisioning the `InsightsMetrics` table
+before anything can reference it (see "First-deploy checklist" below), and Azure SQL
+Serverless provisioning alone typically takes 5–10 minutes. Because the SQL, VM, and VMSS
+modules all depend on module 01's output, that 10-minute wait sits on the critical path
+for the whole deployment, not just the resources that actually need it.
+
 ## How this differs from `manual/`
 
 `manual/` and `automatic/` provision **the same resources with the same defaults** —
