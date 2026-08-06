@@ -189,10 +189,25 @@ class SharedStats:
         }
 
 
+def _new_client_session(timeout: aiohttp.ClientTimeout, **connector_kwargs) -> aiohttp.ClientSession:
+    """
+    Every ScaleTrigger call in this script goes through here so certificate
+    verification stays disabled consistently. The VM/VMSS scenarios (see
+    deploy/azure-demo-resources) serve HTTPS behind Nginx with a self-signed
+    certificate, which aiohttp otherwise rejects outright - every request then fails
+    instantly with an SSL error that the broad "except Exception" blocks below swallow,
+    which looks exactly like nothing is happening: no clear error, no votes recorded,
+    and the auth probe misreads the connection failure as "no auth needed" instead of
+    ever getting a real response.
+    """
+    connector = aiohttp.TCPConnector(ssl=False, **connector_kwargs)
+    return aiohttp.ClientSession(connector=connector, timeout=timeout)
+
+
 async def fetch_jwt_token(api_url: str, username: str, password: str, timeout_seconds: float) -> str:
     """Fetches a JWT token via POST /api/auth/login."""
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with _new_client_session(timeout) as session:
         async with session.post(
             f"{api_url}/api/auth/login",
             json={"Username": username, "Password": password},
@@ -205,7 +220,7 @@ async def fetch_jwt_token(api_url: str, username: str, password: str, timeout_se
 async def probe_requires_auth(api_url: str, timeout_seconds: float) -> bool:
     """Detects Auth:Enabled via a single unauthenticated probe. If the probe fails outright, assumes no auth and lets the real load test surface the problem."""
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with _new_client_session(timeout) as session:
         try:
             async with session.post(f"{api_url}/api/vote/add", params={"option": "yes"}) as resp:
                 await resp.read()
@@ -274,9 +289,8 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
     schedule_index = 0
     current_rate = schedule[0][1]
 
-    connector = aiohttp.TCPConnector(limit=max_in_flight_requests + 10)
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+    async with _new_client_session(timeout, limit=max_in_flight_requests + 10) as session:
 
         async def bounded_send(option: str):
             async with semaphore:

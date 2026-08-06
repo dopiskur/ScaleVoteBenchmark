@@ -142,8 +142,10 @@
 
     The VM and VMSS host ScaleTrigger behind Nginx with a self-signed certificate (see main
     README). This script disables TLS certificate validation for its own HTTPS calls to
-    /api/nodebenchmark/run and /api/loadconfig accordingly - same trust model
-    scaleTriggerLoad.py already uses, not a new relaxation.
+    /api/nodebenchmark/run and /api/loadconfig accordingly, and scaleTriggerLoad.py does
+    the same for its own requests (--url/--votes/etc.) - without it, every vote request
+    against the VM/VMSS fails instantly with a swallowed SSL error, which looks like
+    nothing is happening rather than a clear failure.
 
 .EXAMPLE
     .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword "MyDeployPassword123!"
@@ -322,7 +324,7 @@ if ($VmssApiUrl)        { $Config.ScenarioVMSS.ApiUrl = $VmssApiUrl }
 # ============================================================================
 # TLS setup - the VM/VMSS ScaleTrigger endpoints use a self-signed certificate (Nginx,
 # see main README), so certificate validation is disabled for this script's own HTTPS
-# calls, same trust model scaleTriggerLoad.py already uses. Works on both Windows
+# calls; scaleTriggerLoad.py does the same for its own requests. Works on both Windows
 # PowerShell 5.1 and PowerShell 7+.
 # ============================================================================
 
