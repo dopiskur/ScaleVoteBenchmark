@@ -463,18 +463,19 @@ function Set-RecommendedCpuLoad {
     }
 }
 
-function Set-DbCpuLoad {
-    <# Sets a fixed DbCpuIterationsPerVote via /api/loadconfig - no benchmark endpoint exists to calibrate this. #>
+function Set-FixedLoadSetting {
+    <# Pushes a fixed Min/Max range for one LoadConfig setting via /api/loadconfig - no benchmark involved. #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
+        [Parameter(Mandatory)] [string]$SettingName,
         [Parameter(Mandatory)] [int]$MinValue,
         [Parameter(Mandatory)] [int]$MaxValue
     )
-    Write-Host "Setting DbCpuIterationsPerVote to $MinValue-$MaxValue at $ApiUrl..." -ForegroundColor Cyan
-    $body = ConvertTo-Json -InputObject @(@{ settingName = 'DbCpuIterationsPerVote'; min = $MinValue; max = $MaxValue })
+    Write-Host "Setting $SettingName to $MinValue-$MaxValue at $ApiUrl..." -ForegroundColor Cyan
+    $body = ConvertTo-Json -InputObject @(@{ settingName = $SettingName; min = $MinValue; max = $MaxValue })
     $result = Invoke-ScaleTriggerApi -ApiUrl $ApiUrl -RoutePath '/api/loadconfig' -BodyJson $body
     if ($result.Success) {
-        Write-Host "  DbCpuIterationsPerVote set to $MinValue-$MaxValue." -ForegroundColor Green
+        Write-Host "  $SettingName set to $MinValue-$MaxValue." -ForegroundColor Green
     }
 }
 
@@ -657,7 +658,8 @@ function Invoke-ScenarioB {
     $resourceId = "/subscriptions/$($Config.SubscriptionId)/resourceGroups/$($cfg.ResourceGroup)" +
                   "/providers/Microsoft.Sql/servers/$($cfg.ServerName)/databases/$($cfg.DatabaseName)"
 
-    Set-DbCpuLoad -ApiUrl $cfg.ApiUrl -MinValue $DbCpuIterationsMin -MaxValue $DbCpuIterationsMax
+    Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'CpuIterationsPerVote' -MinValue 0 -MaxValue 0
+    Set-FixedLoadSetting -ApiUrl $cfg.ApiUrl -SettingName 'DbCpuIterationsPerVote' -MinValue $DbCpuIterationsMin -MaxValue $DbCpuIterationsMax
     $load = Start-LoadGenerator -ApiUrl $cfg.ApiUrl -LoadArgsString $cfg.LoadArgs
     $startUtc = (Get-Date).ToUniversalTime()
 

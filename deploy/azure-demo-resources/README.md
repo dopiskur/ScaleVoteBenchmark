@@ -297,8 +297,10 @@ For each scenario, it:
    `CpuIterationsPerVote` range calibrated to its real throughput (`POST
    /api/loadconfig`) - the same "Run benchmark" -> "Set recommended" calculation the
    dashboard's CPU calibration does, just automated per scenario instead of a one-time
-   manual click. Scenario B (SQL) sets a fixed `DbCpuIterationsPerVote` range instead -
-   there's no "benchmark the database" endpoint to calibrate from,
+   manual click. Scenario B (SQL) skips this and instead zeroes `CpuIterationsPerVote`
+   and sets a fixed `DbCpuIterationsPerVote` range, so its load is pure database CPU
+   with no app-side contribution muddying the curve - there's no "benchmark the
+   database" endpoint to calibrate the latter from,
 2. starts the load generator (`../../scripts/scaleTriggerLoad.py`) against the live
    endpoint,
 3. polls the relevant Azure Monitor metric until it crosses the alert threshold,
