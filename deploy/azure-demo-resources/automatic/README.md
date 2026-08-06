@@ -31,7 +31,7 @@ same six resource groups, same scaling scenarios, same dashboard, same estimated
 | Entry point | `Deploy.ps1` (PowerShell) | One Bicep template, one click |
 | Templates | 7 separate deployments, ordered by the script | 1 deployment, dependency order inferred by Bicep |
 | Runbook content | Uploaded + published by `Deploy.ps1` after the fact (`Import-`/`Publish-AzAutomationRunbook`) | Published natively at deploy time (`publishContentLink` pointing at this repo's raw runbook scripts) |
-| Daily VMSS shutdown schedule | Registered by `Deploy.ps1` (`New-AzAutomationSchedule` + `Register-AzAutomationScheduledRunbook`), in your local time zone | Native ARM resources (`.../schedules` + `.../jobSchedules`), computed in **UTC** — see note below |
+| Daily VMSS shutdown schedule | Registered by `Deploy.ps1` (`New-AzAutomationSchedule` + `Register-AzAutomationScheduledRunbook`), in your local time zone | The `schedules` resource is native ARM; the runbook↔schedule link is registered by a `deploymentScripts` resource calling the same `Register-AzAutomationScheduledRunbook` cmdlet instead of the declarative `jobSchedules` resource type (see "First-deploy checklist" below), computed in **UTC** — see note further below |
 | SQL connectivity check | `Deploy.ps1` waits (up to 10 min) for the freshly created SQL Server to accept a connection, adding a firewall rule for your own IP first | Not needed — nobody's local machine needs DB access for a portal-driven deploy, and the VM/VMSS/App Service already retry their own DB connection independently |
 | Az PowerShell / Bicep CLI install | `Deploy.ps1` installs both automatically if missing | Not needed — the portal (or `az deployment`) handles this |
 
@@ -215,6 +215,15 @@ with `InvalidOutputTable`. If you ever see that error again, the wait
 (`vmInsightsPropagationWaitSeconds`, default 600) wasn't long enough for that region/run;
 increase it and redeploy.
 
+**Redeploying on top of a previous attempt can fail with `Conflict` /
+`A jobSchedule with same id already exists`:** the daily VMSS-stop job schedule is
+registered by a `deploymentScripts` resource (module 06) instead of the declarative
+`jobSchedules` ARM resource type, specifically because that type isn't idempotent — a
+second PUT with the same deterministic name fails instead of no-op'ing, which used to
+surface as exactly this error whenever a redeploy landed on a resource group left behind
+by an earlier failed attempt. The script now treats "already registered" as success, so
+this shouldn't recur; if it somehow does, delete `{prefix}-Automation` and redeploy.
+
 **Same as `manual/`** (this workbook is hand-authored JSON, not built through the
 Portal UI):
 - Open the `InsightsMetrics` table in Log Analytics and confirm the `Namespace`/`Name`
@@ -257,12 +266,13 @@ on 2026-08-05 for East US, pay-as-you-go — re-check with the
 [Azure Pricing Calculator](https://azure.microsoft.com/en-us/pricing/calculator/) before
 treating this as a real budget.
 
-Not in the table because it's one-time, not recurring: module 01 includes a
-`deploymentScripts` resource that waits ~10 minutes after enabling the VM Insights
-solution before anything creates a data collection rule against the workspace (see
-"First-deploy checklist" above for why). It briefly spins up a Container Instance and a
-storage account, both auto-deleted after the run — a few cents at most, and the reason
-the overall deployment takes noticeably longer than just the sum of its resources.
+Not in the table because it's one-time, not recurring: modules 01 and 06 each include a
+`deploymentScripts` resource (the InsightsMetrics wait, and the idempotent job-schedule
+registration — see "First-deploy checklist" above for both). Each briefly spins up a
+Container Instance and a storage account, auto-deleted after the run; module 06's also
+creates a small user-assigned managed identity for the duration, kept permanently (it's
+free) so the same identity can be reused if you redeploy. A few cents total, and part of
+why the overall deployment takes noticeably longer than just the sum of its resources.
 
 ## Tearing down
 

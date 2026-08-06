@@ -306,21 +306,86 @@ resource dailyShutdownSchedule 'Microsoft.Automation/automationAccounts/schedule
   }
 }
 
-resource stopVmssJobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2023-11-01' = if (autoShutdownEnabled) {
-  parent: automationAccount
-  name: guid(automationAccount.id, 'stop-vmss-schedule')
+// Microsoft.Automation/automationAccounts/jobSchedules is NOT idempotent the way almost
+// every other ARM resource type is: PUTting the same deterministic name a second time
+// (e.g. redeploying on top of a resource group from an earlier attempt) fails with
+// Conflict ("A jobSchedule with same id already exists") instead of a no-op. Deploy.ps1
+// already works around this in manual/ by treating "already registered" as success; do
+// the same thing here via a script, since the declarative resource type has no such
+// escape hatch.
+var automationContributorRoleId = 'f353d9bd-d4a6-484e-a77a-8050b599b867'
+
+resource jobScheduleScriptIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (autoShutdownEnabled) {
+  name: '${resourcePrefix}-jobschedule-script-identity'
+  location: location
+}
+
+resource jobScheduleScriptRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (autoShutdownEnabled) {
+  scope: automationAccount
+  name: guid(automationAccount.id, jobScheduleScriptIdentity.id, automationContributorRoleId)
   properties: {
-    runbook: {
-      name: stopVmssRunbook.name
-    }
-    schedule: {
-      name: dailyShutdownSchedule.name
-    }
-    parameters: {
-      VmssResourceGroup: scaleSetResourceGroup
-      VmssName: vmssName
+    #disable-next-line BCP318
+    principalId: jobScheduleScriptIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', automationContributorRoleId)
+  }
+}
+
+resource registerStopVmssJobSchedule 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (autoShutdownEnabled) {
+  name: 'register-stop-vmss-job-schedule'
+  location: location
+  kind: 'AzurePowerShell'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${jobScheduleScriptIdentity.id}': {}
     }
   }
+  properties: {
+    azPowerShellVersion: '14.0'
+    retentionInterval: 'PT1H'
+    cleanupPreference: 'OnSuccess'
+    timeout: 'PT10M'
+    arguments: '-resourceGroupName ${resourceGroup().name} -automationAccountName ${automationAccount.name} -runbookName ${stopVmssRunbook.name} -scheduleName ${dailyShutdownSchedule.name} -vmssResourceGroup ${scaleSetResourceGroup} -vmssName ${vmssName}'
+    scriptContent: '''
+      param(
+        [string] $resourceGroupName,
+        [string] $automationAccountName,
+        [string] $runbookName,
+        [string] $scheduleName,
+        [string] $vmssResourceGroup,
+        [string] $vmssName
+      )
+      $maxAttempts = 5
+      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+          Register-AzAutomationScheduledRunbook `
+            -ResourceGroupName $resourceGroupName `
+            -AutomationAccountName $automationAccountName `
+            -RunbookName $runbookName `
+            -ScheduleName $scheduleName `
+            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `
+            -ErrorAction Stop | Out-Null
+          Write-Host "Job schedule registered for $runbookName / $scheduleName."
+          break
+        }
+        catch {
+          if ($_.Exception.Message -like '*already*') {
+            Write-Host "Job schedule already registered for $runbookName / $scheduleName - nothing to do."
+            break
+          }
+          if ($attempt -eq $maxAttempts) {
+            throw
+          }
+          Write-Host "Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet."
+          Start-Sleep -Seconds 15
+        }
+      }
+    '''
+  }
+  dependsOn: [
+    jobScheduleScriptRoleAssignment
+  ]
 }
 
 module automationAccountRoleGrant 'grant-role-subscription.bicep' = {

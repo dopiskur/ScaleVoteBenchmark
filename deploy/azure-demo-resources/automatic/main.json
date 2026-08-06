@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "8070987582634267690"
+      "version": "0.46.1.21595",
+      "templateHash": "3876017106776458830"
     }
   },
   "parameters": {
@@ -128,8 +128,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "10834329744681662715"
+              "version": "0.46.1.21595",
+              "templateHash": "10064653385550116189"
             }
           },
           "parameters": {
@@ -196,7 +196,7 @@
                 "cleanupPreference": "OnSuccess",
                 "timeout": "PT20M",
                 "arguments": "[format('-waitSeconds {0}', parameters('vmInsightsPropagationWaitSeconds'))]",
-                "scriptContent": "      param([int] $waitSeconds)\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\n      Start-Sleep -Seconds $waitSeconds\n    "
+                "scriptContent": "      param([int] $waitSeconds)\r\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\r\n      Start-Sleep -Seconds $waitSeconds\r\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.OperationsManagement/solutions', format('VMInsights({0})', format('{0}-logs', parameters('resourcePrefix'))))]"
@@ -252,8 +252,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "4918162592299969270"
+              "version": "0.46.1.21595",
+              "templateHash": "1435383784922209741"
             }
           },
           "parameters": {
@@ -426,8 +426,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "2673930557637550015"
+              "version": "0.46.1.21595",
+              "templateHash": "16678456664113341721"
             }
           },
           "parameters": {
@@ -726,8 +726,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "15954445204828138495"
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
                     }
                   },
                   "parameters": {
@@ -897,8 +897,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "10020620854865062547"
+                      "version": "0.46.1.21595",
+                      "templateHash": "15168210559216555068"
                     }
                   },
                   "parameters": {
@@ -1030,8 +1030,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "6033762838629002543"
+              "version": "0.46.1.21595",
+              "templateHash": "9373184094506864228"
             }
           },
           "parameters": {
@@ -1509,8 +1509,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "15954445204828138495"
+                      "version": "0.46.1.21595",
+                      "templateHash": "17997225514479355776"
                     }
                   },
                   "parameters": {
@@ -1692,8 +1692,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "10020620854865062547"
+                      "version": "0.46.1.21595",
+                      "templateHash": "15168210559216555068"
                     }
                   },
                   "parameters": {
@@ -1826,8 +1826,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "733773898405304413"
+              "version": "0.46.1.21595",
+              "templateHash": "7930856682838280384"
             }
           },
           "parameters": {
@@ -2277,8 +2277,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "2992779393038081196"
+              "version": "0.46.1.21595",
+              "templateHash": "8491502182363967005"
             }
           },
           "parameters": {
@@ -2356,7 +2356,8 @@
             "todayDate": "[substring(parameters('deploymentTime'), 0, 10)]",
             "paddedShutdownHour": "[padLeft(string(parameters('autoShutdownHour')), 2, '0')]",
             "todayShutdownTime": "[format('{0}T{1}:00:00Z', variables('todayDate'), variables('paddedShutdownHour'))]",
-            "scheduleStartTime": "[if(greater(dateTimeToEpoch(variables('todayShutdownTime')), dateTimeToEpoch(parameters('deploymentTime'))), variables('todayShutdownTime'), dateTimeAdd(variables('todayShutdownTime'), 'P1D'))]"
+            "scheduleStartTime": "[if(greater(dateTimeToEpoch(variables('todayShutdownTime')), dateTimeToEpoch(parameters('deploymentTime'))), variables('todayShutdownTime'), dateTimeAdd(variables('todayShutdownTime'), 'P1D'))]",
+            "automationContributorRoleId": "f353d9bd-d4a6-484e-a77a-8050b599b867"
           },
           "resources": [
             {
@@ -2705,24 +2706,53 @@
             },
             {
               "condition": "[parameters('autoShutdownEnabled')]",
-              "type": "Microsoft.Automation/automationAccounts/jobSchedules",
-              "apiVersion": "2023-11-01",
-              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), guid(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), 'stop-vmss-schedule'))]",
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('{0}-jobschedule-script-identity', parameters('resourcePrefix'))]",
+              "location": "[parameters('location')]"
+            },
+            {
+              "condition": "[parameters('autoShutdownEnabled')]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
+              "name": "[guid(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix'))), variables('automationContributorRoleId'))]",
               "properties": {
-                "runbook": {
-                  "name": "Stop-ScaleSetInstances"
-                },
-                "schedule": {
-                  "name": "daily-vmss-shutdown"
-                },
-                "parameters": {
-                  "VmssResourceGroup": "[parameters('scaleSetResourceGroup')]",
-                  "VmssName": "[variables('vmssName')]"
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('automationContributorRoleId'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('autoShutdownEnabled')]",
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "register-stop-vmss-job-schedule",
+              "location": "[parameters('location')]",
+              "kind": "AzurePowerShell",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix'))))]": {}
                 }
+              },
+              "properties": {
+                "azPowerShellVersion": "14.0",
+                "retentionInterval": "PT1H",
+                "cleanupPreference": "OnSuccess",
+                "timeout": "PT10M",
+                "arguments": "[format('-resourceGroupName {0} -automationAccountName {1} -runbookName {2} -scheduleName {3} -vmssResourceGroup {4} -vmssName {5}', resourceGroup().name, format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances', 'daily-vmss-shutdown', parameters('scaleSetResourceGroup'), variables('vmssName'))]",
+                "scriptContent": "      param(\n        [string] $resourceGroupName,\n        [string] $automationAccountName,\n        [string] $runbookName,\n        [string] $scheduleName,\n        [string] $vmssResourceGroup,\n        [string] $vmssName\n      )\n      $maxAttempts = 5\n      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {\n        try {\n          Register-AzAutomationScheduledRunbook `\n            -ResourceGroupName $resourceGroupName `\n            -AutomationAccountName $automationAccountName `\n            -RunbookName $runbookName `\n            -ScheduleName $scheduleName `\n            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `\n            -ErrorAction Stop | Out-Null\n          Write-Host \"Job schedule registered for $runbookName / $scheduleName.\"\n          break\n        }\n        catch {\n          if ($_.Exception.Message -like '*already*') {\n            Write-Host \"Job schedule already registered for $runbookName / $scheduleName - nothing to do.\"\n            break\n          }\n          if ($attempt -eq $maxAttempts) {\n            throw\n          }\n          Write-Host \"Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet.\"\n          Start-Sleep -Seconds 15\n        }\n      }\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
                 "[resourceId('Microsoft.Automation/automationAccounts/schedules', format('{0}-automation', parameters('resourcePrefix')), 'daily-vmss-shutdown')]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix')))]",
+                "[extensionResourceId(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-jobschedule-script-identity', parameters('resourcePrefix'))), variables('automationContributorRoleId')))]",
                 "[resourceId('Microsoft.Automation/automationAccounts/runbooks', format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances')]"
               ]
             },
@@ -2750,8 +2780,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "14191232230613819004"
+                      "version": "0.46.1.21595",
+                      "templateHash": "11566062173068089823"
                     }
                   },
                   "parameters": {
@@ -2805,8 +2835,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "9868870602989722924"
+                      "version": "0.46.1.21595",
+                      "templateHash": "8106311303023005978"
                     }
                   },
                   "parameters": {
@@ -2858,8 +2888,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.45.15.27210",
-                      "templateHash": "2181737516651544412"
+                      "version": "0.46.1.21595",
+                      "templateHash": "12141154995807114082"
                     }
                   },
                   "parameters": {
@@ -2978,8 +3008,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.45.15.27210",
-              "templateHash": "15389854803440133450"
+              "version": "0.46.1.21595",
+              "templateHash": "9097186275397359085"
             }
           },
           "functions": [
