@@ -92,7 +92,7 @@ and how long it took, as CSVs plus an HTML report — useful if you need to writ
 benchmark the results rather than just watch the dashboard:
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results
+.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -AsSecureString)
 ```
 
 ## Configuration

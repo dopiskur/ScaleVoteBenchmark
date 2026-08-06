@@ -9,9 +9,13 @@ choosing yes/no per request. Supports several parallel processes so a
 single process's GIL/network overhead doesn't cap the achievable rate.
 
 Authentication is auto-detected: a probe vote with no Authorization header
-is sent first, and if the API responds 401, the script logs in with
-admin:admin (matching the API's default AdminUser:Username/Password) and
-attaches the resulting JWT to every subsequent request. No flag needed.
+is sent first, and if the API responds 401, the script logs in and attaches
+the resulting JWT to every subsequent request. Defaults to admin:admin
+(the API's default AdminUser:Username/Password) - pass --username/--password
+if the target was deployed with different credentials, e.g. the
+azure-demo-resources scenarios, which always set Auth:Enabled=true and
+configure AdminUser:Username/Password from the deployment's own
+adminUsername/adminPassword rather than the admin:admin default.
 
 Ramp-up mode (--ramp true): --votes becomes the starting rate, increasing
 by --ramp-step percent every --ramp-interval seconds for the rest of the
@@ -73,6 +77,12 @@ Parameters:
     --timeout (seconds per request)          (optional, default: 10)
         Max time to wait for a single vote request before treating it as failed
         (aiohttp's default is 300s, which would hold a concurrency slot too long).
+
+    --username                               (optional, default: admin)
+        Login used if the API requires authentication (401 on probe).
+
+    --password                               (optional, default: admin)
+        Password used if the API requires authentication (401 on probe).
 """
 
 import subprocess
@@ -101,7 +111,11 @@ import random
 import time
 from dataclasses import dataclass, field
 
-# Matches the API's default AdminUser:Username/Password (see appsettings.json.example).
+# Defaults for --username/--password - match the API's default AdminUser:Username/
+# Password (see appsettings.json.example). Deployments that override AdminUser (e.g.
+# every azure-demo-resources scenario, which always sets Auth:Enabled=true and configures
+# AdminUser from the deployment's own adminUsername/adminPassword) need the real values
+# passed explicitly.
 JWT_USERNAME = "admin"
 JWT_PASSWORD = "admin"
 
@@ -458,6 +472,11 @@ Note: requires 'aiohttp' (the script offers to install it automatically if missi
                    help="Max time to wait for a single request (connect + response) before "
                         "treating it as failed, so a server that never responds doesn't hold "
                         "a concurrency slot for aiohttp's 300s default (default: 10)")
+    p.add_argument("--username", default=JWT_USERNAME,
+                   help=f"Login used if the API requires authentication (default: {JWT_USERNAME})")
+    p.add_argument("--password", default=JWT_PASSWORD,
+                   help="Password used if the API requires authentication (default: matches "
+                        "--username's default)")
     return p.parse_args()
 
 
@@ -469,8 +488,8 @@ def main():
 
     jwt_token = ""
     if requires_auth:
-        jwt_token = asyncio.run(fetch_jwt_token(args.api_url, JWT_USERNAME, JWT_PASSWORD, args.timeout_seconds))
-        print(f"API returned 401 - JWT token acquired automatically (logged in as '{JWT_USERNAME}').")
+        jwt_token = asyncio.run(fetch_jwt_token(args.api_url, args.username, args.password, args.timeout_seconds))
+        print(f"API returned 401 - JWT token acquired automatically (logged in as '{args.username}').")
     else:
         print("API did not require authentication - proceeding without a token.")
 

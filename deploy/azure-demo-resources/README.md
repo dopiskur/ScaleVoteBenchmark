@@ -451,26 +451,31 @@ to be deployed) and only fills in gaps - a `-XxxApiUrl` override always takes pr
 Use those when you want to point at something other than what's deployed, or
 auto-detection gets something wrong.
 
-If a target instance has `Auth:Enabled=true` (default is `false`, so most demo
-deployments don't need this at all), the benchmark/loadconfig calls need `-AdminUsername`/
-`-AdminPassword` - without them, that scenario's auto-tuning step is skipped with a
-warning and the load test still runs, just against whatever `CpuIterationsPerVote` is
-already configured.
+Every azure-demo-resources scenario has `Auth:Enabled=true` and configures the app's
+`AdminUser:Username`/`Password` from the deployment's own `-AdminUsername`/
+`-AdminPassword` (`cloud-init-scaletrigger.bicep`/`service-plan.bicep`) - there's no case
+here where auth isn't required, unlike a plain ScaleTrigger deployment. `-AdminPassword`
+is used for this script's own benchmark/loadconfig calls **and** forwarded to
+`scaleTriggerLoad.py`'s `--username`/`--password`, so its login matches what's actually
+configured instead of that script's own `admin:admin` fallback (which this demo never
+uses).
 
 ### Usage
 
-`-Scenario` and `-Path` are both required - the script refuses to run without them
-(including with zero parameters at all), rather than guessing which scenario to run or
-writing generated files somewhere unexpected. Running it with no parameters (or missing
-either one) prints the full parameter reference instead:
+`-Scenario`, `-Path`, and `-AdminPassword` are required (the password isn't needed for
+`-Scenario Report`, which only reads existing CSVs and never touches Azure or the app) -
+the script refuses to run without them, rather than guessing which scenario to run,
+writing files somewhere unexpected, or letting the load generator fail with a silent 401.
+Running it with no parameters (or missing a required one) prints the full parameter
+reference instead:
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results
+.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -AsSecureString)
 ```
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results
-.\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just rebuild the HTML report from existing CSVs
+.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword
+.\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just rebuild the HTML report from existing CSVs - no password needed
 ```
 
 Auto-detected URLs can be overridden per-run from the command line - useful for a quick
@@ -478,13 +483,15 @@ one-off test without redeploying, e.g. pointing at a VM that isn't the one curre
 deployed:
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -VmApiUrl "https://20.1.2.3"
+.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword -VmApiUrl "https://20.1.2.3"
 ```
 
 | Parameter | Default | Notes |
 |---|---|---|
 | `-Scenario` | *(required)* | `A`, `B`, `C`, `VMSS`, `AppService`, `All`, or `Report`. |
 | `-Path` | *(required)* | Directory the result CSVs and HTML report are saved to. |
+| `-AdminPassword` | *(required unless `-Scenario Report`)* | The password set at deploy time - forwarded to the benchmark/loadconfig calls and to `scaleTriggerLoad.py`. |
+| `-AdminUsername` | `demoadmin` | The username set at deploy time. |
 | `-ResourceGroupPrefix` | `ScaleTriggerDemo` | Which deployment to auto-detect resources from. |
 | `-ResourcePrefix` | `ScaleTrigger` | Which deployment to auto-detect resources from. |
 | `-SubscriptionId` | current Az context | Only switches context if explicitly provided. |
@@ -492,7 +499,6 @@ deployed:
 | `-DatabaseApiUrl` | auto-detected (same as `-AppServiceApiUrl`) | Overrides it for this run. |
 | `-AppServiceApiUrl` | auto-detected from the Web App's default hostname | Overrides both scenario C and AppService (same Web App) for this run. |
 | `-VmssApiUrl` | auto-detected from the Scale Set load balancer's public IP | Overrides it for this run. |
-| `-AdminUsername` / `-AdminPassword` | `demoadmin` / *(none)* | Only needed if a target has `Auth:Enabled=true`. |
 | `-DbCpuIterationsMin` / `-DbCpuIterationsMax` | `5000` / `5000` | Fixed `DbCpuIterationsPerVote` range scenario B sets before its load starts - no benchmark to calibrate this one from. |
 | `-BenchmarkTargetVotes` | `100` | Target vote count (N) for the CPU calibration formula, same default as the dashboard's own "Set recommended" button. |
 | `-SkipHtmlReport` | off | Skip generating the HTML report at the end. |

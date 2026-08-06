@@ -27,6 +27,15 @@
     parameters below still work as explicit overrides for anything auto-detection gets
     wrong, or when you want to point at something other than what's currently deployed.
 
+    Every azure-demo-resources deployment sets Auth:Enabled=true and configures the app's
+    AdminUser:Username/Password from the deployment's own -AdminUsername/-AdminPassword
+    (see cloud-init-scaletrigger.bicep / service-plan.bicep) - there is no case where this
+    demo runs without authentication, unlike a plain ScaleTrigger deployment. -AdminPassword
+    is therefore REQUIRED, same as it was at deploy time; it's used both for this script's
+    own benchmark/loadconfig calls and forwarded to scaleTriggerLoad.py (--username/
+    --password) so its login matches what's actually configured instead of the script's
+    admin:admin fallback.
+
 .PARAMETER Scenario
     Which scenario to run: A, B, C, VMSS, AppService, or All (in order, one at a time).
     REQUIRED - there is no default. Running the script with no parameters at all (or
@@ -69,16 +78,19 @@
     public IP).
 
 .PARAMETER AdminUsername
-    Login used for POST /api/auth/login if a target instance has Auth:Enabled=true and
-    rejects the benchmark/loadconfig calls with 401. Default: demoadmin (ScaleTrigger's
-    own default admin username).
+    Login for POST /api/auth/login - this demo always has Auth:Enabled=true, and the app's
+    AdminUser:Username is set from whatever -AdminUsername was passed to Deploy.ps1/the
+    automatic template at deploy time. Default: demoadmin, matching Deploy.ps1's own
+    default - override this if you deployed with a different -AdminUsername.
 
 .PARAMETER AdminPassword
-    Password for the login above. Only needed if a target instance actually has
-    Auth:Enabled=true - most demo deployments don't (Auth:Enabled defaults to false). If
-    a 401 happens and no password was given, that scenario's benchmark/auto-configure
-    step is skipped with a warning rather than failing the whole run; the load test still
-    runs against whatever CpuIterationsPerVote range is already configured.
+    Password for the login above - whatever -AdminPassword was passed at deploy time.
+    REQUIRED: Deploy.ps1 itself has no default for -AdminPassword (it always prompts),
+    and every azure-demo-resources scenario always has Auth:Enabled=true, so there is no
+    "no password needed" case here to fall back on. Used for this script's own benchmark/
+    loadconfig calls and forwarded to scaleTriggerLoad.py's --username/--password so its
+    login matches reality instead of trying the script's own admin:admin default (which
+    this demo never uses).
 
 .PARAMETER DbCpuIterationsMin
     Fixed Min for scenario B's DbCpuIterationsPerVote, pushed via /api/loadconfig before
@@ -134,13 +146,13 @@
     scaleTriggerLoad.py already uses, not a new relaxation.
 
 .EXAMPLE
-    .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results
+    .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -Prompt "Password" -AsSecureString)
 
 .EXAMPLE
-    .\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -VmApiUrl "https://20.1.2.3"
+    .\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword -VmApiUrl "https://20.1.2.3"
 
 .EXAMPLE
-    .\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just assemble the HTML report from existing CSVs
+    .\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just assemble the HTML report from existing CSVs - no password needed
 #>
 
 [CmdletBinding()]
@@ -162,9 +174,10 @@ param(
     [string]$AppServiceApiUrl,
     [string]$VmssApiUrl,
 
-    # Only needed if a target instance has Auth:Enabled=true (default is false). See
-    # .PARAMETER AdminPassword above for what happens if auth is required but this is
-    # left unset.
+    # Every azure-demo-resources scenario has Auth:Enabled=true and configures
+    # AdminUser:Username/Password from these exact values at deploy time - there is no
+    # "no auth needed" case here, so -AdminPassword is required (below) same as it was
+    # when you ran Deploy.ps1/the automatic template.
     [string]$AdminUsername = "demoadmin",
     [SecureString]$AdminPassword,
 
@@ -193,11 +206,13 @@ param(
 function Show-UsageHelp {
     Write-Host ""
     Write-Host "Example:" -ForegroundColor Cyan
-    Write-Host '  .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results' -ForegroundColor Cyan
+    Write-Host '  .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -AsSecureString)' -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Parameters:"
     Write-Host "  -Scenario <A|B|C|VMSS|AppService|All|Report>  REQUIRED. Which scenario to run."
     Write-Host "  -Path <string>                           REQUIRED. Directory the result CSV/HTML files are saved to."
+    Write-Host "  -AdminPassword <SecureString>            REQUIRED unless -Scenario Report. The password set at deploy time -"
+    Write-Host "                                            this demo always has Auth:Enabled=true, there's no case without it."
     Write-Host "  -ResourceGroupPrefix <string>            [optional] Which deployment to auto-detect from. Default: ScaleTriggerDemo."
     Write-Host "  -ResourcePrefix <string>                 [optional] Which deployment to auto-detect from. Default: ScaleTrigger."
     Write-Host "  -SubscriptionId <string>                 [optional] Az subscription to switch to before running. Default: current context."
@@ -205,8 +220,7 @@ function Show-UsageHelp {
     Write-Host "  -DatabaseApiUrl <string>                 [optional] Overrides auto-detected scenario B URL."
     Write-Host "  -AppServiceApiUrl <string>                [optional] Overrides auto-detected scenario C/AppService URL."
     Write-Host "  -VmssApiUrl <string>                     [optional] Overrides auto-detected scenario VMSS URL."
-    Write-Host "  -AdminUsername <string>                  [optional] Login if a target has Auth:Enabled. Default: demoadmin."
-    Write-Host "  -AdminPassword <SecureString>            [optional] Password if a target has Auth:Enabled. Skipped gracefully if omitted."
+    Write-Host "  -AdminUsername <string>                  [optional] The username set at deploy time. Default: demoadmin."
     Write-Host "  -DbCpuIterationsMin/-DbCpuIterationsMax  [optional] Fixed DbCpuIterationsPerVote range for scenario B. Default: 5000/5000."
     Write-Host "  -BenchmarkTargetVotes <int>              [optional] Target vote count (N) for CPU calibration. Default: 100."
     Write-Host "  -PythonExe <string>                      [optional] Path to the Python executable. Default: python."
@@ -220,7 +234,7 @@ function Show-UsageHelp {
     Write-Host ""
 }
 
-if (-not $Scenario -or -not $Path) {
+if (-not $Scenario -or -not $Path -or ($Scenario -ne 'Report' -and -not $AdminPassword)) {
     Show-UsageHelp
     return
 }
@@ -252,7 +266,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-vm-resize"
         ApiUrl          = "https://<vm-public-ip-or-dns>"
-        LoadArgs        = "--ramp true --votes 5 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
+        LoadArgs        = "--ramp true --votes 100 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
     }
 
     # --- Scenario B: Azure SQL Serverless (chapter 7.3.3) ---
@@ -263,7 +277,7 @@ $Config = @{
         MetricName      = "cpu_percent"
         MetricNamespace = "Microsoft.Sql/servers/databases"
         ApiUrl          = "https://<scaletrigger-instance-url-for-db-test>"
-        LoadArgs        = "--ramp true --votes 5 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
+        LoadArgs        = "--ramp true --votes 100 --ramp-step 25 --ramp-interval 30 --ramp-max 200 --duration 1200 --report 15"
     }
 
     # --- Scenario C: App Service plan with human approval (chapter 7.3.4) ---
@@ -275,7 +289,7 @@ $Config = @{
         ThresholdValue  = 80
         LogicAppName    = "$ResourcePrefix-la-plan-resize-approval"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 5 --ramp-step 15 --ramp-interval 60 --ramp-max 300 --duration 2400 --report 30"
+        LoadArgs        = "--ramp true --votes 100 --ramp-step 15 --ramp-interval 60 --ramp-max 300 --duration 2400 --report 30"
     }
 
     # --- Horizontal scaling: VMSS (chapter 7.4) ---
@@ -285,7 +299,7 @@ $Config = @{
         MetricName      = "Percentage CPU"
         MetricNamespace = "Microsoft.Compute/virtualMachineScaleSets"
         ApiUrl          = "http://<scaleset-lb-public-ip>"
-        LoadArgs        = "--ramp true --votes 10 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
+        LoadArgs        = "--ramp true --votes 100 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
     }
 
     # --- Horizontal scaling: App Service plan (chapter 7.5) ---
@@ -295,7 +309,7 @@ $Config = @{
         MetricName      = "CpuPercentage"
         MetricNamespace = "Microsoft.Web/serverfarms"
         ApiUrl          = "https://<webapp-name>.azurewebsites.net"
-        LoadArgs        = "--ramp true --votes 10 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
+        LoadArgs        = "--ramp true --votes 100 --ramp-step 30 --ramp-interval 20 --ramp-max 400 --duration 900 --report 10"
     }
 }
 
@@ -579,13 +593,21 @@ function Set-DbCpuLoad {
 }
 
 function Start-LoadGenerator {
+    <#
+        scaleTriggerLoad.py defaults to admin:admin if --username/--password aren't given,
+        which never matches this demo (Auth:Enabled=true everywhere, AdminUser set from
+        the deployment's own -AdminUsername/-AdminPassword) - always pass the real ones.
+    #>
     param(
         [Parameter(Mandatory)] [string]$ApiUrl,
         [Parameter(Mandatory)] [string]$LoadArgsString
     )
     $logFile = Join-Path $Path ("load_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
-    $argumentList = "`"$LoadScriptPath`" --url `"$ApiUrl`" $LoadArgsString"
-    Write-Host "Starting load generator: $PythonExe $argumentList" -ForegroundColor Cyan
+    $plainPassword = Get-PlainAdminPassword
+    $credentialArgs = "--username `"$AdminUsername`" --password `"$plainPassword`""
+    $argumentList = "`"$LoadScriptPath`" --url `"$ApiUrl`" $LoadArgsString $credentialArgs"
+    $displayArgumentList = "`"$LoadScriptPath`" --url `"$ApiUrl`" $LoadArgsString --username `"$AdminUsername`" --password ********"
+    Write-Host "Starting load generator: $PythonExe $displayArgumentList" -ForegroundColor Cyan
     $process = Start-Process -FilePath $PythonExe -ArgumentList $argumentList `
         -RedirectStandardOutput $logFile -PassThru -NoNewWindow
     return [PSCustomObject]@{
@@ -1099,8 +1121,8 @@ if ($Scenario -ne 'Report') {
                 SubscriptionId          = $SubId
                 AppServiceApiUrl        = $AppUrl
                 AdminUsername           = $AdminUser
+                AdminPassword           = $AdminPass
             }
-            if ($AdminPass) { $childArgs['AdminPassword'] = $AdminPass }
             & $ScriptPath @childArgs
         } -ArgumentList $PSCommandPath, $Path, $PythonExe, $LoadScriptPath, $contextFile, $ScenarioCTimeoutMinutes, `
             $ResourceGroupPrefix, $ResourcePrefix, $SubscriptionId, $Config.ScenarioC.ApiUrl, $AdminUsername, $AdminPassword
