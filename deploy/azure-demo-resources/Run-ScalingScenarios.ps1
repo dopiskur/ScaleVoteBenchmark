@@ -146,10 +146,10 @@
     scaleTriggerLoad.py already uses, not a new relaxation.
 
 .EXAMPLE
-    .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -Prompt "Password" -AsSecureString)
+    .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword "MyDeployPassword123!"
 
 .EXAMPLE
-    .\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword -VmApiUrl "https://20.1.2.3"
+    .\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword "MyDeployPassword123!" -VmApiUrl "https://20.1.2.3"
 
 .EXAMPLE
     .\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just assemble the HTML report from existing CSVs - no password needed
@@ -179,7 +179,7 @@ param(
     # "no auth needed" case here, so -AdminPassword is required (below) same as it was
     # when you ran Deploy.ps1/the automatic template.
     [string]$AdminUsername = "demoadmin",
-    [SecureString]$AdminPassword,
+    [string]$AdminPassword,
 
     [int]$DbCpuIterationsMin = 5000,
     [int]$DbCpuIterationsMax = 5000,
@@ -206,12 +206,12 @@ param(
 function Show-UsageHelp {
     Write-Host ""
     Write-Host "Example:" -ForegroundColor Cyan
-    Write-Host '  .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -AsSecureString)' -ForegroundColor Cyan
+    Write-Host '  .\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword "MyDeployPassword123!"' -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Parameters:"
     Write-Host "  -Scenario <A|B|C|VMSS|AppService|All|Report>  REQUIRED. Which scenario to run."
     Write-Host "  -Path <string>                           REQUIRED. Directory the result CSV/HTML files are saved to."
-    Write-Host "  -AdminPassword <SecureString>            REQUIRED unless -Scenario Report. The password set at deploy time -"
+    Write-Host "  -AdminPassword <string>                  REQUIRED unless -Scenario Report. The password set at deploy time -"
     Write-Host "                                            this demo always has Auth:Enabled=true, there's no case without it."
     Write-Host "  -ResourceGroupPrefix <string>            [optional] Which deployment to auto-detect from. Default: ScaleTriggerDemo."
     Write-Host "  -ResourcePrefix <string>                 [optional] Which deployment to auto-detect from. Default: ScaleTrigger."
@@ -466,21 +466,13 @@ function Assert-AzConnection {
     $Config.SubscriptionId = if ($SubscriptionId) { $SubscriptionId } else { (Get-AzContext).Subscription.Id }
 }
 
-function Get-PlainAdminPassword {
-    if (-not $AdminPassword) { return $null }
-    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AdminPassword)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-}
-
 function Get-ScaleTriggerAuthToken {
     param([Parameter(Mandatory)] [string]$ApiUrl)
 
-    $plainPassword = Get-PlainAdminPassword
-    if (-not $plainPassword) { return $null }
+    if (-not $AdminPassword) { return $null }
 
     try {
-        $body = @{ username = $AdminUsername; password = $plainPassword } | ConvertTo-Json
+        $body = @{ username = $AdminUsername; password = $AdminPassword } | ConvertTo-Json
         $response = Invoke-RestMethod -Method Post -Uri "$($ApiUrl.TrimEnd('/'))/api/auth/login" `
             -Body $body -ContentType 'application/json' -ErrorAction Stop @script:restMethodCertArgs
         return $response.token
@@ -603,8 +595,7 @@ function Start-LoadGenerator {
         [Parameter(Mandatory)] [string]$LoadArgsString
     )
     $logFile = Join-Path $Path ("load_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
-    $plainPassword = Get-PlainAdminPassword
-    $credentialArgs = "--username `"$AdminUsername`" --password `"$plainPassword`""
+    $credentialArgs = "--username `"$AdminUsername`" --password `"$AdminPassword`""
     $argumentList = "`"$LoadScriptPath`" --url `"$ApiUrl`" $LoadArgsString $credentialArgs"
     $displayArgumentList = "`"$LoadScriptPath`" --url `"$ApiUrl`" $LoadArgsString --username `"$AdminUsername`" --password ********"
     Write-Host "Starting load generator: $PythonExe $displayArgumentList" -ForegroundColor Cyan

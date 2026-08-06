@@ -470,11 +470,11 @@ Running it with no parameters (or missing a required one) prints the full parame
 reference instead:
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword (Read-Host -AsSecureString)
+.\Run-ScalingScenarios.ps1 -Scenario All -Path .\results -AdminPassword "MyDeployPassword123!"
 ```
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword
+.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword "MyDeployPassword123!"
 .\Run-ScalingScenarios.ps1 -Scenario Report -Path .\results   # just rebuild the HTML report from existing CSVs - no password needed
 ```
 
@@ -483,8 +483,13 @@ one-off test without redeploying, e.g. pointing at a VM that isn't the one curre
 deployed:
 
 ```powershell
-.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword $securePassword -VmApiUrl "https://20.1.2.3"
+.\Run-ScalingScenarios.ps1 -Scenario A -Path .\results -AdminPassword "MyDeployPassword123!" -VmApiUrl "https://20.1.2.3"
 ```
+
+`-AdminPassword` is a plain string here (unlike `Deploy.ps1`'s `-AdminPassword`, which is a
+`SecureString`) - this script is a repeatable testing tool, not a one-time provisioning
+step, so it favors typing the password directly over `ConvertTo-SecureString`/`Read-Host`
+ceremony every run.
 
 | Parameter | Default | Notes |
 |---|---|---|
