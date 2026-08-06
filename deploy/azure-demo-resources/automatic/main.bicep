@@ -34,8 +34,8 @@ param resourceGroupPrefix string = 'ScaleTriggerDemo'
 @description('Prefix applied to all resource names inside those groups, e.g. "ScaleTrigger-vm". Globally unique resources (the SQL Server and the Web App) additionally get a random suffix.')
 param resourcePrefix string = 'ScaleTrigger'
 
-@description('Azure region for every resource.')
-param location string = 'eastus'
+@description('Azure region for every resource. Defaults to whatever region is picked in the deployment blade\'s own "Region" selector, so this field normally needs no separate input.')
+param location string = deployment().location
 
 @description('Azure AD account that receives a push notification (via the Azure mobile app) when the App Service plan approval-gated vertical scaling alert fires. The default will not notify anyone useful - replace it with a real account UPN.')
 param approvalNotificationUpn string = 'dummy@somemail.com'

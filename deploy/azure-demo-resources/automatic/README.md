@@ -58,7 +58,7 @@ everything — see `manual/` for deploying one scenario at a time).
 | `adminUsername` | `demoadmin` | Admin login for the VM, VMSS, and SQL Server. |
 | `resourceGroupPrefix` | `ScaleTriggerDemo` | Applied to all resource group names, e.g. `ScaleTriggerDemo-SingleVM`. |
 | `resourcePrefix` | `ScaleTrigger` | Applied to resource names inside those groups, e.g. `ScaleTrigger-vm`. |
-| `location` | `eastus` | Any Azure region (or the region picked in the portal's Basics tab). |
+| `location` | region picked in the portal's own "Region" selector | Any Azure region. Defaults to `deployment().location`, so it normally needs no separate input — override it explicitly only if you want resources in a different region than the deployment's own metadata region (rare). |
 | `approvalNotificationUpn` | `dummy@somemail.com` | Azure AD account that receives the push notification for the approval-gated scaling scenario. **Replace this**, or that scenario notifies no one. |
 | `autoShutdownHour` | `5` | UTC hour (0–23) the VM/VMSS auto-shut down. |
 | `autoShutdownEnabled` | `true` | Whether to create the daily VMSS shutdown schedule at all. |
