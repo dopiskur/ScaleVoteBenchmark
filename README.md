@@ -207,15 +207,3 @@ Before running it the first time:
 
 Since `appsettings.json` never ships in the deployed package, every setting must be set as an **Application Setting** in the Azure Portal (App Service → Configuration), with nested keys joined by a double underscore. For example, `ConnectionStrings:MsSql` becomes `ConnectionStrings__MsSql`, `Auth:Enabled` becomes `Auth__Enabled`, `Load:CpuIterationsPerVote:Min` becomes `Load__CpuIterationsPerVote__Min`, and so on for every nested key in `appsettings.json.example`.
 
-## Package versions
-
-| Package | Version |
-|---|---|
-| Microsoft.Data.SqlClient | 7.0.2 |
-| MySqlConnector | 2.6.1 |
-| Npgsql | 10.0.3 |
-| Microsoft.Data.Sqlite | 10.0.10 |
-| SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 |
-| Azure.Identity | 1.21.0 |
-| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 |
-

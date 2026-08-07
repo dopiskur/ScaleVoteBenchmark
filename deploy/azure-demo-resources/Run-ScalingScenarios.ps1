@@ -26,10 +26,10 @@
     Directory for result CSV/HTML files. REQUIRED.
 
 .PARAMETER ResourceGroupPrefix
-    Which deployment to auto-detect from. Matches Deploy.ps1's -ResourceGroupPrefix. Default: ScaleTriggerDemo.
+    Which deployment to auto-detect from. Matches main.bicep's -resourceGroupPrefix. Default: ScaleTriggerDemo.
 
 .PARAMETER ResourcePrefix
-    Which deployment to auto-detect from. Matches Deploy.ps1's -ResourcePrefix. Default: ScaleTrigger.
+    Which deployment to auto-detect from. Matches main.bicep's -resourcePrefix. Default: ScaleTrigger.
 
 .PARAMETER SubscriptionId
     Switches the active Az context if given; otherwise uses whatever's already active.
